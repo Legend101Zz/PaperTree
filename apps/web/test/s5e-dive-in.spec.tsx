@@ -210,7 +210,7 @@ describe('Dive in', () => {
     expect(document.querySelector('.pt-exchange')?.hasAttribute('data-dive')).toBe(false);
   });
 
-  it('lifts the exchange for --pt-dur-quick before the route changes, and hands its cards on', async () => {
+  it('lifts the exchange for --pt-dur-quick before the route changes, and hands its two slips on', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     stubCreate();
     render(provider(<Panel />));
@@ -226,14 +226,8 @@ describe('Dive in', () => {
     expect(push).toHaveBeenCalledTimes(1);
     vi.useRealTimers();
     const hand = diveHandoff.take(PAGE, Date.now());
-    expect(hand?.cards.map((c) => c.key)).toEqual([
-      'call',
-      'ai',
-      'passage-1',
-      'passage-2',
-      'passage-3',
-      'passage-4',
-    ]);
+    // The panel has no trace rows any more (#341): only the two slips travel.
+    expect(hand?.cards.map((c) => c.key)).toEqual(['call', 'ai']);
   });
 });
 

@@ -141,9 +141,10 @@ def test_0011_carries_every_ai_row_fk_cascade_and_trigger(tmp_path: Path, base: 
 
     with open_database(file) as db:
         result = db.migrate()
-        assert result.applied[-1] == 11, "0011 applies after every migration below it"
+        # 0011 applies after every migration below it; later slices' migrations follow it.
+        assert [v for v in result.applied if v <= 11][-1] == 11
         if base == 10:
-            assert result.applied == (11,)
+            assert result.applied == (11, *(v for v in result.head if v > 11))
         assert any(path.name.endswith(".pre-0011.bak") for path in result.backups)
 
     conn = sqlite3.connect(file)
@@ -154,7 +155,9 @@ def test_0011_carries_every_ai_row_fk_cascade_and_trigger(tmp_path: Path, base: 
             width = len(before[table][0])
             assert [r[:width] for r in after] == before[table], table  # every old column
             if table == "ai_messages":
-                assert {r[width:] for r in after} == {(None,)}, "diagram_json appended, NULL"
+                # diagram_json (0011) and every later slice's column are appended, NULL.
+                assert all(v is None for r in after for v in r[width:])
+                assert all(len(r) > width for r in after)
             else:
                 assert all(len(r) == width for r in after), table
         assert _rows(conn, "PRAGMA foreign_key_check") == []

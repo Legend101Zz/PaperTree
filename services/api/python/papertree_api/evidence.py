@@ -776,7 +776,6 @@ class MintedCitation:
             "marker": self.marker,
             "page_index": self.page_index,
             "anchor": self.anchor,
-            "supported": self.supported,
         }
 
 

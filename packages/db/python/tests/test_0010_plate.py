@@ -111,7 +111,8 @@ def test_a_database_already_at_0011_still_gets_0010(tmp_path: Path) -> None:
     try:
         before = {t: conn.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0] for t in _COUNTED}
         result = migrate(conn, MIGRATIONS_DIR)
-        assert result.applied == (10,)
+        # 10, then every version above 11 that exists (a later slice's migration also lands here).
+        assert result.applied == (10, *(v for v in HEAD_VERSIONS if v > 11))
         assert result.head == HEAD_VERSIONS
         assert result.backups == () and 10 not in BACKUP_BEFORE_VERSIONS
         assert {t: conn.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0] for t in _COUNTED} == (

@@ -26,13 +26,24 @@ question is "Explain with a diagram."). It is not continued by a question: its o
 Redraw (``FollowUp.redraw_of``, a finished diagram answer of the same thread), which appends a new
 user turn and a new plate; ``redraw_of`` on any other thread, or a diagram follow-up without it,
 is 422. Its assistant messages read back with ``diagram: {title, status, parts, links}``.
+
+LEVEL, CHECK AND SIBLINGS (v0.3, #339; contracts.md §2.5). ``level`` (``new`` / ``familiar`` /
+``expert``, default ``familiar``) is on ``ThreadCreate`` and ``FollowUp``, stored on the assistant
+message (``ai_messages.level``, 0014) and sent to the agent. ``check`` is decided HERE, never by the
+web: true only for a ``new`` answer of an explain or ask thread when no earlier answer of the thread
+carried a ```check fence (at most one exercise per thread). ``FollowUp.relevel_of`` answers the same
+question again at ``level``: no user turn is written, the new answer is a sibling of the one it
+re-answers (``ai_messages.sibling_of`` = the group's first answer), and the thread read gives each
+assistant message its ``level`` and ``sibling_group``.
 """
 
 from __future__ import annotations
 
+import re
 import time
+from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Annotated, Any, Final
+from typing import Annotated, Any, Final, cast
 
 from fastapi import APIRouter, Depends, Request, status
 from fastapi.responses import JSONResponse, Response
@@ -54,7 +65,7 @@ from ..deps import (
     SettingsDep,
 )
 from ..errors import ApiError, ErrorEnvelope
-from ..exchanges import ask_excerpt, message_coverage
+from ..exchanges import ask_excerpt
 from ..logging import log_event
 from ..schemas import (
     DIAGRAM_QUESTION,
@@ -62,6 +73,7 @@ from ..schemas import (
     AgentPaper,
     AgentRunRequest,
     AgentToolAccess,
+    AnswerLevel,
     FollowUp,
     Thread,
     ThreadCreate,
@@ -85,6 +97,8 @@ EVENT_STREAM: Final[dict[int | str, dict[str, Any]]] = {
     **ERRORS,
 }
 TITLE_CHARS: Final = 80
+#: A ```check fence on its own line: an answer that carries one has used the thread's exercise.
+CHECK_FENCE: Final = re.compile(r"^```check\s*$", re.MULTILINE)
 
 
 # ── shared by the two SSE routes ─────────────────────────────────────────────────────────────
@@ -124,6 +138,26 @@ def tool_access(settings: Settings, run_id: str, token: str) -> AgentToolAccess:
     return AgentToolAccess(
         base_url=f"{settings.api_internal_url}/internal/agent/runs/{run_id}", token=token
     )
+
+
+def wants_check(
+    db: PaperTreeDb, owner: OwnerId, thread_id: str | None, kind: RunKind, level: str
+) -> bool:
+    """Decision E: the answer ends with a self-check only at ``new`` (New to this), only on an
+    explain or ask thread, and at most once per thread (no earlier answer carried one)."""
+    if kind not in ("explain", "ask") or level != "new":
+        return False
+    if thread_id is None:
+        return True
+    return not any(
+        message["role"] == "assistant" and CHECK_FENCE.search(message["content"]) is not None
+        for message in db.list_messages(owner, thread_id)
+    )
+
+
+def stored_level(kind: RunKind, level: str) -> str | None:
+    """Only an explain or ask answer has a level; a diagram's is not stored."""
+    return level if kind in ("explain", "ask") else None
 
 
 def _request_id(request: Request) -> str | None:
@@ -201,6 +235,7 @@ async def create_thread(
             content="",
             status="streaming",
             run_id=run_id,
+            level=stored_level(kind, body.level),
         )
         _create_run(
             db,
@@ -237,6 +272,8 @@ async def create_thread(
         question=question,
         history=None,
         limits=runs.LIMITS[kind],
+        level=body.level,
+        check=wants_check(db, owner, None, kind, body.level),
     )
     broker = RunBroker(
         spec=RunSpec(
@@ -322,21 +359,36 @@ async def follow_up(
     generation = promoted_generation(call, paper_id)
     user_message_id: str | None = None
     _check_redraw(db, owner, thread, body.redraw_of, retry=body.retry_of is not None)
+    releveled = _relevel_target(db, owner, thread, body) if body.relevel_of is not None else None
+    level: AnswerLevel = body.level
     if body.retry_of is not None:
         user_message_id = _retry_target(db, owner, thread_id, body.retry_of)
+        if "level" not in body.model_fields_set:  # a retry keeps the level it was asked at
+            level = _message_level(db, owner, body.retry_of) or level
     if db.live_run_for_thread(owner, thread_id) is not None:
         raise ApiError("busy", "This conversation is still answering; wait for it or cancel it.")
     runs.require_budget(db, owner, settings)
 
     kind: RunKind = thread["kind"]
+    question = body.question
+    sibling_of: str | None = None
+    if releveled is not None:
+        question, user_message_id, sibling_of = (
+            releveled.question,
+            releveled.question_id,
+            releveled.group,
+        )
     index = evidence.load_index(index_cache, db, owner, call.user_id, paper_id, generation)
     datamark = mint_datamark()
     origin = from_json(thread["origin_anchor_json"]) if thread["origin_anchor_json"] else None
     plan = evidence.plan_seed(index, origin, datamark=datamark) if origin is not None else None
     state = from_json(thread["agent_state_json"]) if thread["agent_state_json"] else []
+    if releveled is not None and releveled.is_last_question:
+        state = _before_last_question(state)  # the model re-answers it, not "as above"
     message_id, run_id = new_id("msg"), new_id("run")
     token, token_sha256 = runs.mint_run_token()
     appended: list[str] = []
+    check = wants_check(db, owner, thread_id, kind, level)
 
     with db.transaction():
         if user_message_id is None:
@@ -347,7 +399,7 @@ async def follow_up(
                 message_id=user_message_id,
                 role="user",
                 generation=generation,
-                content=body.question,
+                content=question,
                 status="complete",
             )
             appended.append(user_message_id)
@@ -360,6 +412,8 @@ async def follow_up(
             content="",
             status="streaming",
             run_id=run_id,
+            level=stored_level(kind, level),
+            sibling_of=sibling_of,
         )
         appended.append(message_id)
         _create_run(
@@ -400,9 +454,15 @@ async def follow_up(
             generation=generation,
         ),
         seed=plan.to_wire(handles) if plan is not None else None,
-        question=body.question,
-        history=AgentHistory(session_id=thread_id, entries=list(state)),
+        question=question,
+        history=(
+            None  # a first question re-asked: a first turn again (the quote is in the user turn)
+            if releveled is not None and not state
+            else AgentHistory(session_id=thread_id, entries=list(state))
+        ),
         limits=runs.LIMITS[kind],
+        level=level,
+        check=check,
     )
     broker = RunBroker(
         spec=RunSpec(
@@ -445,6 +505,67 @@ def _retry_target(db: PaperTreeDb, owner: OwnerId, thread_id: str, retry_of: str
             break
         return str(previous["message_id"])
     raise ApiError("validation_failed", "retry_of: not an answer of this thread")
+
+
+@dataclass(frozen=True, slots=True)
+class _Relevel:
+    """What a relevel answers: the stored question, and the group it joins."""
+
+    question: str
+    question_id: str
+    group: str
+    #: No later question exists, so the thread's stored history ends with this one's turn.
+    is_last_question: bool
+
+
+def _message_level(db: PaperTreeDb, owner: OwnerId, message_id: str) -> AnswerLevel | None:
+    message = db.get_message(owner, message_id)
+    return None if message is None else cast("AnswerLevel | None", message["level"])
+
+
+def _relevel_target(
+    db: PaperTreeDb, owner: OwnerId, thread: dict[str, Any], body: FollowUp
+) -> _Relevel:
+    """``relevel_of`` must be a finished assistant answer of THIS explain or ask thread, alone (not
+    with a retry or a redraw); the new answer re-answers the user turn before the group's first
+    answer, so no user message is written."""
+    if body.retry_of is not None or body.redraw_of is not None:
+        raise ApiError("validation_failed", "relevel_of: not combined with retry_of or redraw_of")
+    if thread["kind"] not in ("explain", "ask"):
+        raise ApiError(
+            "validation_failed", "relevel_of: only an explain or ask answer is re-leveled"
+        )
+    messages = db.list_messages(owner, thread["thread_id"])
+    by_id = {message["message_id"]: message for message in messages}
+    target = by_id.get(str(body.relevel_of))
+    if target is None or target["role"] != "assistant":
+        raise ApiError("validation_failed", "relevel_of: not an answer of this thread")
+    if target["status"] != "complete":
+        raise ApiError("validation_failed", "relevel_of: only a finished answer is re-leveled")
+    group = by_id.get(str(target["sibling_of"] or target["message_id"]), target)
+    previous = next(
+        (m for m in reversed(messages) if m["ordinal"] < group["ordinal"] and m["role"] == "user"),
+        None,
+    )
+    if previous is None:
+        raise ApiError("validation_failed", "relevel_of: that answer has no question to re-ask")
+    return _Relevel(
+        question=str(previous["content"]),
+        question_id=str(previous["message_id"]),
+        group=str(group["message_id"]),
+        is_last_question=not any(
+            m["role"] == "user" and m["ordinal"] > group["ordinal"] for m in messages
+        ),
+    )
+
+
+def _before_last_question(state: list[Any]) -> list[Any]:
+    """The agent's stored entries up to (not including) the last user message."""
+    for index in range(len(state) - 1, -1, -1):
+        message = state[index].get("message") if isinstance(state[index], dict) else None
+        if isinstance(message, dict) and message.get("role") == "user":
+            return list(state[:index])
+    return list(state)
 
 
 def _check_redraw(
@@ -505,7 +626,6 @@ def _citation_wire(c: dict[str, Any], locators: evidence.PassageLocators | None)
         "marker": c["marker"],
         "page_index": c["page_index"],
         "anchor": c["anchor"],
-        "supported": c["supported"],
     }
     locator = locators.locate(c["anchor"]) if locators is not None else None
     if locator is not None:
@@ -513,22 +633,12 @@ def _citation_wire(c: dict[str, Any], locators: evidence.PassageLocators | None)
     return item
 
 
-def _coverage_of(row: dict[str, Any], cited: list[dict[str, Any]]) -> dict[str, Any]:
-    """``MessageCoverage`` of an assistant row. A citation without a locator (its parse could not
-    be loaded) still has a passage key, built from its Anchor the way the locator builds it."""
-    keys = [
-        (
-            c["marker"],
-            c["locator"]["passage_key"]
-            if "locator" in c
-            else evidence.passage_key(
-                int(row["generation"]), evidence.anchor_block_id(c["anchor"]) or str(c["marker"])
-            ),
-            c["supported"],
-        )
-        for c in cited
-    ]
-    return message_coverage(row["content"], keys)
+def _level_wire(row: dict[str, Any], thread_kind: str | None) -> str | None:
+    if row["role"] != "assistant":
+        return None
+    if row["level"] is not None:
+        return str(row["level"])
+    return "familiar" if thread_kind in ("explain", "ask") else None
 
 
 def message_wire(
@@ -537,12 +647,14 @@ def message_wire(
     citations: list[dict[str, Any]],
     locators: evidence.PassageLocators | None = None,
     parts: list[dict[str, Any]] | None = None,
+    thread_kind: str | None = None,
 ) -> dict[str, Any]:
     """One stored message as the wire shape. ``locators`` (the parse of the message's generation,
     None when that parse can no longer be loaded) adds each citation's ``locator``; an assistant
-    message that is complete or partial also gets its ``coverage`` (#201). ``parts`` (a diagram
-    thread's assistant message only, possibly empty) makes it a plate: ``diagram`` instead of
-    ``coverage``, which counts prose paragraphs and has none to count here."""
+    ``parts`` (a diagram thread's assistant message only, possibly empty) makes it a plate:
+    ``diagram``. There is no coverage readout (#341). ``level`` and ``sibling_group`` are an
+    assistant message's (0014): an answer stored before v0.3 has no level and reads ``familiar``
+    on an explain or ask thread."""
     status, error_code = row["status"], row["error_code"]
     if status == "streaming" and not _run_is_live(run):
         # An answer whose run can no longer finish (the API process stopped mid-stream, so no
@@ -563,13 +675,15 @@ def message_wire(
         "generation": row["generation"],
         "run": runs.run_summary(run) if run is not None else None,
         "citations": cited,
+        "level": _level_wire(row, thread_kind),
+        "sibling_group": row["sibling_of"] or row["message_id"]
+        if row["role"] == "assistant"
+        else None,
         "created_at": wire_time(row["created_at"]),
         "completed_at": wire_time(row["completed_at"]) if row["completed_at"] else None,
     }
     if parts is not None:
         wire["diagram"] = diagrams.diagram_wire(row["diagram"], status, parts, locators)
-    elif row["role"] == "assistant" and status in ("complete", "partial"):
-        wire["coverage"] = _coverage_of(row, cited)
     return wire
 
 
@@ -636,7 +750,7 @@ async def get_thread(
         generation = int(message["generation"])
         if (mine or anchored) and generation not in parses:
             parses[generation] = _locators(call, cache, paper_id, generation)
-        out.append(message_wire(message, run, mine, parses.get(generation), parts))
+        out.append(message_wire(message, run, mine, parses.get(generation), parts, thread["kind"]))
     return JSONResponse({"thread": thread_wire(thread), "messages": out})
 
 

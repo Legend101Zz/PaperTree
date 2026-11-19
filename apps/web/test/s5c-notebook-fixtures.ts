@@ -123,14 +123,6 @@ export const ANSWER_MESSAGE: Message = {
   role: 'assistant',
   content: CONTENT,
   citations: CITATIONS,
-  coverage: {
-    passages: 4,
-    citations: 11,
-    unresolved_markers: 0,
-    paragraphs: 5,
-    uncited_paragraphs: [4],
-    not_verified: 0,
-  },
   run: {
     run_id: 'run_1',
     model: 'MiniMax-M3.1-Flash',

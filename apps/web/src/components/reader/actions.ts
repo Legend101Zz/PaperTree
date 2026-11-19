@@ -9,7 +9,7 @@
  *   focusAnchor   S4 implements it (resolve, scroll, the citation flash of DESIGN.md §6)
  *
  * `ReaderWorkspace` mounts `<ReaderActionsProvider>` and decides which implementation fills each
- * slot; `SourcePane`'s toolbar, the explain panel's citation chips and the canvas's "open source"
+ * slot; `SourcePane`'s toolbar, the explain panel's source lines and the canvas's "open source"
  * call them through `useReaderActions()` without knowing who implements them. That indirection is
  * the point: the toolbar (S4), the panel (S6) and the canvas (S7) are three slices, and each one
  * changes only its own file.
@@ -20,20 +20,6 @@
 import { createContext, createElement, useContext, type ReactNode } from 'react';
 
 import type { Anchor } from '@papertree/anchoring';
-
-/**
- * The numbered marker a citation flash was started from (#202): the reader draws its margin tab
- * ("from marker 2 in the answer") beside the flashed passage.
- */
-export interface FlashSource {
-  readonly n: number;
-  /** 1-based page and ¶, as the marker's tab shows them. */
-  readonly page: number;
-  readonly para: number | null;
-  readonly notVerified: boolean;
-  /** A diagram part's flash (#217): the tab says "from part C, Scale" instead of the marker. */
-  readonly part?: { readonly letter: string; readonly label: string };
-}
 
 export type SendToCanvasInput =
   | { kind: 'excerpt'; anchor: Anchor }
@@ -65,7 +51,6 @@ export type ReaderActions = {
 /** What a `focusAnchor` call asks for besides the passage. */
 export interface FocusOptions {
   readonly flash?: boolean;
-  readonly from?: FlashSource;
   readonly bottomInset?: number;
 }
 

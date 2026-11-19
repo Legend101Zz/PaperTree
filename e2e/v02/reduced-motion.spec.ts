@@ -150,7 +150,7 @@ test.describe('S8: reduced motion, every moment (faux agent)', () => {
     const flash = page.locator('svg [data-flash] polygon.pt-flash');
     await expect(flash).toHaveCount(0);
     const scroll = await recordScroll(page, SCROLLER);
-    await exchange.locator('[data-passage="2"] button').first().click();
+    await exchange.locator('.pt-source button').first().click();
     await expect(flash.first()).toBeVisible({ timeout: 10_000 });
     const seen = await scroll.stop();
     const [first, last] = [seen[0] ?? 0, seen.at(-1) ?? 0];

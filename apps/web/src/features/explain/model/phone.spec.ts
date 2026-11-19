@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { buildExchanges } from './exchange';
-import { clipAnswer, pinnedExchange, runSides } from './phone';
+import { clipAnswer, pinnedExchange } from './phone';
 import { originOf } from './threads';
 import { GOLDEN, goldenMessages } from '../../../../test/fixtures/attention-thread';
 
@@ -9,46 +9,29 @@ import type { AnswerModel, AnswerParagraph } from './answer';
 
 const golden = buildExchanges(goldenMessages(), originOf(GOLDEN.thread))[0]?.model as AnswerModel;
 
-function para(index: number, cited = true): AnswerParagraph {
-  return { index, text: `p${String(index)}`, markers: [], cited };
+function para(index: number): AnswerParagraph {
+  return { index, text: `p${String(index)}`, sources: [] };
 }
 
 describe('clipAnswer: the first paragraph, then "Read the whole answer" (frame 08b)', () => {
   it('shows only the golden answer’s first paragraph until it is expanded', () => {
-    expect(golden.body).toHaveLength(4);
-    expect(golden.uncited).toHaveLength(1);
+    expect(golden.paragraphs).toHaveLength(5);
     const clipped = clipAnswer(golden, false);
     expect(clipped.clipped).toBe(true);
-    expect(clipped.body.map((p) => p.index)).toEqual([0]);
-    expect(clipped.body[0]?.text).toMatch(/central proposal/);
-    expect(clipped.uncited).toEqual([]);
-    expect(clipAnswer(golden, true)).toEqual({
-      body: golden.body,
-      uncited: golden.uncited,
-      clipped: false,
-    });
+    expect(clipped.paragraphs.map((p) => p.index)).toEqual([0]);
+    expect(clipped.paragraphs[0]?.text).toMatch(/central proposal/);
+    expect(clipAnswer(golden, true)).toEqual({ paragraphs: golden.paragraphs, clipped: false });
   });
 
   it('never clips an answer of one paragraph (there is nothing to read on)', () => {
-    expect(clipAnswer({ body: [para(0)], uncited: [] }, false).clipped).toBe(false);
-    expect(clipAnswer({ body: [], uncited: [para(0, false)] }, false).clipped).toBe(false);
-    expect(clipAnswer({ body: [], uncited: [] }, false).clipped).toBe(false);
-  });
-
-  it('keeps the first paragraph whichever voice it is in', () => {
-    // An uncited first paragraph inside the body stays first (under its "own reading" label).
-    const mixed = clipAnswer({ body: [para(0, false), para(1)], uncited: [] }, false);
-    expect(mixed.body.map((p) => p.index)).toEqual([0]);
-    // No cited paragraph at all: the first of the AI's own reading.
-    const own = clipAnswer({ body: [], uncited: [para(0, false), para(1, false)] }, false);
-    expect(own).toMatchObject({ body: [], clipped: true });
-    expect(own.uncited.map((p) => p.index)).toEqual([0]);
+    expect(clipAnswer({ paragraphs: [para(0)] }, false).clipped).toBe(false);
+    expect(clipAnswer({ paragraphs: [] }, false).clipped).toBe(false);
   });
 
   it('while streaming, the paragraphs after the first arrive behind the button', () => {
-    const live = { body: [para(0), para(1)], uncited: [] };
-    expect(clipAnswer(live, false).body.map((p) => p.index)).toEqual([0]);
-    expect(clipAnswer({ body: [para(0)], uncited: [] }, false).clipped).toBe(false);
+    const live = { paragraphs: [para(0), para(1)] };
+    expect(clipAnswer(live, false).paragraphs.map((p) => p.index)).toEqual([0]);
+    expect(clipAnswer({ paragraphs: [para(0)] }, false).clipped).toBe(false);
   });
 });
 
@@ -64,13 +47,5 @@ describe('pinnedExchange: whose usage and actions the phone pins', () => {
     expect(pinnedExchange(['complete', 'partial'])).toBe(-1);
     expect(pinnedExchange(['complete', null])).toBe(-1);
     expect(pinnedExchange([])).toBe(-1);
-  });
-});
-
-describe('runSides: where a marker in a run stops its tap area', () => {
-  it('marks each neighbour of a run, and nothing for a marker on its own', () => {
-    expect([0, 1].map((i) => runSides(i, 2))).toEqual(['next', 'prev']);
-    expect([0, 1, 2].map((i) => runSides(i, 3))).toEqual(['next', 'prev next', 'prev']);
-    expect(runSides(0, 1)).toBeNull();
   });
 });

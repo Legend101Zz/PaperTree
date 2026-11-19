@@ -88,20 +88,22 @@ test.describe('v0.2 S7b: Explain with a diagram → the plate → tap a part →
     await expect(plate).toBeVisible({ timeout: 120_000 });
     await expect(panel.locator('.pt-plate-key [data-letter]')).toHaveCount(6);
     await expect(panel.locator('[data-plate-readout]')).toHaveText(
-      '6 parts · 5 cited · drawn by AI from p. 4',
+      '6 parts · drawn by AI from p. 4',
     );
-    await expect(panel.locator('[data-letter="F"]')).toContainText('Inferred, no passage');
+    // A part that came from a passage has one quiet page; the one that did not has none (#340).
+    await expect(panel.locator('.pt-plate-key__source')).toHaveCount(5);
+    await expect(panel.locator('[data-letter="F"] .pt-plate-key__source')).toHaveCount(0);
     await expect(panel.locator('[data-usage-line]')).toContainText('(estimate)');
     const text = (await panel.innerText()).replace(/\s+/g, ' ');
     expect(text).not.toMatch(/\bmsg_|\bthr_|\brun_|\bblk_|\{"/);
-    expect(text).not.toMatch(/\bverified\b(?<!not verified)|fact-checked|\baccurate\b/i);
+    expect(text).not.toMatch(/\bverified\b|fact-checked|\baccurate\b|\bgrounded\b|Stands on/i);
     await page.screenshot({ path: shot('v02-plate-01-done-1440.png') });
 
-    // ── tap part B: its passage flashes, the margin tab names the part ──
+    // ── tap part B: its passage flashes (no margin tab) ──
     await panel.getByRole('button', { name: /^Part B:/ }).click();
     const flash = page.locator('svg [data-flash="true"] polygon.pt-flash');
     await expect(flash.first()).toBeVisible({ timeout: 10_000 });
-    await expect(page.locator('[data-flash-tab]')).toContainText('from part B');
+    await expect(page.locator('[data-flash-tab], .pt-flash-tab')).toHaveCount(0);
     await page.waitForTimeout(500);
     const box = await flash.first().boundingBox();
     expect((box?.y ?? -1) >= 0 && (box?.y ?? 1e9) < 900).toBe(true);

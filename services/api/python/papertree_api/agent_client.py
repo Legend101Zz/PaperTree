@@ -835,7 +835,6 @@ class RunBroker:
                     {
                         "text": b.text,
                         "citations": [c.wire() for c in b.citations],
-                        "supported": b.supported,
                     }
                     for b in bullets
                 ],

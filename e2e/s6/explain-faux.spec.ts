@@ -110,16 +110,18 @@ test.describe('S6 Journey C (faux agent) — explain, follow-up, chip, summary, 
     await expect(panel.locator('[data-explain-quote]')).toContainText('We reframe object');
     const answer = panel.locator('[data-message-status]').first();
     await expect(answer).toHaveAttribute('data-message-status', 'complete', { timeout: 120_000 });
-    // #202: the answer is an AI slip (the AI's voice), its citations numbered passage markers.
+    // #202, #340: the answer is an AI slip (the AI's voice); its sources are one quiet line under a
+    // paragraph, never chips or markers.
     await expect(panel.locator('[data-voice="ai"]').first()).toBeVisible();
     const text = (await panel.innerText()).replace(/\s+/g, ' ');
     expect(text).not.toMatch(/\[b\d+\]|\bmsg_|\bthr_|\brun_|\bblk_|\{"|"citation_id"/);
-    const chips = panel.locator('[data-citation-id]');
-    const chipCount = await chips.count();
+    expect(await panel.locator('.pt-chip, .pt-marker, [data-citation-id]').count()).toBe(0);
+    const pages = panel.locator('.pt-source button');
+    const pageCount = await pages.count();
     note(
-      `first answer complete; ${String(chipCount)} chips; usage "${await panel.locator('[data-usage-line]').first().innerText()}"`,
+      `first answer complete; ${String(pageCount)} source pages; usage "${await panel.locator('[data-usage-line]').first().innerText()}"`,
     );
-    expect(chipCount).toBeGreaterThan(0);
+    expect(pageCount).toBeGreaterThan(0);
     await expect(panel.locator('[data-usage-line]').first()).toContainText('(estimate)');
     await page.screenshot({ path: shot('c02-answer-1440.png') });
 
@@ -135,8 +137,8 @@ test.describe('S6 Journey C (faux agent) — explain, follow-up, chip, summary, 
     expect(threadPosts.filter((p) => !p.endsWith('/messages'))).toHaveLength(1);
     await page.screenshot({ path: shot('c03-followup-1440.png') });
 
-    // ── a marker: the cited passage scrolls into view and flashes ──
-    await panel.locator('[data-citation-id]').first().click();
+    // ── a page of a source line: the cited passage scrolls into view and flashes ──
+    await panel.locator('.pt-source button').first().click();
     const flash = page.locator('svg [data-flash="true"] polygon');
     await expect(flash.first()).toBeVisible({ timeout: 10_000 });
     // Every polygon of the flash, sampled on a grid INSIDE its box. A passage of two lines is one
@@ -175,19 +177,17 @@ test.describe('S6 Journey C (faux agent) — explain, follow-up, chip, summary, 
     ).toBeGreaterThan(0);
     await page.screenshot({ path: shot('c04-chip-flash-1440.png') });
 
-    // ── the summary: progress, bullets with chips ──
+    // ── the summary: progress, bullets each with a source line ──
     const runsBefore = aiRuns(stack.dataRoot, paperId);
     await panel.getByRole('button', { name: 'Summarize paper' }).click();
     const bullets = panel.locator('[data-summary-bullet]');
     await expect(bullets.first()).toBeVisible({ timeout: 120_000 });
     const bulletCount = await bullets.count();
     note(
-      `summary: ${String(bulletCount)} bullets, ${String(await panel.locator('[data-summary-bullet] [data-citation-id]').count())} chips`,
+      `summary: ${String(bulletCount)} bullets, ${String(await panel.locator('[data-summary-bullet] .pt-source').count())} source lines`,
     );
     expect(bulletCount).toBeGreaterThan(0);
-    expect(await panel.locator('[data-summary-bullet] [data-citation-id]').count()).toBeGreaterThan(
-      0,
-    );
+    expect(await panel.locator('[data-summary-bullet] .pt-source').count()).toBe(bulletCount);
     await page.screenshot({ path: shot('c05-summary-1440.png') });
     const runsAfterSummary = aiRuns(stack.dataRoot, paperId);
     expect(runsAfterSummary).toBe(runsBefore + 1);

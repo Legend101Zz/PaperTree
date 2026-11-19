@@ -310,15 +310,6 @@
   padding-inline-start: 18px;
 }
 
-.pt-bc .pt-ai-slip__aside {
-  display: none; /* no margin column on a card: the markers are inline */
-}
-
-.pt-bc .pt-ai-slip__uncited {
-  margin-block-start: 4px;
-  padding-block-start: 6px;
-}
-
 .pt-bc .pt-ai-slip__footer {
   flex: none;
   margin-block-start: 6px;

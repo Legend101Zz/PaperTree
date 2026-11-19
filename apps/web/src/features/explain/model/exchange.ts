@@ -1,12 +1,11 @@
 /**
- * The view model of ask → answer → trace (#202, DESIGN.md §4): a thread's messages become
- * exchanges, each a call slip (the ask), an answer split into paragraphs with their passage
- * markers, a trace of the passages it stands on, and the coverage counts. Pure; the `Exchange`
- * component draws it, `passages.ts` numbers the passages.
+ * The view model of ask → answer (#202, #340, DESIGN.md §4): a thread's messages become
+ * exchanges, each a call slip (the ask) and an answer split into paragraphs, each with the pages of
+ * the paper it draws on. Pure; the `Exchange` component draws it.
  */
 import { cleanQuote, selectorOf } from './anchor';
 import { buildAnswer, type AnswerModel, type ExchangeMessage } from './answer';
-import { numberPassages, type PassageNumbers } from './passages';
+import { threadHandles, type ThreadHandles } from './passages';
 
 import type { Anchor } from '@papertree/anchoring';
 
@@ -16,8 +15,7 @@ export {
   type AnswerModel,
   type AnswerParagraph,
   type ExchangeMessage,
-  type PassageMarker,
-  type TraceEntry,
+  type PaperSource,
 } from './answer';
 
 /** The passage the person selected, as the first call slip quotes it. */
@@ -93,7 +91,7 @@ export function buildExchanges<M extends ExchangeMessage>(
   origin: ThreadOrigin | null,
 ): Exchange<M>[] {
   const answers = messages.filter((m) => m.role === 'assistant');
-  const numbers = numberPassages(answers);
+  const numbers = threadHandles(answers);
   const exchangeOf = (ask: M | null, answer: M | null): Exchange<M> =>
     exchangeFrom(ask, answer, numbers);
   const out: Exchange<M>[] = [];
@@ -118,7 +116,7 @@ export function buildExchanges<M extends ExchangeMessage>(
 function exchangeFrom<M extends ExchangeMessage>(
   ask: M | null,
   answer: M | null,
-  numbers: PassageNumbers,
+  numbers: ThreadHandles,
 ): Exchange<M> {
   const hasText = answer !== null && answer.text.trim().length > 0;
   return {

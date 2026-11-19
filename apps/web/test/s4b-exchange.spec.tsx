@@ -1,14 +1,15 @@
 /**
- * #202 part 2: the exchange on screen, on the golden thread (frame 04's real stored answer).
+ * #202 part 2, as #340/#341 changed it: the exchange on screen, on the golden thread (frame 04's
+ * real stored answer).
  *
  * - the three voices: the ask is yours (`data-voice="you"`), the quote the paper's, the answer the
- *   AI's; the old "p. 3 p. 3 p. 3" chips are gone;
- * - marker ↔ trace light each other on hover and on focus, both ways;
- * - a marker click and Show in paper run the citation flash on the cited Anchor, with the marker
- *   it came from (the reader draws "from marker 2 in the answer" beside the passage);
- * - every marker and trace row is reachable by Tab, and the margin echo is not;
+ *   AI's; no chip, marker, margin flag, trace or readout anywhere;
+ * - each paragraph ends in ONE quiet line: `From the paper: p. 1 · p. 2`, or `General knowledge`;
+ * - hovering or focusing a page peeks the passage; a click runs the citation flash on the cited
+ *   Anchor (no margin tab);
+ * - every page is reachable by Tab;
  * - the thread menu lists the threads by their asks and switches them;
- * - the flash's faint outline clears on the next action, and its margin tab says where it came from.
+ * - the flash's faint outline clears on the next action.
  */
 import {
   act,
@@ -22,6 +23,7 @@ import {
 import { useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { sourceLines } from './answer-render';
 import { GOLDEN, goldenMessages } from './fixtures/attention-thread';
 import { focusAnchor, Harness, stubDesktop } from './s6-harness';
 import {
@@ -47,7 +49,6 @@ import {
 import { HighlightOverlay } from '@/components/reader/HighlightOverlay';
 import type { ViewMessage } from '@/components/explain/useExplainActions';
 import { Exchange } from '@/features/explain/components/Exchange';
-import { FlashMarginTab } from '@/features/explain/components/FlashMarginTab';
 import { buildExchanges, type Exchange as ExchangeModel } from '@/features/explain/model/exchange';
 import type { Message, Thread } from '@/lib/api/types';
 
@@ -82,7 +83,6 @@ const FREE_DETAIL = {
       message_id: 'msg_fa',
       content: 'Attention looks at every position at once.',
       citations: [],
-      coverage: undefined,
     },
   ],
 };
@@ -107,15 +107,11 @@ async function openGolden(extra: Parameters<typeof installFetch>[0] = {}): Promi
   return { calls };
 }
 
-const inline = (n: number): HTMLElement[] =>
-  Array.from(document.querySelectorAll<HTMLElement>(`[data-passage="${String(n)}"] button`));
-const row = (n: number): HTMLElement =>
-  document.querySelector<HTMLElement>(`.pt-trace-row[data-n="${String(n)}"]`) as HTMLElement;
 const firstExchange = (): HTMLElement =>
   document.querySelector<HTMLElement>('[data-exchange]') as HTMLElement;
 
-describe('the exchange: ask → answer → trace', () => {
-  it('keeps the three voices apart and has no per-citation chips', async () => {
+describe('the exchange: ask → answer, one quiet source line per paragraph', () => {
+  it('keeps the three voices apart and draws no chip, marker, tab, trace or readout', async () => {
     await openGolden();
     const exchange = firstExchange();
     expect(exchange.getAttribute('aria-label')).toBe('Explain this passage.');
@@ -124,90 +120,88 @@ describe('the exchange: ask → answer → trace', () => {
       exchange.querySelector('[data-explain-quote] [data-voice="paper"]')?.textContent,
     ).toMatch(/We propose a new simple network architecture/);
     expect(exchange.querySelector('[data-voice="ai"]')?.textContent).toMatch(/central proposal/);
-    expect(document.querySelectorAll('.pt-chip')).toHaveLength(0);
-    expect(exchange.textContent).toContain(
-      "Stands on 4 passages · 11 citations · 1 paragraph uncited (the AI's own reading)",
+    for (const gone of [
+      '.pt-chip',
+      '.pt-marker',
+      '.pt-ai-slip .pt-tab',
+      '.pt-ai-slip__aside',
+      '.pt-ai-slip__uncited',
+      '.pt-trace-list',
+      '.pt-trace-row',
+      '.pt-coverage',
+      '[data-citation-id]',
+    ]) {
+      expect(document.querySelector(gone), gone).toBeNull();
+    }
+    expect(exchange.textContent).not.toMatch(
+      /Stands on|not verified|\bverified\b|grounded|own reading|not found in the paper/i,
     );
-    expect(exchange.querySelector('.pt-ai-slip__uncited')?.textContent).toMatch(
-      /no citation · the AI's own reading.*This is my reading/,
-    );
-    expect(exchange.querySelectorAll('.pt-trace-row')).toHaveLength(4);
+    expect(exchange.textContent).not.toMatch(/\[b\d/);
   });
 
-  it('hovering marker 2 lights trace row 2, and hovering row 2 lights every marker 2', async () => {
+  it('ends each paragraph in the pages it draws on, once each, or "General knowledge"', async () => {
     await openGolden();
-    const marker = inline(2)[0] as HTMLElement;
-    expect(row(2).getAttribute('data-lit')).toBeNull();
-    fireEvent.mouseEnter(marker);
-    expect(row(2).getAttribute('data-lit')).toBe('true');
-    expect(row(1).getAttribute('data-lit')).toBeNull();
-    fireEvent.mouseLeave(marker);
-    expect(row(2).getAttribute('data-lit')).toBeNull();
-
-    fireEvent.mouseEnter(row(2));
-    const lit = inline(2).filter((b) => firstExchange().contains(b));
-    expect(lit.length).toBeGreaterThan(0);
-    expect(lit.every((b) => b.getAttribute('data-lit') === 'true')).toBe(true);
-    expect(inline(1).every((b) => b.getAttribute('data-lit') === null)).toBe(true);
-    fireEvent.mouseLeave(row(2));
-    expect(inline(2).some((b) => b.getAttribute('data-lit') === 'true')).toBe(false);
+    expect(sourceLines(firstExchange())).toEqual([
+      'From the paper: p. 1',
+      'From the paper: p. 1 · p. 2',
+      'From the paper: p. 2',
+      'From the paper: p. 1 · p. 2',
+      'General knowledge',
+    ]);
+    // The last paragraph is the AI's own words: the line is the same quiet line, no warning.
+    const general = firstExchange().querySelector('.pt-source--general') as HTMLElement;
+    expect(general.previousElementSibling?.textContent).toMatch(/This is my reading/);
+    expect(general.querySelector('button')).toBeNull();
   });
 
-  it('focus on Show in paper lights its marker too (review 2.6)', async () => {
+  it('hovering or focusing a page peeks the passage’s first words, and leaving closes it', async () => {
     await openGolden();
-    fireEvent.focus(screen.getAllByRole('button', { name: 'Show in paper, passage 2' })[0]!);
-    expect(inline(2)[0]?.getAttribute('data-lit')).toBe('true');
-    expect(row(2).getAttribute('data-lit')).toBe('true');
+    const page = screen.getAllByRole('button', {
+      name: 'Show p. 2 in the paper',
+    })[0] as HTMLElement;
+    const peek = (): HTMLElement | null =>
+      page.parentElement?.querySelector<HTMLElement>('[role="tooltip"]') ?? null;
+    expect(peek()?.hidden).toBe(true);
+    fireEvent.mouseEnter(page);
+    expect(peek()?.hidden).toBe(false);
+    expect(peek()?.textContent).toMatch(/^p\. 2“.+”$/);
+    expect(page.getAttribute('aria-describedby')).toBe(peek()?.id);
+    fireEvent.mouseLeave(page);
+    expect(peek()?.hidden).toBe(true);
+    fireEvent.focus(page);
+    expect(peek()?.hidden).toBe(false);
+    fireEvent.keyDown(page, { key: 'Escape' });
+    expect(peek()?.hidden).toBe(true);
   });
 
-  it('focus lights them too, both ways', async () => {
-    await openGolden();
-    fireEvent.focus(inline(2)[0] as HTMLElement);
-    expect(row(2).getAttribute('data-lit')).toBe('true');
-    fireEvent.blur(inline(2)[0] as HTMLElement);
-    expect(row(2).getAttribute('data-lit')).toBeNull();
-    fireEvent.focus(row(3).querySelector('button') as HTMLElement);
-    expect(inline(3)[0]?.getAttribute('data-lit')).toBe('true');
-  });
-
-  it('a marker click and Show in paper flash the cited passage, saying which marker', async () => {
+  it('a page click flashes the cited passage, with no margin tab to say where from', async () => {
     await openGolden();
     const b6 = GOLDEN.messages[1]?.citations.find((c) => c.marker === 'b6');
-    fireEvent.click(inline(2)[0] as HTMLElement);
-    fireEvent.click(screen.getAllByRole('button', { name: 'Show in paper, passage 2' })[0]!);
-    expect(focusAnchor).toHaveBeenCalledTimes(2);
-    for (const [anchor, opts] of focusAnchor.mock.calls) {
-      expect(anchor).toEqual(b6?.anchor);
-      expect(opts).toEqual({ flash: true, from: { n: 2, page: 2, para: 2, notVerified: false } });
-    }
+    // Paragraph 3 draws on b8 alone (p. 2); paragraph 2's first p. 2 passage is b6.
+    const lines = firstExchange().querySelectorAll('.pt-source');
+    fireEvent.click(lines[1]?.querySelectorAll('button')[1] as HTMLElement);
+    expect(focusAnchor).toHaveBeenCalledTimes(1);
+    const [anchor, opts] = focusAnchor.mock.calls[0] as [unknown, unknown];
+    expect(anchor).toEqual(b6?.anchor);
+    expect(opts).toEqual({ flash: true });
+    expect(document.querySelector('[data-flash-tab], .pt-flash-tab')).toBeNull();
   });
 
-  it('every marker and trace row is reachable by Tab; the margin echo is not', async () => {
+  it('every page is reachable by Tab: a real button that is neither hidden nor taken out of order', async () => {
     await openGolden();
-    const exchange = firstExchange();
-    // A <button> is in the Tab order unless it says tabindex="-1", is disabled or is hidden.
-    // (happy-dom reports `tabIndex` -1 for every button, so the attribute is read instead.)
-    const tabbable = Array.from(exchange.querySelectorAll<HTMLElement>('button')).filter(
-      (b) =>
-        b.getAttribute('tabindex') !== '-1' &&
-        !b.hasAttribute('disabled') &&
-        b.closest('[aria-hidden="true"]') === null,
-    );
-    const markers = Array.from(exchange.querySelectorAll('[data-citation-id] button'));
-    expect(markers).toHaveLength(11);
-    for (const m of markers) expect(tabbable).toContain(m);
-    for (const r of Array.from(exchange.querySelectorAll('.pt-trace-row'))) {
-      expect(r.querySelectorAll('button')).toHaveLength(2);
-      for (const b of Array.from(r.querySelectorAll('button'))) expect(tabbable).toContain(b);
-    }
-    // Reading order: the answer's markers (and its actions), then the trace rows.
-    const order = tabbable.map((b) => (b.closest('.pt-trace-row') === null ? 'answer' : 'trace'));
-    expect(order.lastIndexOf('answer')).toBeLessThan(order.indexOf('trace'));
-    const sidenotes = exchange.querySelectorAll('.pt-exchange__sidenote');
-    expect(sidenotes.length).toBeGreaterThan(0);
-    for (const s of Array.from(sidenotes)) {
-      expect(s.getAttribute('aria-hidden')).toBe('true');
-      expect(s.querySelector('button')).toBeNull();
+    const pages = Array.from(firstExchange().querySelectorAll<HTMLElement>('.pt-source button'));
+    expect(pages.map((b) => b.textContent)).toEqual([
+      'p. 1',
+      'p. 1',
+      'p. 2',
+      'p. 2',
+      'p. 1',
+      'p. 2',
+    ]);
+    for (const b of pages) {
+      expect(b.getAttribute('tabindex')).not.toBe('-1');
+      expect(b.hasAttribute('disabled')).toBe(false);
+      expect(b.closest('[aria-hidden="true"]')).toBeNull();
     }
   });
 });
@@ -404,7 +398,6 @@ describe('the citation flash in the reader', () => {
                 [100, 260],
               ],
             ],
-            extent: [100, 200, 400, 260],
             phase,
             scrollMs: 240,
           }}
@@ -421,19 +414,10 @@ describe('the citation flash in the reader', () => {
       container.querySelectorAll('[data-flash="linger"] polygon.pt-flash.pt-flash--linger'),
     ).toHaveLength(1);
   });
-
-  it('the margin tab names the marker it came from', () => {
-    render(
-      <FlashMarginTab from={{ n: 2, page: 2, para: 2, notVerified: false }} left={140} top={300} />,
-    );
-    const tab = document.querySelector('[data-flash-tab="2"]');
-    expect(tab?.textContent).toBe('2p. 2 ¶2from marker 2 in the answer');
-    expect(tab?.getAttribute('aria-hidden')).toBe('true');
-  });
 });
 
-describe('honest, stable answers (review 1.1, 1.3)', () => {
-  it('a follow-up’s tabs are final before its stored read lands: no "p. 2" → "p. 2 ¶2" swap', async () => {
+describe('stable answers (review 1.1, 1.3, #252)', () => {
+  it('a follow-up’s source line is final before its stored read lands: nothing swaps', async () => {
     let reads = 0;
     let release: (() => void) | null = null;
     const msgs = GOLDEN.messages as Message[];
@@ -444,7 +428,6 @@ describe('honest, stable answers (review 1.1, 1.3)', () => {
       ordinal: 5,
       content: 'Cheaper to train [b6].',
       citations: [msgs[3]!.citations[0]!],
-      coverage: undefined,
     };
     const { locator: _dropped, ...liveCitation } = msgs[3]!.citations[0]!;
     installFetch({
@@ -478,20 +461,17 @@ describe('honest, stable answers (review 1.1, 1.3)', () => {
     await waitFor(() => expect(reads).toBe(2));
     const last = () =>
       Array.from(document.querySelectorAll('[data-exchange]')).at(-1) as HTMLElement;
-    await waitFor(() => expect(last().querySelector('.pt-trace-list')).not.toBeNull());
-    const before = last().querySelector('.pt-trace-list')?.textContent;
-    const name = last().querySelector('[data-passage="2"] button')?.getAttribute('aria-label');
-    expect(before).toContain('p. 2 ¶2');
-    expect(before).toContain('Introduction');
-    expect(name).toBe('Passage 2, p. 2 ¶2');
+    await waitFor(() => expect(last().querySelector('.pt-source')).not.toBeNull());
+    const before = sourceLines(last());
+    expect(before).toEqual(['From the paper: p. 2']);
     await act(async () => {
       release?.();
       await new Promise((r) => setTimeout(r, 50));
     });
-    expect(last().querySelector('.pt-trace-list')?.textContent).toBe(before);
+    expect(sourceLines(last())).toEqual(before);
   });
 
-  it('a marker shown at done stays through the stored read: same node, same tab, and a click in between flashes (#252)', async () => {
+  it('a page shown at done stays through the stored read: same node, and a click in between flashes (#252)', async () => {
     let release: (() => void) | null = null;
     const msgs = GOLDEN.messages as Message[];
     const b6 = msgs[1]!.citations.find((c) => c.marker === 'b6')!;
@@ -503,7 +483,6 @@ describe('honest, stable answers (review 1.1, 1.3)', () => {
       message_id: 'msg_a1',
       content: 'Recurrence is sequential [b6].',
       citations: [b6],
-      coverage: undefined,
     };
     const { calls } = installFetch({
       [`GET /papers/${PAPER}/threads`]: () => jsonResponse(200, []),
@@ -539,43 +518,30 @@ describe('honest, stable answers (review 1.1, 1.3)', () => {
     await waitFor(() =>
       expect(document.querySelector('[data-message-status="complete"]')).not.toBeNull(),
     );
-    const marker = document.querySelector<HTMLElement>('[data-passage="1"] button');
-    expect(marker?.getAttribute('aria-label')).toBe('Passage 1, p. 2');
-    const trace = document.querySelector('.pt-trace-list')?.textContent;
-    fireEvent.click(marker as HTMLElement);
+    const page = screen.getByRole('button', { name: 'Show p. 2 in the paper' });
+    expect(sourceLines(document.body)).toEqual(['From the paper: p. 2']);
+    fireEvent.click(page);
     expect(focusAnchor).toHaveBeenCalledTimes(1);
-    expect(focusAnchor.mock.calls[0]?.[1]).toEqual({
-      flash: true,
-      from: { n: 1, page: 2, para: null, notVerified: false },
-    });
+    expect(focusAnchor.mock.calls[0]?.[1]).toEqual({ flash: true });
     await act(async () => {
       release?.();
       await new Promise((r) => setTimeout(r, 50));
     });
     // The stored copy landed (its time is on the call slip now), and nothing moved.
-    expect(document.querySelector('[data-passage="1"] button')).toBe(marker);
-    expect(marker?.isConnected).toBe(true);
-    expect(marker?.getAttribute('aria-label')).toBe('Passage 1, p. 2');
-    expect(document.querySelector('.pt-trace-list')?.textContent).toBe(trace);
+    expect(screen.getByRole('button', { name: 'Show p. 2 in the paper' })).toBe(page);
+    expect(page.isConnected).toBe(true);
+    expect(sourceLines(document.body)).toEqual(['From the paper: p. 2']);
     expect(document.querySelector('.pt-call-slip time')?.getAttribute('datetime')).toBe(
       answer.created_at,
     );
   });
 
-  it('a claim whose citation matched no passage is the AI’s own reading, and the readout says so', () => {
+  it('a claim whose handle matched no passage has no page: it is general knowledge, with no raw handle', () => {
     const answer = goldenMessages()[1]!;
     const b1 = answer.citations.find((c) => c.marker === 'b1')!;
     const ask = { ...goldenMessages()[0]! };
     const [exchange] = buildExchanges(
-      [
-        ask,
-        {
-          ...answer,
-          text: 'Cited claim [b1].\n\nInvented claim [b9].',
-          citations: [b1],
-          coverage: null,
-        },
-      ],
+      [ask, { ...answer, text: 'Cited claim [b1].\n\nInvented claim [b9].', citations: [b1] }],
       null,
     );
     render(
@@ -588,14 +554,8 @@ describe('honest, stable answers (review 1.1, 1.3)', () => {
         onSendToCanvas={async () => undefined}
       />,
     );
-    const uncited = document.querySelector('.pt-ai-slip__uncited');
-    expect(uncited?.textContent).toMatch(/no citation · the AI's own reading.*Invented claim/);
+    expect(sourceLines(document.body)).toEqual(['From the paper: p. 1', 'General knowledge']);
     expect(document.body.textContent).not.toContain('[b9]');
-    expect(document.querySelector('.pt-coverage')?.textContent).toContain(
-      "1 paragraph uncited (the AI's own reading)",
-    );
-    expect(document.querySelector('[data-unresolved="1"]')?.textContent).toContain(
-      'matches no passage',
-    );
+    expect(document.querySelector('.pt-coverage, [data-unresolved]')).toBeNull();
   });
 });

@@ -12,12 +12,10 @@ import { useCallback, useRef, useState, type ReactNode } from 'react';
 import { formatAskTime, type Exchange as ExchangeModel } from '@/features/explain/model/exchange';
 import { wasNotSent } from '@/features/explain/model/states';
 
-import { tabOf, verdictOf } from '../model/plate';
 import { DiagramPlate } from './DiagramPlate';
 import { PlateNotes } from './PlateNotes';
 
 import type { ViewMessage } from '@/components/explain/useExplainActions';
-import type { FlashSource } from '@/components/reader/actions';
 import type { FocusHandoff } from '@/features/explain/components/AnswerParts';
 import type { DiagramPart } from '@/lib/api/types';
 import type { Anchor } from '@papertree/anchoring';
@@ -29,9 +27,8 @@ export interface DiagramExchangeProps {
   readonly initial: string;
   /** 1-based among the plates the thread has drawn (or is drawing); null for one never drawn. */
   readonly plateNo: number | null;
-  readonly numbers: ReadonlyMap<string, number>;
-  /** The reader's citation flash, with the part it came from for the margin tab. */
-  readonly onFlash: (anchor: Anchor, from: FlashSource) => void;
+  /** The reader's citation flash of a part's passage. */
+  readonly onFlash: (anchor: Anchor) => void;
   readonly onStop: () => void;
   /** Draw the plate again: Retry after a failure or a Stop (and Redraw). */
   readonly onRedraw: (key: string) => void;
@@ -42,15 +39,13 @@ export interface DiagramExchangeProps {
 }
 
 /**
- * What the reader is told when a tapped part has nothing in the paper to flash.
+ * What the reader is told when a tapped part has no passage of the paper to flash.
  *
  * @param part The part.
  * @returns The sentence.
  */
 export function nothingToShow(part: DiagramPart): string {
-  return part.cite === null
-    ? `Part ${part.letter} is inferred: no passage says it, so there is nothing to show in the paper.`
-    : `Part ${part.letter}'s quote was not found in the paper, so there is nothing to show.`;
+  return `Part ${part.letter} has no passage in the paper to show.`;
 }
 
 /** A diagram exchange, named by its ask. */
@@ -58,7 +53,6 @@ export function DiagramExchange({
   exchange,
   initial,
   plateNo,
-  numbers,
   onFlash,
   onStop,
   onRedraw,
@@ -69,21 +63,14 @@ export function DiagramExchange({
   const handoff: FocusHandoff = useRef(null);
   const answer = exchange.answer;
   const onPart = useCallback(
-    (part: DiagramPart, n: number | null) => {
-      const tab = tabOf(part.cite);
+    (part: DiagramPart) => {
       const anchor = part.cite?.anchor ?? null;
-      if (anchor === null || tab === null || n === null) {
+      if (anchor === null) {
         setSaid(nothingToShow(part));
         return;
       }
       setSaid(null);
-      onFlash(anchor, {
-        n,
-        page: tab.page,
-        para: tab.para,
-        notVerified: verdictOf(part) !== 'cited',
-        part: { letter: part.letter, label: part.label },
-      });
+      onFlash(anchor);
     },
     [onFlash],
   );
@@ -115,7 +102,6 @@ export function DiagramExchange({
           <DiagramPlate
             answer={answer}
             plateNo={plateNo}
-            numbers={numbers}
             handoff={handoff}
             onStop={onStop}
             onPart={onPart}

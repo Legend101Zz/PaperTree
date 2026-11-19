@@ -129,7 +129,7 @@ def test_a_plate_streams_parts_whose_quotes_resolve_to_anchors_on_the_real_parse
         passages = _passages(h, token, paper_id)
         for part in parts[:5]:
             cite = part["cite"]
-            assert cite["supported"] is True, part
+            assert "supported" not in cite, part
             assert cite["quote"] == QUOTES[part["letter"]]
             assert anchor_errors(cite["anchor"]) == [], part["letter"]
             assert cite["citation_id"] == cite["anchor"]["id"]
@@ -169,7 +169,7 @@ def test_a_plate_streams_parts_whose_quotes_resolve_to_anchors_on_the_real_parse
         assert plate["parts"] == parts, "the plate read back is the plate that streamed"
 
 
-def test_a_quote_with_differences_is_anchored_not_verified_and_one_found_nowhere_has_no_anchor(
+def test_a_quote_with_differences_is_anchored_and_one_found_nowhere_has_no_anchor(
     tmp_path: Path,
 ) -> None:
     patch = {"B": {"cite": {"quote": NEAR}}, "C": {"cite": {"quote": f"^7f3a91c2 {NOWHERE}"}}}
@@ -178,10 +178,8 @@ def test_a_quote_with_differences_is_anchored_not_verified_and_one_found_nowhere
         frames, _ = read_sse(_draw(h, token, paper_id))
         _assert_browser_stream(frames)
         a, b, c = events(frames, "part")[:3]
-        assert a["cite"]["supported"] is True
-        assert b["cite"]["supported"] is False and b["cite"]["anchor"] is not None, (
-            "with differences"
-        )
+        assert "supported" not in a["cite"] and "supported" not in b["cite"]
+        assert b["cite"]["anchor"] is not None, "with differences"
         assert _block(b["cite"]["anchor"]) == _block(a["cite"]["anchor"]), "the same paragraph"
         assert c["cite"] == {
             "citation_id": None,
@@ -189,8 +187,8 @@ def test_a_quote_with_differences_is_anchored_not_verified_and_one_found_nowhere
             "anchor": None,
             "locator": None,
             "page_index": None,
-            "supported": False,
         }
+        # The verdict is still stored, for the record; no response carries it (#340).
         rows = h.rows("SELECT letter, supported, anchor_json IS NULL AS bare FROM ai_diagram_parts")
         assert [(r["letter"], r["supported"], r["bare"]) for r in rows[:3]] == [
             ("A", 1, 0),
@@ -227,7 +225,7 @@ def test_a_near_quote_anchors_to_the_passage_it_is_closest_to_not_the_first_that
         selection = _block(a["cite"]["anchor"])
         # The trap is real: the selection (handle b1) passes the claim check for this quote too.
         assert evidence.claim_verdict(NEAR_B6, [selection], read) == "supported"
-        assert b["cite"]["supported"] is False and _block(b["cite"]["anchor"]) == b6
+        assert _block(b["cite"]["anchor"]) == b6
 
 
 @pytest.mark.parametrize(
@@ -253,7 +251,7 @@ def test_a_short_phrase_or_an_unread_passage_is_never_shown_as_cited(
         assert holders, f"precondition: the paper holds {quote!r} word for word"
         if why == "a passage the run never read":
             assert not set(holders) & set(_run_texts(h, token, paper_id)), "precondition: unread"
-        assert b["cite"]["anchor"] is None and b["cite"]["supported"] is False, why
+        assert b["cite"]["anchor"] is None, why
 
 
 def test_a_part_frame_off_the_contract_is_dropped_and_the_plate_goes_on(tmp_path: Path) -> None:
@@ -386,7 +384,7 @@ def test_the_plates_quotes_resolve_verbatim_on_a_fresh_parse_of_the_corpus_pdf(
         frames, _ = read_sse(response)
     parts = events(frames, "part")
     assert fake.contract_errors == [] and fake.requests[0]["seed"]["passages"]
-    assert [p["cite"]["supported"] for p in parts[:5]] == [True] * 5, parts
+    assert all("supported" not in p["cite"] for p in parts[:5]), parts
     assert all(anchor_errors(p["cite"]["anchor"]) == [] for p in parts[:5])
     assert {p["cite"]["locator"]["page_index"] for p in parts[:5]} == {3}
     print(
