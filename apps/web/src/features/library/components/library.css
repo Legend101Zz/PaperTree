@@ -95,6 +95,12 @@
 
 /* ── the rows: one tab stop, scrolling sideways when wider than the page ─────────────── */
 
+.pt-planks {
+  display: flex;
+  flex-direction: column;
+  gap: 36px;
+}
+
 .pt-shelf {
   position: relative;
   display: flex;
@@ -121,7 +127,7 @@
   padding-inline: 2px;
 }
 
-.pt-shelf[data-searching='true'] .pt-plank__holder,
+.pt-planks[data-searching='true'] .pt-plank__holder,
 .pt-rows[data-searching='true'] .pt-plank__holder {
   opacity: 0.7; /* the holder's ink stays above 5:1 on its card */
   filter: saturate(0.5);

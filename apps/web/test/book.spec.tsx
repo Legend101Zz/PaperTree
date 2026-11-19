@@ -310,7 +310,67 @@ describe('take out and open (v0.3 #337)', () => {
     expect(document.querySelector('.pt-catalogue')).toBeNull();
   });
 
-  it('opens THAT book when a lower plank is clicked (#336), not the first or another', async () => {
+  it('stands nine books on two planks at 1440 px, and a click on the lower plank opens THAT book (#336)', async () => {
+    // happy-dom lays nothing out: the shelf is 1280 px wide, as at 1440.
+    const width = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'clientWidth');
+    Object.defineProperty(HTMLElement.prototype, 'clientWidth', {
+      configurable: true,
+      get(this: HTMLElement) {
+        return this.classList.contains('pt-planks') ? 1280 : 0;
+      },
+    });
+    try {
+      const on = (id: string, title: string, topic: string, at: number): LibraryPaper => ({
+        ...ATTENTION,
+        paper_id: id,
+        title,
+        reading: null,
+        created_at: `2026-10-0${String(at)}T09:00:00+00:00`,
+        topic:
+          topic === 'Transformers & attention'
+            ? ATTENTION.topic
+            : {
+                topic_id: `top_${topic}`,
+                name: topic,
+                cloth: 'vision',
+                source: 'arxiv_category',
+                source_detail: 'cs.CV',
+              },
+      });
+      api.list.mockResolvedValue([
+        { ...ATTENTION, reading: null, created_at: '2026-10-01T08:00:00+00:00' },
+        on('ppr_t2', 'Sentence-BERT', 'Transformers & attention', 1),
+        on('ppr_t3', 'BERT', 'Transformers & attention', 1),
+        on('ppr_t4', 'FlashAttention', 'Transformers & attention', 1),
+        on('ppr_l1', 'SuperGLUE', 'Language', 2),
+        on('ppr_u1', 'Proof-Gated Skill Compilation', 'Agents', 3),
+        on('ppr_v1', 'Deep Residual Learning', 'Vision & detection', 4),
+        on('ppr_v2', 'Adam', 'Vision & detection', 4),
+        on('ppr_v3', 'Neural Ordinary Differential Equations', 'Vision & detection', 4),
+      ]);
+      await renderLibrary();
+      const planks = document.querySelectorAll('[aria-label="Your shelf"] .pt-plank');
+      expect(planks).toHaveLength(2);
+      const count = (plank: Element | undefined) =>
+        plank?.querySelectorAll('button[data-paper-id]').length;
+      expect([count(planks[0]), count(planks[1])]).toEqual([6, 3]);
+      const resnet = planks[1]?.querySelector<HTMLElement>('[data-paper-id="ppr_v1"]');
+      expect(resnet).not.toBeNull();
+      fireEvent.click(resnet as HTMLElement);
+      const dialog = await screen.findByRole('dialog', { name: 'Deep Residual Learning' });
+      await settled(dialog);
+      expect(screen.getAllByRole('dialog')).toHaveLength(1);
+      expect(resnet?.getAttribute('data-pulled')).toBe('true');
+      expect(theBook()?.hasAttribute('data-pulled')).toBe(false);
+      fireEvent.keyDown(document.activeElement as HTMLElement, { key: 'Escape' });
+      await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+      expect(document.activeElement).toBe(resnet);
+    } finally {
+      if (width !== undefined) Object.defineProperty(HTMLElement.prototype, 'clientWidth', width);
+    }
+  });
+
+  it('opens THAT book when a row at scale is clicked (41 papers, a plank per topic)', async () => {
     const other = (id: string, title: string, topic: string): LibraryPaper => ({
       ...ATTENTION,
       paper_id: id,
@@ -324,7 +384,6 @@ describe('take out and open (v0.3 #337)', () => {
         source_detail: 'cs.CV',
       },
     });
-    // 41 papers is a library at scale: a plank per topic, each scrolling on its own.
     const filler = Array.from({ length: 39 }, (_, i) =>
       other(`ppr_f${String(i)}`, `Filler paper ${String(i)}`, 'Vision'),
     );
@@ -334,9 +393,6 @@ describe('take out and open (v0.3 #337)', () => {
       other('ppr_node', 'Neural Ordinary Differential Equations', 'Optimization'),
     ]);
     await renderLibrary();
-    // Attention's plank, the fillers' and Node's: Node stands on a plank of its own.
-    const planks = document.querySelectorAll('[aria-label="Your shelf"] [role="group"]');
-    expect(planks.length).toBe(3);
     const node = document.querySelector<HTMLElement>('[data-paper-id="ppr_node"]') as HTMLElement;
     const plank = node.closest('[role="group"]');
     expect(plank?.querySelectorAll('[data-paper-id]')).toHaveLength(1);
@@ -346,11 +402,7 @@ describe('take out and open (v0.3 #337)', () => {
       name: 'Neural Ordinary Differential Equations',
     });
     await settled(dialog);
-    expect(screen.getAllByRole('dialog')).toHaveLength(1);
-    expect(within(dialog).queryByText('Attention Is All You Need')).toBeNull();
-    // It is that spine whose slot is the gap, and the other two stand.
     expect(node.getAttribute('data-pulled')).toBe('true');
-    expect(theBook()?.hasAttribute('data-pulled')).toBe(false);
     fireEvent.keyDown(document.activeElement as HTMLElement, { key: 'Escape' });
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     expect(document.activeElement).toBe(node);

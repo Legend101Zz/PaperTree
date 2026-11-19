@@ -1,7 +1,7 @@
 # library
 
 The signed-in library at `/dashboard` (#195–#199; frames 00, 01, 01b–01f, 03, 08a): the papers stand as cloth
-spines on walnut planks, at every size (on a phone they lie flat in stacks), a row per group, each row under a brass label holder. A spine lifts 14 px on hover with a paper tag ("He et al. · 2015 · 12 pages · not started", `SpineTag`). A spine shows its state: a red ribbon
+spines on walnut planks, at every size (on a phone they lie flat in stacks), a row per group; the groups flow left to right and wrap onto the next plank when one is full (`packPlanks`: a plank's books run at most `PLANK_BAY` = 640 px, so the prototype's nine books stand 6 + 3 on two planks at 1440 px), each row under a brass label holder. A spine lifts 14 px on hover with a paper tag ("He et al. · 2015 · 12 pages · not started", `SpineTag`). A spine shows its state: a red ribbon
 while you are reading it, a kraft wrap while we read it, a torn red label when we could not. The Table view lists the
 same papers as a ruled catalogue, Topics shows each topic as a card, and the Map is a plan of the reading room.
 

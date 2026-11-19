@@ -14,6 +14,8 @@ import {
   foldForSearch,
   libraryStats,
   matchPapers,
+  packPlanks,
+  PLANK_BAY,
   needsALook,
   readingPage,
   shelfStep,
@@ -23,6 +25,7 @@ import {
   spineState,
   spineTitle,
   spineWidth,
+  type ShelfGroup,
   type ShelfPaper,
 } from './shelf';
 
@@ -85,8 +88,8 @@ describe('spine height', () => {
     const ids = ['ppr_A', 'ppr_B', 'ppr_G9AYN750E5MG1NRBMGSQJ4N5JM', ''];
     for (const id of ids) {
       expect(spineHeight(id)).toBe(spineHeight(id));
-      expect(spineHeight(id)).toBeGreaterThanOrEqual(262);
-      expect(spineHeight(id)).toBeLessThanOrEqual(318);
+      expect(spineHeight(id)).toBeGreaterThanOrEqual(217);
+      expect(spineHeight(id)).toBeLessThanOrEqual(251);
       // A library at scale stands shorter spines (01f, #196).
       expect(spineHeight(id, true)).toBeGreaterThanOrEqual(150);
       expect(spineHeight(id, true)).toBeLessThanOrEqual(179);
@@ -402,5 +405,46 @@ describe('the spine tag', () => {
         },
       }).line,
     ).toBe('Vaswani et al. · 2017 · 15 pages · reading now, p. 4 of 15');
+  });
+});
+
+describe('planks', () => {
+  const group = (key: string, label: string, n: number): ShelfGroup => ({
+    key,
+    label,
+    papers: Array.from({ length: n }, (_, i) => paper({ id: `${key}${String(i)}`, pageCount: 15 })),
+  });
+  // The prototype's nine: four, one, one, then three.
+  const nine = [
+    group('t', 'Transformers & attention', 4),
+    group('l', 'Language', 1),
+    group('u', 'Agents', 1),
+    group('v', 'Vision & detection', 3),
+  ];
+
+  it('stands nine books as 6 + 3 on two planks at 1440 px, the last group wrapping', () => {
+    const planks = packPlanks(nine, 1280);
+    expect(planks.map((p) => p.map((g) => g.key))).toEqual([['t', 'l', 'u'], ['v']]);
+    expect(planks.map((p) => p.reduce((n, g) => n + g.papers.length, 0))).toEqual([6, 3]);
+  });
+
+  it('keeps the order, fills a plank only up to its bay, and wraps sooner in a narrower window', () => {
+    expect(PLANK_BAY).toBeLessThan(1280);
+    expect(packPlanks(nine, 900).map((p) => p.length)).toEqual([3, 1]);
+    expect(packPlanks(nine, 300).map((p) => p.map((g) => g.key))).toEqual([
+      ['t'],
+      ['l', 'u'],
+      ['v'],
+    ]);
+    expect(
+      packPlanks(nine, 1280)
+        .flat()
+        .map((g) => g.key),
+    ).toEqual(['t', 'l', 'u', 'v']);
+  });
+
+  it('is one plank before it is measured, and none for an empty shelf', () => {
+    expect(packPlanks(nine, 0)).toEqual([nine]);
+    expect(packPlanks([], 1280)).toEqual([]);
   });
 });
