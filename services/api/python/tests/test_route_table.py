@@ -102,6 +102,9 @@ ADDED: frozenset[tuple[str, str]] = frozenset(
         ("POST", "/boards/{board_id}/nodes/{node_id}/asks"),
         ("POST", "/boards/{board_id}/nodes/{node_id}/notes"),
         ("POST", "/boards/{board_id}/tidy"),
+        # v0.3 (#348): a region of a page as an image (the image ask)
+        ("GET", "/papers/{paper_id}/crop"),
+        ("GET", "/papers/{paper_id}/crop-url"),
         # v0.2 S5a (#206): the notebook
         ("POST", "/papers/{paper_id}/notebook/pages"),
         ("GET", "/papers/{paper_id}/notebook/pages"),
