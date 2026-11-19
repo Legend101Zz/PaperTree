@@ -4,17 +4,21 @@
  * Summary and the ⋯ menu. A paper still being read has a disabled Read (its status is the
  * sentence above), and a queued one a Read that opens the PDF in Source mode. A failed paper has
  * **Retry** and **Remove** instead of Read: Retry through `useBookActions` (busy flag, failure as
- * a sentence), Remove through the same Undo-able delete as the menu's. Read or Retry carries
+ * a sentence), Remove through the same Undo-able delete as the menu's. Once reading has started,
+ * "from the start" is a link beside Continue (V3-36: it opens the reader at page 1). Read or Retry carries
  * `data-book-primary`, which is where focus lands when the book has opened, so Enter reads.
  */
 'use client';
 
 import { Button } from '@papertree/ui';
 import { ArrowRight } from 'lucide-react';
+import Link from 'next/link';
 
 import { TOUCH_TARGET } from '@/components/library/primitives';
 import { useBookActions } from '@/features/library/hooks/useBookActions';
+import { readingPage } from '@/features/library/model/shelf';
 
+import { bookReaderHref } from '../hooks/useFromBook';
 import { isReadIn, readLabel, summaryLine, type SummaryState } from '../model/book';
 import { SpreadMenu } from './SpreadMenu';
 
@@ -53,6 +57,7 @@ export function SpreadActions({
   const { busy, error, retry } = useBookActions(book.id, onRetry, () => Promise.resolve());
   const failed = book.processing === 'failed';
   const label = readLabel(book);
+  const started = readingPage(book) !== null && isReadIn(book);
   const line = summaryLine(summary);
   return (
     <>
@@ -87,6 +92,16 @@ export function SpreadActions({
             <span className="pt-sr-only">{` ${book.title}`}</span>
           </Button>
         )}
+        {!failed && started ? (
+          <Link
+            className="pt-bookdetails__fromstart"
+            href={bookReaderHref(book.id, { page: 1 })}
+            data-book-from-start=""
+          >
+            from the start
+            <span className="pt-sr-only">{` of ${book.title}`}</span>
+          </Link>
+        ) : null}
         {isReadIn(book) ? (
           <>
             <Button size="touch" onClick={onSummary}>

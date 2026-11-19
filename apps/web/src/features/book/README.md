@@ -26,8 +26,20 @@ A book taken off the shelf and opened (#200; frames 02a, 02 and 11; DESIGN.md §
   complete summary of the current prompt, "Summary cached (partial: …)", "A summary is being written", or
   **Summarize** with "No summary yet"; it opens the reader's panel on the summary), the arXiv link and "Put it back
   (Esc)".
+- **The abstract and At a glance (v0.3 #337, V3-33).** The abstract is the paper speaking: the whole of it, hyphens
+  joined, in the paper's own face, folded to two lines by the CSS (`data-folded`) with "all of it" / "fold it" beside its
+  "p. 1 · Abstract" tab; the words are always in the page. Under it is the sheet, the AI's map of the paper
+  (`GlanceSheet`, `GET /papers/{id}/glance`, made in the background when the paper is added and cached): the gist,
+  Problem · Idea · How it works · Results (at most two large numbers) · Limits, Read first and five Words to know,
+  under an "AI · Paper at a glance" tab with the model's short name ("M3.1 Flash"). **No page marks at rest**: each block
+  that cites a page is itself a link to the reader there (`?from=book&page=3`, `usePageFromBook`), and only hover or
+  focus draws a quiet `p. 3 ›` at its end; a block that cited nothing is plain text, Read first needs no mark. Maths is
+  `$…$`, typeset (`lib/MathText`). While the sheet is still being made (`making`, or before the first answer) its labels
+  stand over hairlines (V3-15b) with a line saying so, it asks again every 3 s and fills in place; `none` or a failed
+  request draws nothing, so the page never waits on a spinner and the abstract is always there.
 - **The spread's actions (v0.3 #337).** **Read** says **Continue at p. 4** once reading has started and resumes
-  there (`useContinue`; the same place as Reading now's Continue). The **⋯** menu (`SpreadMenu`, a `role="menu"`
+  there (`useContinue`; the same place as Reading now's Continue), with **from the start** (a link to `?from=book&page=1`)
+  beside it. The **⋯** menu (`SpreadMenu`, a `role="menu"`
   with arrow keys; Esc closes the menu first, a second Esc puts the book back) has **Rename…** (the title becomes a
   field in place, Enter saves with `PATCH /papers/{id}`, Esc cancels, a blank title is refused in a sentence; the
   name is stored beside the paper, `paper_title` 0012, and wins over the parsed title everywhere the library shows
@@ -71,6 +83,6 @@ the plate, which the opened book draws. A plate change re-reads `['papers']`. Th
   excerpt, the plate's caption, which books can be opened (pure; `book.spec.ts`).
 - `model/motion.ts`: the keyframes and timings, both paths (pure; `motion.spec.ts`).
 - `components/PulledBook.tsx` (the dialog, its three moments: opening, open, closing), `BookCover.tsx`, `BookSpread.tsx`, `Bookplate.tsx`,
-  `BookDetails.tsx`, `SpreadActions.tsx`, `SpreadMenu.tsx`, `SpreadTitle.tsx`, `book.css`, `spread.css`.
+  `BookDetails.tsx`, `GlanceSheet.tsx`, `SpreadActions.tsx`, `SpreadMenu.tsx`, `SpreadTitle.tsx`, `book.css`, `spread.css`.
 - `hooks/useBookOnShelf.ts`, `useBookData.ts`, `useBookMotion.ts`, `useFocusTrap.ts`, `useFromBook.ts`.
-- Tests: `apps/web/test/book.spec.tsx` and `book-actions.spec.tsx` (through the library page), e2e `e2e/v02/book.spec.ts`.
+- Tests: `apps/web/test/book.spec.tsx`, `book-actions.spec.tsx` and `book-glance.spec.tsx` (through the library page), `book-page-jump.spec.tsx` (the reader's half), e2e `e2e/v02/book.spec.ts`.

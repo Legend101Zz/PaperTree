@@ -24,8 +24,10 @@ export interface UsageTotals extends UsageBucket {
     readonly ask: UsageBucket;
     readonly summary: UsageBucket;
     readonly diagram: UsageBucket;
-    /** The topic run (#242), not built yet: 0 until it is. */
+    /** The topic run (#242). */
     readonly topic: UsageBucket;
+    /** The spread's "At a glance" run (v0.3 #337). */
+    readonly glance: UsageBucket;
   };
 }
 

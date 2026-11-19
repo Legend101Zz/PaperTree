@@ -59,11 +59,11 @@ export function withNoHighlights(actual: typeof Highlights): typeof Highlights {
 }
 
 /**
- * `@/features/book/api/bookApi` for a paper the parser found no figures or abstract in: the two
+ * `@/features/book/api/bookApi` for a paper the parser found no figures or abstract in: the
  * reads an opened book makes answer "nothing there". The writes (the plate) stay real.
  *
  * @param actual - The real module, from the `vi.mock` factory's `importOriginal()`.
- * @returns The module with `bookApi.figures` and `bookApi.abstract` answering in-process.
+ * @returns The module with `bookApi.figures`, `abstract` and `glance` answering in-process.
  * @example
  *   vi.mock('@/features/book/api/bookApi', async (importOriginal) =>
  *     (await import('./api-stubs')).withEmptyBook(await importOriginal()),
@@ -76,6 +76,8 @@ export function withEmptyBook(actual: typeof BookApi): typeof BookApi {
       ...actual.bookApi,
       figures: vi.fn(async () => []),
       abstract: vi.fn(async () => ({ text: null, page_index: null, anchor: null })),
+      // No sheet is coming (v0.3 #337): the spread shows the abstract alone.
+      glance: vi.fn(async () => ({ state: 'none' as const, glance: null })),
     },
   };
 }

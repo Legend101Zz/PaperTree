@@ -1,20 +1,23 @@
 /**
- * BookDetails: the right page of the opened book (#200, frame 02). The topic and where it came
- * from, "2017 · arXiv 1706.03762 · 15 pages", the figures the parser found, the title, the byline,
- * the abstract's first sentences under their "p. 1 · Abstract" tab (a link that flashes it in the
- * reader), where the person is with its rule, their counts, Read or Continue (oxblood cloth),
- * Summary, the ⋯ menu (`SpreadActions`), the arXiv link and "Put it back (Esc)". The title is a
- * field while it is being renamed (`SpreadTitle`). A paper that is queued, being read, failed or
- * partial shows its status sentence (`statusSentence`) in place of the abstract: the facts are not
- * in yet, or not all of them. The abstract is the paper's words (`PaperText`). On a phone
+ * BookDetails: the right page of the opened book (#200, frame 02; v0.3 #337, V3-33). The topic and
+ * where it came from, "2017 · arXiv 1706.03762 · 15 pages", the figures the parser found, the
+ * title, the byline, the abstract folded to two lines under its "p. 1 · Abstract" tab (a link that
+ * flashes it in the reader; "all of it" unfolds it), then the AI's "At a glance" sheet
+ * (`GlanceSheet`: the abstract is the paper speaking, the sheet is the AI), where the person is
+ * with its rule, their counts, Read or Continue (oxblood cloth), Summary, the ⋯ menu
+ * (`SpreadActions`), the arXiv link and "Put it back (Esc)". The title is a field while it is
+ * being renamed (`SpreadTitle`). A paper that is queued, being read, failed or partial shows its
+ * status sentence (`statusSentence`) in place of the abstract and the sheet: the facts are not in
+ * yet, or not all of them. The abstract is the paper's words (`PaperText`). On a phone
  * (reached through the library's sheet, #199) the tab and the arXiv link answer 44 px taps and
  * "Put it back" shows no key.
  */
 'use client';
 
 import { Button, PaperText } from '@papertree/ui';
+import { ChevronDown } from 'lucide-react';
 import Link from 'next/link';
-import { useState } from 'react';
+import { useId, useState } from 'react';
 
 import { cardStateLine } from '@/features/library/model/catalogue';
 import { useTouchTargets } from '@/features/library/hooks/useTouchTargets';
@@ -23,7 +26,8 @@ import { readingPage } from '@/features/library/model/shelf';
 
 import { bookReaderHref } from '../hooks/useFromBook';
 import {
-  abstractExcerpt,
+  ABSTRACT_FOLD_CHARS,
+  abstractText,
   arxivLink,
   countsLine,
   figuresLine,
@@ -31,7 +35,9 @@ import {
   longDate,
   metaLine,
   statusSentence,
+  type GlanceView,
 } from '../model/book';
+import { GlanceSheet } from './GlanceSheet';
 import { SpreadActions } from './SpreadActions';
 import { SpreadTitle } from './SpreadTitle';
 
@@ -52,6 +58,8 @@ export interface BookDetailsProps {
   readonly abstract: { readonly text: string | null; readonly pageIndex: number | null } | null;
   /** `GET …/summary`'s state, or null while it loads (nothing is claimed then). */
   readonly summary: SummaryState | null;
+  /** What the "At a glance" sheet draws (`glanceView`). */
+  readonly glance: GlanceView;
   readonly onRead: () => void;
   readonly onSummary: () => void;
   readonly onPutBack: () => void;
@@ -108,10 +116,14 @@ export function BookDetails({
   onDelete,
   onRetry,
   summary,
+  glance,
 }: BookDetailsProps): ReactNode {
   const meta = metaLine(book);
   const found = figures === null ? null : figuresLine(figures);
-  const excerpt = abstract === null ? null : abstractExcerpt(abstract.text);
+  const whole = abstract === null ? null : abstractText(abstract.text);
+  const foldable = whole !== null && whole.length > ABSTRACT_FOLD_CHARS;
+  const [unfolded, setUnfolded] = useState(false);
+  const abstractId = useId();
   const source = topicSource(book.topic, 'book');
   const arxiv = arxivLink(book.arxivId);
   const touch = useTouchTargets();
@@ -162,24 +174,47 @@ export function BookDetails({
           {status}
         </p>
       )}
-      {!isReadIn(book) || excerpt === null || abstract === null ? null : (
+      {!isReadIn(book) || whole === null || abstract === null ? null : (
         <div className="pt-bookdetails__abstract">
-          {/* The link holds the tab's clipped face: the tab's swallowtail would clip a hit area
-              drawn on itself, and the link's own is free to reach 44 px on a phone (book.css). */}
-          <Link
-            className="pt-bookdetails__tablink"
-            href={bookReaderHref(book.id, 'abstract')}
-            aria-label={`p. ${String((abstract.pageIndex ?? 0) + 1)}, Abstract: show it in the paper`}
+          <div className="pt-bookdetails__abstracthead">
+            {/* The link holds the tab's clipped face: the tab's swallowtail would clip a hit area
+                drawn on itself, and the link's own is free to reach 44 px on a phone (book.css). */}
+            <Link
+              className="pt-bookdetails__tablink"
+              href={bookReaderHref(book.id, 'abstract')}
+              aria-label={`p. ${String((abstract.pageIndex ?? 0) + 1)}, Abstract: show it in the paper`}
+            >
+              <span className="pt-tab pt-bookdetails__tab">
+                {`p. ${String((abstract.pageIndex ?? 0) + 1)} · Abstract`}
+              </span>
+            </Link>
+            {foldable ? (
+              <button
+                type="button"
+                className="pt-bookdetails__unfold"
+                aria-expanded={unfolded}
+                aria-controls={abstractId}
+                data-abstract-toggle=""
+                onClick={() => setUnfolded((open) => !open)}
+              >
+                {unfolded ? 'fold it' : 'all of it'}
+                <ChevronDown size={14} strokeWidth={1.5} aria-hidden="true" />
+              </button>
+            ) : null}
+          </div>
+          {/* The whole abstract, folded to two lines by the CSS: the words are always in the page. */}
+          <div
+            id={abstractId}
+            className="pt-bookdetails__fold"
+            data-folded={String(foldable && !unfolded)}
           >
-            <span className="pt-tab pt-bookdetails__tab">
-              {`p. ${String((abstract.pageIndex ?? 0) + 1)} · Abstract`}
-            </span>
-          </Link>
-          <PaperText as="blockquote" className="pt-bookdetails__excerpt">
-            {`“${excerpt}”`}
-          </PaperText>
+            <PaperText as="blockquote" className="pt-bookdetails__excerpt">
+              {`“${whole}”`}
+            </PaperText>
+          </div>
         </div>
       )}
+      {isReadIn(book) ? <GlanceSheet paperId={book.id} view={glance} /> : null}
       <ReadingRow book={book} />
       {isReadIn(book) ? <p className="pt-bookdetails__counts">{countsLine(book)}</p> : null}
       <SpreadActions

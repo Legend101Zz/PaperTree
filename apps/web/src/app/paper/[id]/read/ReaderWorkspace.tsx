@@ -92,7 +92,7 @@ import {
   type PendingScroll,
 } from '@/components/reader/documentHandle';
 import { HighlightUndoToast } from '@/features/highlights';
-import { useFocusFromBook, useSummaryFromBook } from '@/features/book';
+import { useFocusFromBook, usePageFromBook, useSummaryFromBook } from '@/features/book';
 import { AskFromNotebook } from '@/features/notebook/components/AskFromNotebook';
 import { useFocusFromNotebook } from '@/features/notebook/hooks/useFocusFromNotebook';
 import { useThreadFromNotebook } from '@/features/notebook/hooks/useThreadFromNotebook';
@@ -609,6 +609,8 @@ export function ReaderWorkspace({ paper: given }: ReaderWorkspaceProps) {
   useFocusFromNotebook(paper.kind === 'api' ? paper.paperId : null, doc !== null, focusAnchor);
   // The opened book's "p. 1 · Abstract" tab (#200): flash the abstract once the parse is in.
   useFocusFromBook(paper.kind === 'api' ? paper.paperId : null, doc !== null, focusAnchor);
+  // The "At a glance" sheet's `p. 3 ›` and "from the start" (v0.3 #337): open at that page.
+  usePageFromBook(paper.kind === 'api' ? paper.paperId : null, doc !== null, jumpToPage);
 
   /** The colour a new highlight gets: the wash pressed, else the last one picked (amber at first). */
   const lastColor = useRef<HighlightColor>('amber');

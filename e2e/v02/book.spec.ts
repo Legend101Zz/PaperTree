@@ -193,6 +193,86 @@ test('the spread’s ⋯ menu: Esc order, Rename persists, Delete → Undo resto
   expect(listed.map((p) => p.paper_id)).not.toContain(paperId);
 });
 
+test('the spread’s At a glance sheet: made when the paper was added, every field, p. n › on hover, a click opens the reader there, the abstract folds', async ({
+  page,
+  stack,
+}) => {
+  test.skip(
+    !existsSync(ATTENTION),
+    'SKIPPED: the corpus PDF attention-is-all-you-need.pdf is absent. Run research/benchmarks/fetch_corpus.sh.',
+  );
+  test.setTimeout(600_000);
+  const token = await register(stack.apiUrl, `e2e-glance-${String(Date.now())}@papertree.test`);
+  const paperId = await upload(stack.apiUrl, token, ATTENTION);
+  await waitParsed(stack.apiUrl, token, paperId);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await tokenInit(page, token);
+  await page.goto('/dashboard');
+  const book = page.locator(`[aria-label="Your shelf"] button[data-paper-id="${paperId}"]`);
+  await expect(book).toHaveAttribute('data-spine-state', 'ready', { timeout: 60_000 });
+  // Reading the library started the run in the background (the faux agent writes the canned sheet
+  // of `services/agent/src/faux.ts`, `FAUX_GLANCE`); the sheet is cached, never asked for twice.
+  await expect
+    .poll(
+      async () => {
+        const answer = await fetch(`${stack.apiUrl}/papers/${paperId}/glance`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        return ((await answer.json()) as { state: string }).state;
+      },
+      { timeout: 90_000 },
+    )
+    .toBe('ready');
+
+  await book.focus();
+  await page.keyboard.press('Enter');
+  const dialog = page.getByRole('dialog', { name: 'Attention Is All You Need' });
+  await expect(dialog).toHaveAttribute('data-book-stage', 'open');
+  const section = dialog.getByRole('region', { name: 'Paper at a glance' });
+  const sheet = section.locator('[data-glance="ready"]');
+  await expect(sheet).toBeVisible();
+  // The abstract is the paper, above the sheet; the sheet is the AI, with a quiet model line.
+  await expect(section.getByText(/^M3/)).toBeVisible();
+  await expect(sheet).toContainText('A canned glance for the tests: one sentence');
+  for (const label of ['Problem', 'Idea', 'How it works', 'Results', 'Limits', 'Read first']) {
+    await expect(sheet.getByText(label, { exact: true })).toBeVisible();
+  }
+  await expect(sheet.getByText('Words to know')).toBeVisible();
+  await expect(sheet.getByText('0.42%')).toBeVisible();
+  await expect(sheet.getByText('faux error, MNIST')).toBeVisible();
+  await expect(sheet.getByText('0.22M')).toBeVisible();
+  await expect(sheet.locator('.pt-glance__term')).toHaveText([
+    'ODE',
+    'Euler method',
+    'adjoint method',
+    'normalizing flow',
+    'Lipschitz',
+  ]);
+  await expect(sheet.locator('.pt-math .katex')).toHaveCount(1); // $f(x) = x^2$, typeset
+  await expect(sheet).not.toContainText(/stands on|verified|\$/i);
+
+  // No page mark at rest; hover shows `p. 1 ›` (Problem cites the abstract); a click opens the reader.
+  const problem = sheet.locator('a[data-glance-page="1"]').first();
+  const mark = problem.locator('.pt-glance__page');
+  await expect(mark).toHaveText('p. 1 ›');
+  await expect(mark).toHaveCSS('opacity', '0');
+  await problem.hover();
+  await expect(mark).toHaveCSS('opacity', '1');
+
+  // The abstract folds to two lines; "all of it" unfolds it.
+  const fold = dialog.locator('.pt-bookdetails__fold');
+  await expect(fold).toHaveAttribute('data-folded', 'true');
+  await dialog.getByRole('button', { name: /all of it/ }).click();
+  await expect(fold).toHaveAttribute('data-folded', 'false');
+  await dialog.getByRole('button', { name: /fold it/ }).click();
+  await expect(fold).toHaveAttribute('data-folded', 'true');
+  // A paper not yet started says Read, with no "from the start".
+  await expect(dialog.getByRole('link', { name: /from the start/ })).toHaveCount(0);
+
+  await problem.click();
+  await page.waitForURL(`**/paper/${paperId}/read?from=book&page=1`);
+});
+
 /** axe-core's serious and critical violations on the page (axe from apps/web's devDependencies). */
 async function axeSerious(page: Page): Promise<string[]> {
   await page.addScriptTag({ content: readFileSync(AXE, 'utf8') });

@@ -46,6 +46,7 @@ vi.mock('@/lib/api/papers', async (importOriginal) => {
 const bookApi = vi.hoisted(() => ({
   figures: vi.fn(),
   abstract: vi.fn(),
+  glance: vi.fn(),
   setPlate: vi.fn(),
   clearPlate: vi.fn(),
 }));
@@ -148,6 +149,7 @@ beforeEach(() => {
   });
   bookApi.figures.mockResolvedValue([]);
   bookApi.abstract.mockResolvedValue({ text: null, page_index: null, anchor: null });
+  bookApi.glance.mockResolvedValue({ state: 'none', glance: null });
   summaryApi.get.mockResolvedValue({ state: 'none', summary: null });
   // The book's motion is WAAPI; here every animation has already finished.
   (Element.prototype as unknown as { animate: unknown }).animate = () => ({

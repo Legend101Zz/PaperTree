@@ -40,6 +40,7 @@ vi.mock('@/lib/api/papers', async (importOriginal) => {
 const book = vi.hoisted(() => ({
   figures: vi.fn(),
   abstract: vi.fn(),
+  glance: vi.fn(),
   setPlate: vi.fn(),
   clearPlate: vi.fn(),
 }));
@@ -203,6 +204,7 @@ beforeEach(() => {
     page_index: 0,
     anchor: { id: 'anc_abs' },
   });
+  book.glance.mockResolvedValue({ state: 'none', glance: null });
   book.setPlate.mockResolvedValue(undefined);
   book.clearPlate.mockResolvedValue(undefined);
   summary.get.mockResolvedValue({ state: 'ready', summary: null });
@@ -427,7 +429,7 @@ describe('take out and open (v0.3 #337)', () => {
       return found;
     });
     expect(quote.textContent).toMatch(/^“The dominant sequence transduction models/);
-    expect(quote.textContent).toMatch(/convolutions entirely\.”$/);
+    expect(quote.textContent).toMatch(/machine translation tasks show these models to be\.”$/);
     const tab = within(dialog).getByRole('link', { name: /^p\. 1, Abstract/ });
     expect(tab.getAttribute('href')).toBe(`/paper/${ID}/read?from=book&at=abstract`);
     expect(

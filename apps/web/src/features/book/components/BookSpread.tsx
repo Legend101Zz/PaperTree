@@ -12,7 +12,7 @@ import { Crop } from 'lucide-react';
 import { forwardRef, useEffect, useRef, type ReactNode } from 'react';
 
 import { useBookFacts, useDisplayName, usePlateChoice } from '../hooks/useBookData';
-import { figureOneOffer, isReadIn, plateCaption } from '../model/book';
+import { figureOneOffer, glanceView, isReadIn, plateCaption } from '../model/book';
 import { BookDetails } from './BookDetails';
 import { Bookplate } from './Bookplate';
 
@@ -104,7 +104,7 @@ export const BookSpread = forwardRef<HTMLDivElement, BookSpreadProps>(function B
 ) {
   // The figures, the abstract and the summary exist once the paper is read in; before that (queued,
   // being read, failed) the right page says so instead of asking for them.
-  const { figures, abstract, summary } = useBookFacts(book.id, isReadIn(book));
+  const { figures, abstract, summary, glance } = useBookFacts(book.id, isReadIn(book));
   const name = useDisplayName();
   const plate = book.plate ?? null;
   const offer = figures.data === undefined ? null : figureOneOffer(figures.data);
@@ -149,6 +149,7 @@ export const BookSpread = forwardRef<HTMLDivElement, BookSpreadProps>(function B
           titleId={titleId}
           figures={figures.data ?? null}
           summary={summary.data?.state ?? null}
+          glance={glanceView(glance.data, glance.isError)}
           abstract={
             abstract.data === undefined
               ? null
