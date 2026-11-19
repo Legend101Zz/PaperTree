@@ -13,11 +13,11 @@ the model read was the front matter. Here the passages are, in order:
      and a smaller later one may still fit; every skipped id is recorded in ``Seed.dropped``.
 
 THE BUDGET IS COUNTED ON WHAT IS SENT. ``cost`` is the caller's: the API passes the estimate of
-the DATAMARKED text, because that is what the agent receives and ``papertree_prompts``' own
-measurement is that marking costs 2.6x (a 9.6x for a caption with its wrapper), so a budget on raw
-text would overrun by that factor on exactly the passages that are sent. The default, for callers
-with no marking, is the raw estimate. Either way the number is ``AtomTokenEstimator``'s: an upper
-bound on a byte-level BPE's count, not a MiniMax invoice (``budget.py``).
+the DATAMARKED text, because that is what the agent receives. Marking used to cost ~2.6x (per-word
+datamarks); since 2026-11-19 (#339) it is a fixed two marker lines per passage, so the same budget
+now buys about twice the passages (measured on the resnet fixture: 5 -> 11). The default, for
+callers with no marking, is the raw estimate. Either way the number is ``AtomTokenEstimator``'s:
+an upper bound on a byte-level BPE's count, not a MiniMax invoice (``budget.py``).
 """
 
 from __future__ import annotations
@@ -37,8 +37,11 @@ from papertree_retrieval.index import PaperIndex
 
 __all__ = ["SEED_BUDGET_TOKENS", "Seed", "SeedPassage", "build_seed"]
 
-#: contracts.md §3.2: "under a budget of <= 3,000 estimated tokens".
-SEED_BUDGET_TOKENS: Final = 3_000
+#: contracts.md §3.2 (dated note 2026-11-20): "under a budget of <= 1,500 estimated tokens".
+#: It was 3,000 while every word carried a datamark, which roughly doubled the estimate, so 3,000
+#: bought about five passages. With boundary marks the same five passages cost ~1,300, and keeping
+#: 3,000 would have spent the saving on six more passages instead of on latency (#339).
+SEED_BUDGET_TOKENS: Final = 1_500
 
 #: How much text before the focus a trimmed selected block keeps, so the model reads the sentence
 #: with its lead-in rather than starting mid-word at the quote.

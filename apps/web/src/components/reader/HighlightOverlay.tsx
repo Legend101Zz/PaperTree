@@ -14,9 +14,16 @@
  * composited with `transform: scale(zoom × userUnit)`, so zoom costs one transform and the geometry
  * is serialised once per change of the highlights, never per zoom step.
  *
+ * ONE BAND PER LINE (#346). The stored quads are one per text item, so a line with italics or inline
+ * maths is several, and painting them one by one leaves white gaps and steps. At PAINT time the quads
+ * of a line are merged (`mergeQuadsPerLine`); what is stored is untouched, so a re-parse still cannot
+ * move a highlight. Only a record with no quads at all falls back to its polygons.
+ *
  * WHAT IT LOOKS LIKE. A low-alpha tint the text reads through, plus a darker underline along each
- * line's baseline (the bottom edge of each quad) — the underline is what keeps a pale tint legible
- * and tells colours apart for a reader who cannot. Approximate paint (a ladder answer that is not
+ * line's baseline (the bottom edge of each band) — the underline is what keeps a pale tint legible
+ * and tells colours apart for a reader who cannot. The LIVE selection is drawn the same way, as
+ * bands in the selection token (`selection`), while the native highlight on the text layer is made
+ * transparent (`.pt-reader [data-pt-selpaint]`). Approximate paint (a ladder answer that is not
  * exact) adds a dashed outline: a different SHAPE, not only a different opacity.
  *
  * NOT A POINTER TARGET. The whole layer is `pointer-events: none`, so a drag that starts on a
@@ -27,7 +34,7 @@
 
 import { useMemo } from 'react';
 
-import { irPolygonToSvgPoints } from '@papertree/anchoring';
+import { irPolygonToSvgPoints, mergeQuadsPerLine } from '@papertree/anchoring';
 import type { BBox, Polygon } from '@papertree/document-ir';
 
 import type { HighlightColor } from '@/lib/api/types';
@@ -78,6 +85,8 @@ export interface HighlightOverlayProps {
   readonly items: readonly PaintItem[];
   readonly activeHighlightId?: string | null;
   readonly flash?: FlashPaint | null;
+  /** The live selection's quads on THIS page (IR space), or null: painted as one band per line. */
+  readonly selection?: readonly BBox[] | null;
   /** Enter or Space on a focused highlight. */
   readonly onActivate?: (highlightId: string, anchorKey: string) => void;
 }
@@ -86,6 +95,28 @@ interface Region {
   readonly item: PaintItem;
   readonly points: readonly string[];
   readonly lines: readonly (readonly [number, number, number])[];
+}
+
+/** A band as SVG polygon points. */
+function bandPoints(b: BBox): string {
+  return `${String(b[0])},${String(b[1])} ${String(b[2])},${String(b[1])} ${String(b[2])},${String(b[3])} ${String(b[0])},${String(b[3])}`;
+}
+
+/** What one highlight draws: its quads merged per line, or its polygons when it has no quads. */
+function regionOf(item: PaintItem): Region {
+  const bands = mergeQuadsPerLine(item.quads);
+  if (bands.length === 0) {
+    return {
+      item,
+      points: item.polygons.filter((p) => p.length >= 3).map((p) => irPolygonToSvgPoints(p)),
+      lines: item.quads.map((q) => [q[0], q[2], q[3]] as const),
+    };
+  }
+  return {
+    item,
+    points: bands.map(bandPoints),
+    lines: bands.map((b) => [b[0], b[2], b[3]] as const),
+  };
 }
 
 export function HighlightOverlay({
@@ -97,21 +128,17 @@ export function HighlightOverlay({
   items,
   activeHighlightId = null,
   flash = null,
+  selection = null,
   onActivate,
 }: HighlightOverlayProps): JSX.Element {
   // ZOOM IS NOT A DEPENDENCY: the geometry is fixed in IR space; only the transform changes.
   const regions = useMemo<Region[]>(
-    () =>
-      items
-        .filter((item) => item.pageIndex === pageIndex)
-        .map((item) => ({
-          item,
-          points: item.polygons
-            .filter((polygon) => polygon.length >= 3)
-            .map((polygon) => irPolygonToSvgPoints(polygon)),
-          lines: item.quads.map((q) => [q[0], q[2], q[3]] as const),
-        })),
+    () => items.filter((item) => item.pageIndex === pageIndex).map(regionOf),
     [items, pageIndex],
+  );
+  const selectionPoints = useMemo(
+    () => (selection === null ? [] : mergeQuadsPerLine(selection).map(bandPoints)),
+    [selection],
   );
   const flashPoints = useMemo(
     () =>
@@ -172,6 +199,13 @@ export function HighlightOverlay({
           ))}
         </g>
       ))}
+      {selectionPoints.length === 0 ? null : (
+        <g className="pt-sel" aria-hidden="true" data-selection-bands={selectionPoints.length}>
+          {selectionPoints.map((p, index) => (
+            <polygon key={String(index)} className="pt-sel-fill" points={p} />
+          ))}
+        </g>
+      )}
       {flashPoints.length === 0 || flash === null || flash.phase === 'scroll' ? null : (
         // `true` while the ring and wash run (their keyframes start as this group mounts, when the
         // scroll is over); `linger` for the faint outline that waits for the next action.

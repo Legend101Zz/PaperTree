@@ -289,7 +289,7 @@ describe('reader/capture-wire.spec — a DOM selection becomes an anchor', () =>
     const span = await stampedSpan(target);
 
     selectWithin(span);
-    fireEvent.click(await screen.findByRole('button', { name: 'Highlight' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Highlight in amber' }));
 
     await waitFor(() => {
       expect(captured.length).toBeGreaterThan(0);
@@ -342,7 +342,7 @@ describe('reader/capture-wire.spec — a DOM selection becomes an anchor', () =>
     selection?.addRange(range);
     fireEvent(document, new Event('selectionchange'));
     fireEvent.pointerUp(to);
-    fireEvent.click(await screen.findByRole('button', { name: 'Highlight' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Highlight in amber' }));
     await waitFor(() => expect(captured.length).toBe(1));
     const blocks = captured[0]?.anchors.map(
       (a) =>
@@ -360,7 +360,7 @@ describe('reader/capture-wire.spec — a DOM selection becomes an anchor', () =>
     renderPane(doc, { actions: { openExplain: (input) => asked.push(input) } });
     const span = await stampedSpan(target);
     selectWithin(span);
-    fireEvent.click(await screen.findByRole('button', { name: 'Explain this passage' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Explain' }));
     await waitFor(() => expect(asked).toHaveLength(1));
     expect(asked[0]?.quote).toBe(span.textContent);
     expect(JSON.stringify(asked[0]?.anchor)).toContain(target.id);
@@ -388,7 +388,7 @@ describe('reader/capture-wire.spec — a DOM selection becomes an anchor', () =>
     expect(label.getAttribute('data-block-id')).toBeNull();
 
     selectWithin(label);
-    fireEvent.click(await screen.findByRole('button', { name: 'Highlight' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Highlight in amber' }));
     await waitFor(() => expect(captured.length).toBeGreaterThan(0));
     const anchor = captured[0]?.anchor as Anchor;
     expect(anchor.doc.textStreamId).toBe('pdfjs@5.7.284/page-text');
@@ -526,7 +526,7 @@ describe('reader/capture-wire.spec — review F1: each selected glyph is stored 
     const first = await itemElement(firstStr);
     const last = await itemElement(lastStr);
     selectBetween(first, 0, last, (last.textContent ?? '').length);
-    fireEvent.click(await screen.findByRole('button', { name: 'Highlight' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Highlight in amber' }));
     await waitFor(() => expect(captured).toHaveLength(1));
 
     const anchors = captured[0]?.anchors ?? [];
@@ -548,7 +548,7 @@ describe('reader/capture-wire.spec — review F1: each selected glyph is stored 
     const last = await itemElement(tail.str);
     expect(last.getAttribute('data-cp-start')).toBeNull();
     selectBetween(first, 0, last, (last.textContent ?? '').length);
-    fireEvent.click(await screen.findByRole('button', { name: 'Highlight' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Highlight in amber' }));
     await waitFor(() => expect(captured).toHaveLength(1));
 
     const anchors = captured[0]?.anchors ?? [];
@@ -575,7 +575,7 @@ describe('reader/capture-wire.spec — review F1: each selected glyph is stored 
     const last = await itemElement(tail.str);
     const part = Math.floor((last.textContent ?? '').length / 2);
     selectBetween(first, 0, last, part);
-    fireEvent.click(await screen.findByRole('button', { name: 'Highlight' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Highlight in amber' }));
     await waitFor(() => expect(captured).toHaveLength(1));
 
     const anchors = captured[0]?.anchors ?? [];
@@ -615,7 +615,7 @@ describe('reader/capture-wire.spec — review F1: each selected glyph is stored 
     const from = await itemElement(firstStr);
     const to = await itemElement(nextStr);
     selectBetween(from, 0, to, Math.min(10, (to.textContent ?? '').length));
-    fireEvent.click(await screen.findByRole('button', { name: 'Highlight' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Highlight in amber' }));
     await waitFor(() => expect(captured).toHaveLength(1));
 
     const anchors = captured[0]?.anchors ?? [];
@@ -657,17 +657,19 @@ describe('reader/capture-wire.spec — review F2: a selection longer than one hi
     const last = await itemElement((items[items.length - 1] as FakeItem).str);
     selectBetween(first, 0, last, (last.textContent ?? '').length);
 
-    const button = await screen.findByRole('button', { name: 'Highlight' });
+    const button = await screen.findByRole('button', { name: 'Highlight in amber' });
     await waitFor(() => expect((button as HTMLButtonElement).disabled).toBe(true));
     const toolbar = screen.getByRole('toolbar', { name: 'Selection actions' });
     expect(toolbar.textContent).toMatch(/covers \d+ passages; one highlight holds up to 64/);
-    const noteId = button.getAttribute('aria-describedby');
+    const noteId = screen
+      .getByRole('group', { name: 'Highlight colour' })
+      .getAttribute('aria-describedby');
     expect(noteId).not.toBeNull();
     expect(document.getElementById(noteId ?? '')?.textContent).toMatch(/up to 64/);
     fireEvent.click(button);
     expect(captured).toEqual([]);
-    // Ask and Copy still work on it.
-    expect((screen.getByRole('button', { name: 'Copy' }) as HTMLButtonElement).disabled).toBe(
+    // Explain still works on it.
+    expect((screen.getByRole('button', { name: 'Explain' }) as HTMLButtonElement).disabled).toBe(
       false,
     );
   });

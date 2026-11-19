@@ -128,7 +128,10 @@ describe('the topic-v1 prompt', () => {
     const turn = userText(request);
     assert.ok(turn.startsWith(request.question));
     assert.match(turn, /<untrusted_document trust="untrusted">/);
-    assert.ok(turn.includes(`${request.datamark} We ${request.datamark} present`));
+    assert.ok(
+      turn.includes(`\n${request.datamark}\nWe present`),
+      'the abstract opens after a marker line',
+    );
   });
 
   test('no abstract is said, not guessed', () => {

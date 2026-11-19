@@ -7,6 +7,8 @@
 
 import { usePopover } from '../hooks/usePopover';
 
+import './popoverMenu.css';
+
 import type { CSSProperties, ReactNode } from 'react';
 
 /** Props for `PopoverMenu`. */

@@ -1,0 +1,251 @@
+/*
+ * The selection menu (#203, #346, P4 step 5). Three forms, one markup:
+ *   margin  a column beside the selection in the desk margin. It is as wide as its longest label
+ *           ("Send to board" and its chevron) and no label wraps, so nothing runs past the box (#346).
+ *   docked  a compact row (icons, short labels, the five colours) over the column, for when there is
+ *           no margin: a narrow window and, later, the split view. `.pt-seltool-dock` is a size
+ *           container so a narrower column drops the labels, keeping the row on one line.
+ *   sheet   the phone's bottom bar.
+ * Colours are tokens, so it works on every room and page. Only transform and opacity ease, and not
+ * at all under prefers-reduced-motion.
+ */
+
+.pt-seltool {
+  position: absolute;
+  z-index: 40;
+  display: flex;
+  gap: 2px;
+  padding: 6px;
+  font-family: var(--pt-font-ui);
+  line-height: 1;
+  color: var(--pt-ink);
+  background: var(--pt-e2-fill);
+  border: 1px solid var(--pt-control-border);
+  border-radius: var(--pt-radius-menu);
+  box-shadow: var(--pt-e2), var(--pt-e2-edge);
+  pointer-events: auto;
+  /* Its labels are never part of a text selection, even when a drag ends over the bar (e2e rfix
+     R1 A2 / R1b C selected "Explain Ask" before the bar was dropped on a new press). */
+  user-select: none;
+  -webkit-user-select: none;
+  animation: pt-rise 140ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pt-seltool {
+    animation: none;
+  }
+}
+
+/* In the desk margin: a column that fits its longest label. The placement reads the drawn width. */
+.pt-seltool--margin {
+  flex-direction: column;
+  inline-size: max-content;
+  padding: 4px;
+}
+
+/* (scoped: it must win over the shared `.pt-toolbtn`, which centres its content). 40 px: v0.1's floor
+   for the selection bar's buttons (review S4). */
+.pt-seltool .pt-seltool__item {
+  justify-content: flex-start;
+  min-block-size: 40px;
+  padding-inline: 8px;
+  white-space: nowrap;
+}
+
+.pt-seltool__item--primary {
+  font-weight: 700;
+}
+
+.pt-seltool__item[disabled] {
+  color: var(--pt-ink-muted);
+  cursor: not-allowed;
+}
+
+.pt-seltool__chevron {
+  flex: none;
+  margin-inline-start: auto;
+}
+
+.pt-seltool__sep {
+  flex: none;
+  block-size: 1px;
+  margin: 4px 6px;
+  background: var(--pt-rule);
+}
+
+/* Send to board: the two choices sit indented under it in a column, and in a popover in a row. */
+.pt-seltool__send {
+  position: relative;
+}
+
+.pt-seltool__sub {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 2px 0 2px 16px;
+}
+
+.pt-seltool__hint {
+  margin-inline-start: 6px;
+  font-size: 0.78rem;
+  color: var(--pt-ink-2);
+}
+
+/* Docked: over the column (outside the scroller), sized to its contents and centred. */
+.pt-seltool-dock {
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+  pointer-events: none;
+  container-type: inline-size;
+}
+
+.pt-seltool--docked {
+  inset-inline: 0;
+  inline-size: max-content;
+  max-inline-size: calc(100% - 16px);
+  margin-inline: auto;
+  flex-wrap: wrap;
+  align-items: center;
+  min-block-size: 48px;
+  padding-block: 4px;
+}
+
+.pt-seltool--top {
+  inset-block-start: 8px;
+}
+
+.pt-seltool--bottom {
+  inset-block-end: 8px;
+}
+
+.pt-seltool--docked .pt-seltool__item {
+  padding-inline: 8px;
+  gap: 6px;
+}
+
+.pt-seltool--docked .pt-seltool__chevron {
+  margin-inline-start: 0;
+}
+
+.pt-seltool--docked .pt-seltool__sep {
+  inline-size: 1px;
+  block-size: 22px;
+  margin: 0 4px;
+}
+
+.pt-seltool--docked .pt-seltool__sub,
+.pt-seltool--sheet .pt-seltool__sub {
+  position: absolute;
+  inset-block-start: calc(100% + 6px);
+  inset-inline-start: 0;
+  z-index: 1;
+  padding: 6px;
+  background: var(--pt-e2-fill);
+  border: 1px solid var(--pt-control-border);
+  border-radius: var(--pt-radius-menu);
+  box-shadow: var(--pt-e2), var(--pt-e2-edge);
+}
+
+/* At the bottom of the column, or on the phone, the choices open upward. */
+.pt-seltool--bottom .pt-seltool__sub,
+.pt-seltool--sheet .pt-seltool__sub {
+  inset-block-start: auto;
+  inset-block-end: calc(100% + 6px);
+}
+
+/* A column too narrow for the labels keeps the icons (their names are the buttons' aria-labels). */
+@container (max-inline-size: 470px) {
+  .pt-seltool--docked .pt-toolbtn__label {
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
+
+.pt-seltool--sheet {
+  position: fixed;
+  inset-inline: 16px;
+  inset-block-end: calc(16px + env(safe-area-inset-bottom, 0px));
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+}
+
+/* The five washes behind a highlighter glyph, like the prototype's row: chips each drawn 18 px
+   inside a 24 px target (WCAG 2.5.8's minimum), 40 px on the phone's bar where a finger presses. */
+.pt-seltool__washes {
+  display: flex;
+  align-items: center;
+  padding: 2px 4px 4px 8px;
+}
+
+.pt-seltool__washicon {
+  flex: none;
+  margin-inline-end: 6px;
+  color: var(--pt-ink-2);
+}
+
+.pt-seltool--docked .pt-seltool__washes {
+  padding: 0 8px;
+}
+
+.pt-seltool--sheet .pt-seltool__washes {
+  padding: 0 4px;
+}
+
+.pt-seltool__wash {
+  position: relative;
+  inline-size: 24px;
+  block-size: 24px;
+  padding: 0;
+  cursor: pointer;
+  background: none;
+  border: 0;
+  border-radius: var(--pt-radius-round);
+}
+
+.pt-seltool__wash::before {
+  content: '';
+  position: absolute;
+  inset: 3px;
+  border-radius: var(--pt-radius-round);
+  background: var(--wash-fill);
+  box-shadow: inset 0 0 0 2px var(--wash-ink);
+}
+
+.pt-seltool--sheet .pt-seltool__wash {
+  inline-size: 40px;
+  block-size: 40px;
+}
+
+.pt-seltool--sheet .pt-seltool__wash::before {
+  inset: 10px;
+}
+
+.pt-seltool__wash:focus-visible {
+  outline: var(--pt-focus-width) solid var(--pt-focus);
+  outline-offset: var(--pt-focus-offset);
+}
+
+.pt-seltool__wash[disabled] {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+/* Highlight is unavailable for this selection: the reason is a sentence in the bar itself, never only
+   a tooltip, taking the bar's width and never setting it. */
+.pt-seltool__note {
+  flex-basis: 100%;
+  inline-size: 0;
+  min-inline-size: 100%;
+  margin: 0;
+  padding: 4px 8px 6px;
+  font-size: 0.8125rem;
+  line-height: 1.4;
+  color: var(--pt-ink-muted);
+}

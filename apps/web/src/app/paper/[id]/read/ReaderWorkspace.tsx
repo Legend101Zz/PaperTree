@@ -303,7 +303,11 @@ export function ReaderWorkspace({ paper: given }: ReaderWorkspaceProps) {
   const [navigatorOpen, setNavigatorOpen] = useState(false);
   const [selection, setSelection] = useState<PendingSelection | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [card, setCard] = useState<{ highlightId: string; at: CardAt | null } | null>(null);
+  const [card, setCard] = useState<{
+    highlightId: string;
+    at: CardAt | null;
+    focusNote?: boolean;
+  } | null>(null);
   const [flash, setFlash] = useState<FlashPaint | null>(null);
   const [guidedFlash, setGuidedFlash] = useState<string | null>(null);
   const [followBlockId, setFollowBlockId] = useState<string | null>(null);
@@ -620,6 +624,29 @@ export function ReaderWorkspace({ paper: given }: ReaderWorkspaceProps) {
     [highlights],
   );
 
+  /** The selection menu's Note: a highlight, with its card open on the note field. */
+  const onCreateNote = useCallback(
+    async (captured: SelectionCapture, at: CardAt | null) => {
+      const made = await highlights.create(captured.anchors, lastColor.current);
+      if (made !== null) setCard({ highlightId: made.highlightId, at, focusNote: true });
+    },
+    [highlights],
+  );
+
+  // The selection menu's Board beside. TODO(#344): the split view puts the board next to the paper;
+  // until it lands this is the existing board-open behaviour, the header's Board link.
+  const boardPath =
+    paper.kind === 'api' ? `/paper/${encodeURIComponent(paper.paperId)}/board` : null;
+  const onOpenBoard = useMemo(
+    () =>
+      boardPath === null
+        ? undefined
+        : () => {
+            window.location.assign(boardPath);
+          },
+    [boardPath],
+  );
+
   const onActivateHighlight = useCallback(
     (highlightId: string, at: CardAt | null) => setCard({ highlightId, at }),
     [],
@@ -717,6 +744,8 @@ export function ReaderWorkspace({ paper: given }: ReaderWorkspaceProps) {
           onNavigatorToggle={() => setNavigatorOpen((open) => !open)}
           highlights={highlights}
           onCreateHighlight={onCreateHighlight}
+          onCreateNote={onCreateNote}
+          onOpenBoard={onOpenBoard}
           onActivateHighlight={onActivateHighlight}
           activeHighlightId={card?.highlightId ?? null}
           flash={flash}
@@ -788,7 +817,11 @@ function HighlightCardSlot({
   onColor,
 }: {
   readonly highlights: UseHighlights;
-  readonly card: { readonly highlightId: string; readonly at: CardAt | null };
+  readonly card: {
+    readonly highlightId: string;
+    readonly at: CardAt | null;
+    readonly focusNote?: boolean;
+  };
   readonly onClose: () => void;
   readonly onColor: (color: HighlightColor) => void;
 }) {
@@ -799,6 +832,7 @@ function HighlightCardSlot({
       key={highlight.highlightId}
       highlight={highlight}
       at={card.at}
+      focusNote={card.focusNote === true}
       onColor={(color) => {
         onColor(color);
         void highlights.update(highlight.highlightId, { color });
@@ -842,7 +876,7 @@ function ReaderActionsMount({
 }) {
   const paperId = paper.kind === 'api' ? paper.paperId : null;
   const explain = useExplainActions({ paperId });
-  const { openExplain, openDiagram, askAbout, openPanel, closeExplain, summarize } = explain;
+  const { openExplain, askAbout, openPanel, closeExplain, summarize } = explain;
   const explainOpen = explain.state.open;
   // S5e: a dived page's Back to the paper (`?thread=`) reopens the panel on its thread.
   useThreadFromNotebook(paperId, explain.selectThread);
@@ -867,12 +901,10 @@ function ReaderActionsMount({
     () => ({
       openExplain,
       askAbout,
-      // A sample paper has no server to draw a plate: no button rather than an inert one.
-      ...(paperId === null ? {} : { explainWithDiagram: openDiagram }),
       sendToCanvas: (input) => sendToCanvas(paperId, input),
       focusAnchor: (anchor, opts) => onFocusAnchor(anchor, opts),
     }),
-    [openExplain, openDiagram, askAbout, paperId, onFocusAnchor],
+    [openExplain, askAbout, paperId, onFocusAnchor],
   );
 
   return (
@@ -904,6 +936,8 @@ interface ViewProps {
   readonly onNavigatorToggle: () => void;
   readonly highlights: UseHighlights;
   readonly onCreateHighlight: (captured: SelectionCapture, color?: HighlightColor) => void;
+  readonly onCreateNote: (captured: SelectionCapture, at: CardAt | null) => void;
+  readonly onOpenBoard: (() => void) | undefined;
   readonly onActivateHighlight: (highlightId: string, at: CardAt | null) => void;
   readonly activeHighlightId: string | null;
   readonly flash: FlashPaint | null;
@@ -1118,6 +1152,8 @@ function SourceSlot(props: ViewProps) {
       zoom={props.zoom}
       highlights={props.highlights.highlights}
       onCreateHighlight={props.onCreateHighlight}
+      onCreateNote={props.onCreateNote}
+      {...(props.onOpenBoard === undefined ? {} : { onOpenBoard: props.onOpenBoard })}
       highlightUnavailableReason={props.highlights.unavailableReason}
       onActivateHighlight={props.onActivateHighlight}
       activeHighlightId={props.activeHighlightId}

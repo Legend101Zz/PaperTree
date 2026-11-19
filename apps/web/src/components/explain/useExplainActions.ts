@@ -130,7 +130,6 @@ type Action =
       epoch: number;
       request: ExplainRequest | null;
       view: PanelView;
-      diagram?: boolean;
     }
   | { type: 'close' }
   | { type: 'view'; view: PanelView }
@@ -167,7 +166,7 @@ export function explainReducer(state: ExplainState, action: Action): ExplainStat
         threadId: null,
         messages: [],
         fresh: false,
-        diagram: action.diagram === true,
+        diagram: false,
       };
     case 'fresh':
       return {
@@ -256,11 +255,10 @@ export interface ExplainController {
   /** What the panel is open on; `null` when it was opened without a selection (or is closed). */
   readonly request: ExplainRequest | null;
   readonly openExplain: (input: ExplainRequest) => void;
-  /** The selection toolbar's "Explain with a diagram" (#217): a new diagram thread on the passage. */
-  readonly openDiagram: (input: ExplainRequest) => void;
   /**
-   * Redraw a plate (#217): a new plate under a new ask in the same thread (`redraw_of`). On a plate
-   * that never arrived (refused or failed before it was written) it asks for that plate again.
+   * Redraw a plate (#217) of a stored diagram thread: a new plate under a new ask in the same
+   * thread (`redraw_of`). On a Redraw that never arrived (refused before the stream) it sends that
+   * Redraw again, in place.
    */
   readonly redraw: (key: string) => void;
   /**
@@ -304,8 +302,6 @@ export interface ExplainController {
 export type AskOutcome = 'sent' | 'not-sent';
 
 const DEFAULT_EXPLAIN_QUESTION = 'Explain this passage.';
-/** The server's default ask of a diagram thread (`schemas.DIAGRAM_QUESTION`). */
-const DIAGRAM_QUESTION = 'Explain with a diagram.';
 /** A Redraw's ask: it names the exchange it opens in the thread menu (#217). */
 const REDRAW_QUESTION = 'Redraw the diagram.';
 
@@ -585,40 +581,13 @@ export function useExplainActions(options: { readonly paperId: string | null }):
     [halt, sendCreate],
   );
 
-  const openDiagram = useCallback(
-    (input: ExplainRequest): void => {
-      halt(false);
-      const epoch = (epochRef.current += 1);
-      dispatch({ type: 'open', epoch, request: input, view: 'thread', diagram: true });
-      stateRef.current = {
-        ...stateRef.current,
-        epoch,
-        messages: [],
-        threadId: null,
-        diagram: true,
-      };
-      if (paperId === null) return;
-      const body: CreateThreadBody = { kind: 'diagram', anchor: input.anchor };
-      const open = (signal: AbortSignal) => threadsApi.create(paperId, body, signal);
-      void startTurn(epoch, DIAGRAM_QUESTION, false, open, undefined, {});
-    },
-    [halt, paperId, startTurn],
-  );
-
   const redraw = useCallback(
     (key: string): void => {
       const current = stateRef.current;
       const target = current.messages.find((m) => m.key === key);
       if (paperId === null || target === undefined || current.messages.some(isStreaming)) return;
-      const { epoch, threadId, request } = current;
-      if (threadId === null) {
-        // The first plate never reached a thread (refused or failed before its `run`): ask again.
-        if (request === null) return;
-        const body: CreateThreadBody = { kind: 'diagram', anchor: request.anchor };
-        const open = (signal: AbortSignal) => threadsApi.create(paperId, body, signal);
-        void startTurn(epoch, target.question, false, open, key, {});
-        return;
-      }
+      const { epoch, threadId } = current;
+      if (threadId === null) return;
       // A Redraw that never arrived (refused before the stream) is sent again as the same Redraw,
       // in place; a plate that has an id gets a new plate under a new ask.
       const again = target.messageId === null;
@@ -919,7 +888,6 @@ export function useExplainActions(options: { readonly paperId: string | null }):
       state,
       request: state.open ? state.request : null,
       openExplain,
-      openDiagram,
       redraw,
       askAbout,
       openPanel,
@@ -939,7 +907,6 @@ export function useExplainActions(options: { readonly paperId: string | null }):
       paperId,
       state,
       openExplain,
-      openDiagram,
       redraw,
       askAbout,
       openPanel,
