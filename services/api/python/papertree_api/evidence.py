@@ -24,20 +24,9 @@ section titled ``</untrusted_document>`` would close the delimiter from the outs
 ON DONE (§3.4). The final text's ``[bN]`` markers are mapped to blocks through the run's handles
 (an unknown marker is dropped and logged); each citation gets a whole-block Anchor minted by
 ``papertree_anchoring.capture_citation`` (``capture_anchor(..., target_kind="citation")``)
-against the generation the answer was grounded in; the text is split into claims (sentences, or
-bullets for a summary) and ``assess_claim`` runs per claim over the cited blocks' resolved
-text — only the blocks THAT claim cites, never every block the run was shown. Each claim is
-``supported``, ``neutral`` (commentary that reuses some of the passage's words) or ``unsupported``
-(a wrong number, invented wording); a citation is ``supported`` when at least one claim that cites
-it is ``supported`` and none is ``unsupported`` (S5F: "every claim" made interpretive sentences
-take well-grounded citations down; ``papertree_agent_tools.grounding`` carries the measurements).
-The verifier's REASONS (which list the words it could not find) never leave this module.
-
-WHICH CLAIM A MARKER BELONGS TO. The contract fixes a marker's shape (§3.2), not where a model puts
-it: ``Claim. [b1] Next.`` and ``Claim [b1]. Next.`` both give ``b1`` to ``Claim``. Markers written
-right after a stop, or opening a line, belong to the claim BEFORE them; given to the next sentence
-instead, a fabricated claim's citation could read ``supported``. An abbreviation's stop
-(``Fig. 3``) does not end a claim, so no marker-less fragment escapes the verifier.
+against the generation the answer was grounded in. No verdict is computed or stored on a
+citation (v0.3, #351: an AI answer is a tutor, not an auditor); ``claim_assessment`` remains only
+for ``quotes.py``, which uses it to find the nearest passage of a diagram part's quote.
 """
 
 from __future__ import annotations
@@ -54,7 +43,6 @@ from papertree_agent_tools import (
     ClaimAssessment,
     ClaimEvidence,
     PaperVocabulary,
-    Verdict,
     assess_claim,
     content_tokens,
     paper_vocabulary,
@@ -103,20 +91,8 @@ _WHITESPACE: Final = re.compile(r"\s+")
 #: follow-up "2. **Amplify the mismatch** …" read as an unsupported claim about the number 2).
 _LIST_ORDINAL: Final = re.compile(r"^\s*(?:[-*\u2022]\s+)?\(?[0-9]{1,2}[.)]\s+")
 _MARKER_GROUPS: Final = rf"(?:\s*{MARKER.pattern})*"
-#: A claim ends at `.`/`!`/`?` (and any closing quote or paren), TOGETHER WITH the marker groups
-#: written right after it: `Claim. [b1] Next.` gives `b1` to `Claim.`, exactly as `Claim [b1].`
-#: does (the contract fixes the marker's shape, not which side of the stop a model puts it).
-_CLAIM_END: Final = re.compile(rf"(?P<stop>[.!?])[\"'”’)]*{_MARKER_GROUPS}(?=\s+[\"'“‘(\[A-Z0-9])")
 #: Marker groups at the very start of a claim (a line that opens with, or is only, markers).
 _LEADING_MARKERS: Final = re.compile(rf"^{_MARKER_GROUPS}\s*")
-#: Words whose `.` does not end a sentence: `Fig. 3 shows …` is one claim, and a split there would
-#: leave a marker-less fragment (`As Fig.`) that no verifier reads. A wrong merge costs precision
-#: (two sentences checked together); a wrong split leaves words unchecked.
-_ABBREVIATIONS: Final = frozenset(
-    {"al", "approx", "cf", "ch", "e.g", "eq", "eqs", "fig", "figs", "i.e", "no", "nos", "p", "pp"}
-    | {"ref", "refs", "resp", "sec", "secs", "tab", "tabs", "vol", "vs"}
-)
-_LAST_WORD: Final = re.compile(r"([\w.]+)$")
 _BULLET: Final = re.compile(r"^\s*(?:[-*•]|\d+[.)])\s+")
 
 
@@ -641,20 +617,6 @@ def strip_markers(text: str) -> str:
     return _WHITESPACE.sub(" ", MARKER.sub(" ", text)).strip()
 
 
-def _sentences(line: str) -> list[str]:
-    parts: list[str] = []
-    start = 0
-    for end in _CLAIM_END.finditer(line):
-        if end.group("stop") == ".":
-            word = _LAST_WORD.search(line[start : end.start("stop")])
-            if word is not None and word.group(1).lower() in _ABBREVIATIONS:
-                continue
-        parts.append(line[start : end.end()])
-        start = end.end()
-    parts.append(line[start:])
-    return [part.strip() for part in parts if part.strip()]
-
-
 def _attach_leading_markers(claims: list[str], part: str) -> None:
     """Appends ``part`` to ``claims``; marker groups that OPEN it (or are all of it) belong to
     the claim before it, when there is one (``Claim.\\n[b1]``)."""
@@ -664,16 +626,6 @@ def _attach_leading_markers(claims: list[str], part: str) -> None:
         part = part[lead.end() :].strip()
     if part:
         claims.append(part)
-
-
-def split_claims(text: str) -> list[str]:
-    """Sentences of an answer, each with the markers written right after its stop; a
-    line-broken answer is split per line first."""
-    claims: list[str] = []
-    for line in text.splitlines():
-        for part in _sentences(line):
-            _attach_leading_markers(claims, part)
-    return claims
 
 
 def split_bullets(text: str) -> list[str]:
@@ -710,55 +662,6 @@ def claim_assessment(
     return assess_claim(clean, ClaimEvidence(bags, (), refs), paper=paper)
 
 
-def claim_verdict(
-    claim: str,
-    cited_blocks: Sequence[str],
-    texts: Mapping[str, str],
-    paper: PaperVocabulary | None = None,
-) -> Verdict:
-    """:func:`claim_assessment`'s verdict. A claim whose cited blocks are not in ``texts`` (a block
-    the generation lacks) has no evidence, and no evidence is ``neutral`` only when the claim is
-    empty: a claim citing nothing real is not supported."""
-    assessed = claim_assessment(claim, cited_blocks, texts, paper)
-    if assessed is None:
-        clean = _LIST_ORDINAL.sub("", strip_markers(claim), count=1)
-        return "unsupported" if clean else "neutral"
-    return assessed.verdict
-
-
-def claim_supported(
-    claim: str,
-    cited_blocks: Sequence[str],
-    texts: Mapping[str, str],
-    paper: PaperVocabulary | None = None,
-) -> bool:
-    return claim_verdict(claim, cited_blocks, texts, paper) == "supported"
-
-
-def citation_supported(verdicts: Sequence[Verdict]) -> bool | None:
-    """The stored flag of a citation: ``True`` when at least one claim that carries it is
-    ``supported`` and none is ``unsupported``; ``False`` when a claim that carries it is
-    ``unsupported``; ``None`` (not checked) when every claim that carries it is ``neutral``.
-
-    Not "every claim": an answer that explains a passage cites it from its interpretive sentences
-    too, and those reuse part of the passage's words and add their own (``neutral``). Counting
-    them against the citation made a well-grounded citation read "not verified". And not "any
-    claim" alone: a fabricated number or an invented finding carrying the same marker as an honest
-    sentence (``unsupported``) must still take the citation down.
-
-    ``None`` and not ``False`` for all-neutral (W2API item 2, 2026-10-15): the live panel's
-    follow-ups ("which is most serious, and how would you test it?") cite the right passages from
-    judgement and experiment-design sentences; the lexical check cannot call those grounded, but
-    it has no evidence against them either, so the reader is told "not checked", not "not
-    supported". Re-run on those 33 follow-up citations: before, 1 true and 32 false; now 1 true, 5
-    false (an unsupported claim carries them) and 27 null."""
-    if "unsupported" in verdicts:
-        return False
-    if "supported" in verdicts:
-        return True
-    return None
-
-
 @dataclass(frozen=True, slots=True)
 class MintedCitation:
     citation_id: str
@@ -767,7 +670,6 @@ class MintedCitation:
     block_id: str
     page_index: int
     anchor: dict[str, Any]
-    supported: bool | None
 
     def wire(self) -> dict[str, Any]:
         return {
@@ -807,13 +709,11 @@ class CitationMinter:
     run_id: str
     handles: Mapping[str, str]
     document: IndexedDocument | None
-    texts: Mapping[str, str]
     new_id: Callable[[str], str]
-    paper: PaperVocabulary | None = None
     dropped: list[str] = field(default_factory=list)
     _next: int = 0
 
-    def mint(self, marker: str, supported: bool | None) -> MintedCitation | None:
+    def mint(self, marker: str) -> MintedCitation | None:
         block_id = self.handles.get(marker)
         if block_id is None:
             self.dropped.append(marker)
@@ -855,28 +755,16 @@ class CitationMinter:
             block_id=block_id,
             page_index=page_index,
             anchor=anchor,
-            supported=supported,
         )
         self._next += 1
         return citation
 
 
 def cite_answer(final_text: str, minter: CitationMinter) -> list[MintedCitation]:
-    """An answer's citations, one per distinct known marker, in order of first appearance, each
-    ``supported`` iff every claim citing it passes the verifier."""
-    verdicts: dict[str, list[Verdict]] = {}
-    for claim in split_claims(final_text):
-        cited = [m for m in markers_in(claim) if m in minter.handles]
-        if not cited:
-            continue
-        blocks = [minter.handles[m] for m in cited]
-        verdict = claim_verdict(claim, blocks, minter.texts, minter.paper)
-        for marker in cited:
-            verdicts.setdefault(marker, []).append(verdict)
+    """An answer's citations, one per distinct known marker, in order of first appearance."""
     citations: list[MintedCitation] = []
     for marker in markers_in(final_text):
-        seen = verdicts.get(marker)
-        citation = minter.mint(marker, None if seen is None else citation_supported(seen))
+        citation = minter.mint(marker)
         if citation is not None:
             citations.append(citation)
     return citations
@@ -886,26 +774,17 @@ def cite_answer(final_text: str, minter: CitationMinter) -> list[MintedCitation]
 class SummaryBulletOut:
     text: str
     citations: tuple[MintedCitation, ...]
-    supported: bool
 
 
 def cite_summary(final_text: str, minter: CitationMinter) -> list[SummaryBulletOut]:
-    """contracts.md §3.4: bullets ``- … [bN]``; a bullet without a valid marker is
-    ``supported: false``; each marker in a bullet is its own citation."""
+    """contracts.md §3.4: bullets ``- … [bN]``; each marker in a bullet is its own citation, and
+    a bullet without a valid marker has no citation."""
     out: list[SummaryBulletOut] = []
     for bullet in split_bullets(final_text):
-        known = [m for m in markers_in(bullet) if m in minter.handles]
-        supported = bool(known) and claim_supported(
-            bullet, [minter.handles[m] for m in known], minter.texts, minter.paper
-        )
         citations = []
         for marker in markers_in(bullet):
-            citation = minter.mint(marker, supported if known else False)
+            citation = minter.mint(marker)
             if citation is not None:
                 citations.append(citation)
-        out.append(
-            SummaryBulletOut(
-                text=bullet, citations=tuple(citations), supported=supported and bool(citations)
-            )
-        )
+        out.append(SummaryBulletOut(text=bullet, citations=tuple(citations)))
     return out

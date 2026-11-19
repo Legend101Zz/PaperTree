@@ -6,11 +6,11 @@ of the paper: a quote of a passage the model never read is a memory or a coincid
 is the strongest label the product shows (DESIGN.md §4). A quote must also be long enough to be
 evidence of anything: "the model" is in most passages and proves nothing.
 
-  VERBATIM (shown "cited"): the quote, any datamark the model copied removed, is a substring of one
-    of those passages once both are folded the way an Anchor's quote is matched
+  VERBATIM (an Anchor over that passage): the quote, any datamark the model copied removed, is a
+    substring of one of those passages once both are folded the way an Anchor's quote is matched
     (``normalise_for_match``: line hyphens joined, whitespace collapsed, the identity fold). The
     first such passage in handle order, the selection first.
-  NEAR (shown "not verified", with that passage's Anchor): not verbatim, but the lexical checker
+  NEAR (with that passage's Anchor too): not verbatim, but the lexical checker
     the answers use says the passage supports it; of every passage that does, the one covering the
     most of the quote's content words (handle order breaks a tie), so a near copy of b6 anchors to
     b6, not to a long b1 that shares its section's vocabulary. This is a claim check, not a quote
@@ -43,10 +43,9 @@ _SPACE: Final = re.compile(r"\s+")
 
 @dataclass(frozen=True, slots=True)
 class Found:
-    """Where a quote was found: the passage's block, and whether word for word."""
+    """Where a quote was found: the passage's block, or None."""
 
     block_id: str | None
-    verbatim: bool
 
 
 def clean_quote(quote: str) -> str:
@@ -123,16 +122,16 @@ class QuoteResolver:
             quote: The model's quote (cleaned or not).
 
         Returns:
-            ``Found(block, True)`` for a verbatim match, ``Found(block, False)`` for a near one,
-            ``Found(None, False)`` when it is nowhere, or too short to be evidence.
+            ``Found(block)`` for a verbatim or a near match, ``Found(None)`` when it is nowhere,
+            or too short to be evidence.
         """
         clean = clean_quote(quote)
         if not is_evidence(clean):
-            return Found(None, False)
+            return Found(None)
         needle = normalise_for_match(clean).text
         for block_id in self._run_blocks:
             if needle in self._fold(block_id):
-                return Found(block_id, True)
+                return Found(block_id)
         best: str | None = None
         best_coverage = -1.0
         for block_id in self._run_blocks:
@@ -143,4 +142,4 @@ class QuoteResolver:
                 and assessed.coverage > best_coverage  # strictly: the earlier handle wins a tie
             ):
                 best, best_coverage = block_id, assessed.coverage
-        return Found(best, False)
+        return Found(best)
