@@ -74,7 +74,7 @@ function craftedStream(anchor: unknown): string {
     frame('citations', { items: [cite(1, 0), cite(2, 0)] }),
     frame('usage', {
       run_id: 'run_w3',
-      model: 'MiniMax-M3.1-Flash-Preview',
+      model: 'MiniMax-M3.1-Flash',
       provider: 'minimax',
       agent_sdk: 'pi-coding-agent@0.87.1',
       input_tokens: 2000,

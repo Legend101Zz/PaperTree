@@ -97,7 +97,9 @@ PROVIDER: Final = "minimax"
 MODEL: Final = "MiniMax-M3"
 #: Every model the agent may report in its run event (`minimax/<id>`, ADR-003). `MODEL` is only the
 #: fallback for a stream that broke before the run event; the stored model is what the agent said.
-KNOWN_MODELS: Final = ("MiniMax-M3", "MiniMax-M3.1-Flash-Preview")
+#: `MiniMax-M3.1-Flash-Preview` is not a policy id any more (the agent reports the GA id), but it is
+#: listed here: summaries cached under it are old stored data, and `_cached` must still find them.
+KNOWN_MODELS: Final = ("MiniMax-M3", "MiniMax-M3.1-Flash", "MiniMax-M3.1-Flash-Preview")
 MODEL_PREFIX: Final = "minimax/"
 UNKNOWN_SDK: Final = "unknown"
 

@@ -10,12 +10,14 @@ import { after, describe, test } from 'node:test';
 import { readConfig } from '../src/config.ts';
 import {
   costBasis,
+  DEFAULT_EFFORTS,
   DEFAULT_MODELS,
   FLASH_COST_BASIS,
   FLASH_MODEL_ID,
   M3_MODEL_ID,
   type ModelPolicy,
   readPolicy,
+  RUN_KINDS,
 } from '../src/models.ts';
 import { readExample } from './support/contract.ts';
 import {
@@ -37,24 +39,43 @@ after(async () => {
 });
 
 describe('readPolicy(): env -> which model answers which kind', () => {
-  test('the shipped default: Flash (low) for explain and diagram, M3 for ask and summary (ADR-003, revised 2026-10-15; ADR-004 §2.9)', () => {
+  test('the shipped default: Flash for every kind, effort per kind (ADR-003 Revision 2026-11-19)', () => {
     const p = readPolicy({});
     assert.deepEqual(
-      [p.explain.id, p.ask.id, p.summary.id, p.diagram.id],
-      [FLASH_MODEL_ID, M3_MODEL_ID, M3_MODEL_ID, FLASH_MODEL_ID],
+      RUN_KINDS.map((k) => p[k].id),
+      RUN_KINDS.map(() => FLASH_MODEL_ID),
     );
     assert.deepEqual(
-      [p.explain.effort, p.ask.effort, p.summary.effort, p.diagram.effort],
-      ['low', null, null, 'low'],
+      [p.explain.effort, p.ask.effort, p.summary.effort, p.topic.effort, p.diagram.effort],
+      ['low', 'medium', 'medium', 'low', 'low'],
     );
+    assert.equal(FLASH_MODEL_ID, 'MiniMax-M3.1-Flash');
     assert.equal(p.explain.label, `minimax/${FLASH_MODEL_ID}`);
     assert.deepEqual(DEFAULT_MODELS, {
       explain: FLASH_MODEL_ID,
-      ask: M3_MODEL_ID,
-      summary: M3_MODEL_ID,
+      ask: FLASH_MODEL_ID,
+      summary: FLASH_MODEL_ID,
       diagram: FLASH_MODEL_ID,
       topic: FLASH_MODEL_ID,
     });
+    assert.deepEqual(DEFAULT_EFFORTS, {
+      explain: 'low',
+      ask: 'medium',
+      summary: 'medium',
+      diagram: 'low',
+      topic: 'low',
+    });
+  });
+
+  test('M3 stays an allowed override, with effort null; the retired -Preview id is refused', () => {
+    const p = readPolicy({ PAPERTREE_MODEL_ASK: M3_MODEL_ID });
+    assert.equal(p.ask.id, M3_MODEL_ID);
+    assert.equal(p.ask.effort, null);
+    assert.equal(p.explain.id, FLASH_MODEL_ID);
+    assert.throws(
+      () => readPolicy({ PAPERTREE_MODEL: 'MiniMax-M3.1-Flash-Preview' }),
+      /PAPERTREE_MODEL=MiniMax-M3.1-Flash-Preview/,
+    );
   });
 
   test('PAPERTREE_MODEL=MiniMax-M3 is the whole-service fallback', () => {
@@ -102,6 +123,28 @@ describe('readPolicy(): env -> which model answers which kind', () => {
     assert.equal(readPolicy({ PAPERTREE_MODEL: FLASH_MODEL_ID }).explain.effort, 'low');
   });
 
+  test('per-kind effort env overrides, and a global effort beats the per-kind defaults', () => {
+    const p = readPolicy({
+      PAPERTREE_MODEL_EFFORT_DIAGRAM: 'high',
+      PAPERTREE_MODEL_EFFORT_TOPIC: 'medium',
+      PAPERTREE_MODEL_EFFORT_ASK: 'low',
+    });
+    assert.deepEqual(
+      [p.diagram.effort, p.topic.effort, p.ask.effort, p.summary.effort],
+      ['high', 'medium', 'low', 'medium'],
+    );
+    const g = readPolicy({ PAPERTREE_MODEL_EFFORT: 'high', PAPERTREE_MODEL_EFFORT_EXPLAIN: 'low' });
+    assert.deepEqual(
+      [g.explain.effort, g.ask.effort, g.summary.effort, g.diagram.effort, g.topic.effort],
+      ['low', 'high', 'high', 'high', 'high'],
+    );
+    const m = readPolicy({
+      PAPERTREE_MODEL_SUMMARY: M3_MODEL_ID,
+      PAPERTREE_MODEL_EFFORT_SUMMARY: 'high',
+    });
+    assert.equal(m.summary.effort, null);
+  });
+
   test('an unknown model or effort is refused at config time, naming the variable', () => {
     assert.throws(() => readPolicy({ PAPERTREE_MODEL: 'gpt-9' }), /PAPERTREE_MODEL=gpt-9/);
     assert.throws(() => readPolicy({ PAPERTREE_MODEL_EFFORT: 'none' }), /PAPERTREE_MODEL_EFFORT/);
@@ -116,9 +159,10 @@ describe('readPolicy(): env -> which model answers which kind', () => {
     );
   });
 
-  test('the cost label: Flash is an estimate on M3 rates', () => {
+  test('the cost label: Flash is priced at published rates, not an estimate on M3 rates', () => {
     assert.equal(costBasis(FLASH_MODEL_ID), FLASH_COST_BASIS);
-    assert.equal(FLASH_COST_BASIS, 'estimate on M3 rates');
+    assert.match(FLASH_COST_BASIS, /^published rates/);
+    assert.doesNotMatch(FLASH_COST_BASIS, /estimate/);
     assert.notEqual(costBasis(M3_MODEL_ID), FLASH_COST_BASIS);
   });
 });
@@ -228,7 +272,7 @@ describe('Flash on the wire (mock Anthropic server)', () => {
       diagram: null,
       topic: null,
     });
-    assert.equal(body['cost_basis'][FLASH_MODEL_ID], 'estimate on M3 rates');
+    assert.equal(body['cost_basis'][FLASH_MODEL_ID], FLASH_COST_BASIS);
     assert.equal(body['model'], `minimax/${FLASH_MODEL_ID}`);
   });
 

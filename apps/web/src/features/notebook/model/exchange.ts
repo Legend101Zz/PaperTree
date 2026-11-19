@@ -171,7 +171,7 @@ export function usageLine(run: RunSummary | null): string | null {
 }
 
 /**
- * The model's short name for the slip's source line ("MiniMax-M3.1-Flash-Preview" → "M3.1 Flash").
+ * The model's short name for the slip's source line ("MiniMax-M3.1-Flash" → "M3.1 Flash").
  *
  * @param model - The provider's model id, or null when the run is unknown.
  * @returns A short label; "the AI" when the model is unknown.

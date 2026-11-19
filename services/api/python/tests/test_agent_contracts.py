@@ -384,7 +384,7 @@ def test_the_run_event_model_enum_is_the_same_in_the_schema_and_the_model() -> N
         (Path(__file__).resolve().parents[4] / "contracts/agent/run-events.schema.json").read_text()
     )
     text = json.dumps(schema)
-    for model in ("minimax/MiniMax-M3", "minimax/MiniMax-M3.1-Flash-Preview"):
+    for model in ("minimax/MiniMax-M3", "minimax/MiniMax-M3.1-Flash"):
         assert model in text
         AgentRun.model_validate(
             {"run_id": _RUN["run_id"], "model": model, "sdk": "pi-coding-agent@0.87.1"}
