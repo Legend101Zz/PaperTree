@@ -8,6 +8,7 @@ import { after, before, describe, test } from 'node:test';
 
 import { MAX_IMAGE_BYTES, validateRunRequest } from '../src/contract.ts';
 import type { RunRequest } from '../src/contract.ts';
+import { defaultBrain } from '../src/faux.ts';
 import { createLogger } from '../src/log.ts';
 import {
   acceptsImages,
@@ -15,11 +16,14 @@ import {
   DEFAULT_MODELS,
   FLASH_MODEL_ID,
   M3_MODEL_ID,
+  modelLabel,
   readPolicy,
   RUN_KINDS,
 } from '../src/models.ts';
 import { systemPrompt, userText } from '../src/prompts.ts';
 import { BootError } from '../src/app.ts';
+import { startRun } from '../src/run.ts';
+import type { SseSink } from '../src/sse.ts';
 import { createPaperSession, IMAGE_PLACEHOLDER, NoVisionModelError } from '../src/session.ts';
 import { createPaperTools } from '../src/tools.ts';
 
@@ -281,5 +285,56 @@ describe('a model without image input is never sent a picture', () => {
         return true;
       },
     );
+  });
+});
+
+describe('an image RUN whose model lacks image input (the guard through `startRun`)', () => {
+  const quiet = createLogger({ write: () => {} });
+  /** One whole run, as `app.ts` starts it, on `model`; its frames and the faux model's request count. */
+  async function runOn(model: any): Promise<{ events: Json[]; requests: number }> {
+    const faux = agent.app.faux!;
+    const body = image();
+    const events: Json[] = [];
+    const sse: SseSink = {
+      event: (name, data) => void events.push({ name, data }),
+      ping() {},
+      end() {},
+      open: true,
+    };
+    const active = startRun(
+      asRequest(body),
+      sse,
+      {
+        modelRuntime: agent.app.modelRuntime,
+        model,
+        choice: { id: M3_MODEL_ID, label: modelLabel(M3_MODEL_ID), effort: null },
+        log: quiet,
+        pingMs: 60_000,
+        faux: { model: faux, brain: defaultBrain },
+      },
+      new AbortController().signal,
+    );
+    await active.finished;
+    return { events, requests: faux.requests(String(body['run_id'])) };
+  }
+
+  test('fails loudly before any request is made: an error `done`, no text, the model never called', async () => {
+    const { events, requests } = await runOn(textOnly(agent.app.faux!.model));
+    const done = events.at(-1)!;
+    assert.equal(done['name'], 'done');
+    assert.equal(done['data']['status'], 'error', 'a run, not a silently text-only answer');
+    assert.ok(done['data']['error'], 'the done event carries the error');
+    assert.equal(
+      events.filter((e) => e['name'] === 'text').length,
+      0,
+      'no answer text was streamed',
+    );
+    assert.equal(requests, 0, 'the text-only model was never sent a request');
+  });
+
+  test('the same run on a vision model completes and the model is called once (the control)', async () => {
+    const { events, requests } = await runOn(agent.app.faux!.model);
+    assert.equal(events.at(-1)!['data']['status'], 'complete');
+    assert.equal(requests, 1);
   });
 });
