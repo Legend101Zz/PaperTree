@@ -115,7 +115,10 @@ test.describe('v0.2 S7b: a stored plate in the explain panel → tap a part → 
     await page.goto(`/paper/${paperId}/board`);
     const card = page.locator('[data-plate-mini="6"]');
     await expect(card).toBeVisible({ timeout: 60_000 });
-    await expect(page.getByText('6 parts · 5 cited')).toBeVisible();
+    // The card counts its parts and claims nothing about how well they are backed (no verdicts).
+    const node = page.locator('.react-flow__node-diagram');
+    await expect(node).toContainText('6 parts');
+    await expect(node).not.toContainText(/cited|verified|supported/i);
     await expect(page.getByText('Scaled dot-product attention').first()).toBeVisible();
     await page.screenshot({ path: shot('v02-plate-03-board-1440.png') });
     await context.close();
