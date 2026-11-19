@@ -114,6 +114,7 @@ export function useBoardController(paperId: string): BoardController {
       groupNodes,
       saveViewport,
       initialViewport,
+      internals: { store, writes, offer },
     }),
     [
       status,
@@ -145,6 +146,9 @@ export function useBoardController(paperId: string): BoardController {
       groupNodes,
       saveViewport,
       initialViewport,
+      store,
+      writes,
+      offer,
     ],
   );
 }

@@ -84,12 +84,12 @@ export interface ExportInclude {
 export const DEFAULT_INCLUDE: ExportInclude = { full: true, notes: true, folded: false };
 
 /** What the Markdown export needs besides the tree. */
-export interface ExportOptions {
+export interface ExportOptions<N extends OutlineNodeInput = OutlineNodeInput> {
   /** The board's title: the `#` heading. */
   readonly title: string;
   readonly include?: ExportInclude;
   /** The source line under a passage, e.g. "Deep Residual Learning, p. 3"; omitted when absent. */
-  readonly sourceOf?: (passage: OutlineNodeInput) => string | undefined;
+  readonly sourceOf?: (passage: N) => string | undefined;
 }
 
 /** A step of the flattened walk. */
@@ -198,7 +198,7 @@ export function buildOutline<N extends OutlineNodeInput = CanvasNode>(tree: Boar
  */
 export function exportMarkdown<N extends OutlineNodeInput = CanvasNode>(
   tree: BoardTree<N>,
-  options: ExportOptions,
+  options: ExportOptions<N>,
 ): string {
   const include = options.include ?? DEFAULT_INCLUDE;
   const lines: string[] = [`# ${options.title}`, ''];

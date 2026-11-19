@@ -47,6 +47,12 @@ export interface BoardToolbarProps {
   readonly zoom: (direction: 'in' | 'out') => void;
   /** v0.1's selection tools, in the menu. */
   readonly more: readonly BoardTool[];
+  /** The branching board's own tools (v0.3): Tidy, Fold, Outline. */
+  readonly branch?: {
+    readonly tidy: BoardTool;
+    readonly fold: BoardTool;
+    readonly outline: BoardTool;
+  };
 }
 
 function Tool({ tool, icon }: { readonly tool: BoardTool; readonly icon?: boolean }): ReactNode {
@@ -172,6 +178,13 @@ export function BoardToolbar(props: BoardToolbarProps): ReactNode {
       <Tool tool={addNote} />
       <Tool tool={addFrame} />
       <Tool tool={threadButton} />
+      {props.branch === undefined ? null : (
+        <>
+          <Tool tool={props.branch.tidy} />
+          <Tool tool={props.branch.fold} />
+          <Tool tool={props.branch.outline} />
+        </>
+      )}
       <span className="pt-boardtools__rule" aria-hidden="true" />
       {wide ? (
         <>

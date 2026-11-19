@@ -4,8 +4,21 @@
  * Rows, not a blob: one drag-end is one PATCH of one node. `GET /papers/{id}/board` NEVER writes; a
  * board is created by the first `createNode` (an explicit send). The server answers 501 until S7.
  */
-import { request } from './client';
-import type { Anchor, Board, CanvasEdge, CanvasNode, EdgeKind, FromPort, ToPort } from './types';
+import { request, streamSse } from './client';
+import type {
+  Anchor,
+  AskLevel,
+  AskUses,
+  Board,
+  BoardBranch,
+  CanvasEdge,
+  CanvasNode,
+  EdgeKind,
+  FromPort,
+  ParentSpan,
+  SseEvent,
+  ToPort,
+} from './types';
 
 const seg = encodeURIComponent;
 
@@ -34,6 +47,18 @@ export interface CreateNodeBody {
   /** Required for `diagram`. */
   readonly source_diagram_id?: string;
   readonly group_id?: string | null;
+  /**
+   * v0.3: the tree fields an Undo of a delete puts back (the ordinary create never sets them: asks
+   * and notes go through `ask` and `keepNote`).
+   */
+  readonly parent_id?: string;
+  readonly branch?: BoardBranch;
+  readonly parent_span?: ParentSpan;
+  readonly question?: string;
+  readonly uses?: AskUses;
+  readonly offset_x?: number;
+  readonly offset_y?: number;
+  readonly folded?: boolean;
 }
 
 export interface PatchNodeBody {
@@ -49,7 +74,40 @@ export interface PatchNodeBody {
   readonly group_id?: string | null;
   readonly source_page_id?: string;
   readonly source_diagram_id?: string;
+  /** v0.3 (v03-BOARD-SPEC section 2): the drag offset on top of the Tidy layout, and the fold. */
+  readonly offset_x?: number;
+  readonly offset_y?: number;
+  readonly folded?: boolean;
 }
+
+/** The three quick asks of the span menu (rule 8). */
+export type QuickAskName = 'simpler' | 'example' | 'diagram';
+
+/** The body of `POST /boards/{board_id}/nodes/{node_id}/asks` (v03-BOARD-SPEC section 3). */
+export interface AskBody {
+  /** 1..2000. The web always sends it (a quick ask sends its own words); the server takes it optional with `quick`. */
+  readonly question: string;
+  readonly span?: ParentSpan;
+  readonly ask_differently?: boolean;
+  readonly quick?: QuickAskName;
+  readonly uses: AskUses;
+  readonly level: AskLevel;
+}
+
+/** The body of `POST /boards/{board_id}/nodes/{node_id}/notes`: Keep as note, no AI. */
+interface KeepNoteBody {
+  readonly span: ParentSpan;
+  readonly text: string;
+}
+
+/** The first frame of a board ask: the answer card the server made before it began to write. */
+interface BoardNodeEvent {
+  readonly event: 'node';
+  readonly data: { readonly node: CanvasNode };
+}
+
+/** Every frame a board ask can send: the thread's own events, plus `node` first. */
+type BoardAskEvent = SseEvent | BoardNodeEvent;
 
 export interface CreateEdgeBody {
   /** Client-minted `ce_` + uuid. */
@@ -102,6 +160,39 @@ export const boardsApi = {
     }),
   deleteEdge: (boardId: string, edgeId: string) =>
     request<void>(`/boards/${seg(boardId)}/edges/${seg(edgeId)}`, { method: 'DELETE' }),
+  /**
+   * A card asked from a card (v03-BOARD-SPEC section 3): SSE `node` first (the new answer card, with
+   * its id, parent, branch, span and `source_message_id`), then the thread's `run`, `status`, `text`,
+   * `citations`, `usage` and `done`. A refusal before the stream (409, 429, 503) throws from the
+   * first `next()`, as on a thread.
+   */
+  ask: (
+    boardId: string,
+    nodeId: string,
+    body: AskBody,
+    signal?: AbortSignal,
+  ): AsyncGenerator<BoardAskEvent> =>
+    // `streamSse` is typed for the thread's events; `node` is read by its parser too (client.ts).
+    streamSse(
+      `/boards/${seg(boardId)}/nodes/${seg(nodeId)}/asks`,
+      body,
+      signal,
+    ) as AsyncGenerator<BoardAskEvent>,
+  /** Keep as note: a `note` child (branch `right`) on the words. No AI call. 201. */
+  keepNote: (boardId: string, nodeId: string, body: KeepNoteBody) =>
+    request<CanvasNode>(`/boards/${seg(boardId)}/nodes/${seg(nodeId)}/notes`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  /**
+   * Tidy: every offset of the tree under `rootId` back to 0, versions bumped. The response body is
+   * not relied on: the board reads itself again, which is where the new versions come from.
+   */
+  tidy: (boardId: string, rootId: string) =>
+    request<unknown>(`/boards/${seg(boardId)}/tidy`, {
+      method: 'POST',
+      body: JSON.stringify({ root_id: rootId }),
+    }),
   patchBoard: (boardId: string, body: PatchBoardBody) =>
     request<Board>(`/boards/${seg(boardId)}`, { method: 'PATCH', body: JSON.stringify(body) }),
 };

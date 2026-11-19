@@ -6,11 +6,13 @@ import { memo } from 'react';
 
 import { sameCard } from '../../model/glance';
 import { withGlance } from './CardGlance';
-import { ExplanationCard } from './ExplanationCard';
+import { AnswerCard } from './AnswerCard';
+import { BranchNoteCard } from './BranchNoteCard';
 import { FrameNode } from './FrameNode';
 import { DiagramCard, NotebookCard } from './NotebookCard';
 import { NoteCard, QuestionCard } from './NoteCard';
 import { PassageCard } from './PassageCard';
+import { AskDraft } from '../tree/AskBox';
 
 /**
  * Node type → the card that draws it; the keys are `flowType`'s values. Every card is memoised on
@@ -18,7 +20,10 @@ import { PassageCard } from './PassageCard';
  */
 export const nodeTypes = {
   excerpt: withGlance(PassageCard),
-  explanation: withGlance(ExplanationCard),
+  explanation: withGlance(AnswerCard),
+  branchnote: withGlance(BranchNoteCard),
+  // The ask box being written: a node the layout placed; never a glance.
+  draft: AskDraft,
   note: withGlance(NoteCard),
   question: withGlance(QuestionCard),
   notebook: withGlance(NotebookCard),

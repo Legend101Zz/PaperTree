@@ -568,6 +568,14 @@ type BranchKeys =
   | 'final_text'
   | 'level'
   | 'model';
+/**
+ * TEMPORARY (#343): the same for `PatchNodeBody`, which sends `offset_x`, `offset_y` and `folded`
+ * (v03-BOARD-SPEC section 3) before the `NodePatch` schema lists them. Delete with `BranchKeys`.
+ */
+type PatchBranchKeys = 'offset_x' | 'offset_y' | 'folded';
+/** TEMPORARY (#343): and `CreateNodeBody`, which puts a deleted tree card back with its place. */
+type CreateBranchKeys =
+  PatchBranchKeys | 'parent_id' | 'branch' | 'parent_span' | 'question' | 'uses';
 /** Type equality (mutual assignability is not it: `string` and a union of strings pass one way). */
 type Equal<A, B> =
   (<X>() => X extends A ? 1 : 2) extends <X>() => X extends B ? 1 : 2 ? true : false;
@@ -830,10 +838,22 @@ const KEYS_ARE_EXACT: true[] = [
   true satisfies Equal<OptionalKeys<FollowUpBody>, Opt<'threads.FollowUp'>>,
   true satisfies Equal<keyof SummaryRequest, SchemaKeys<'summary', 'SummaryRequest'>>,
   true satisfies Equal<OptionalKeys<SummaryRequest>, Opt<'summary.SummaryRequest'>>,
-  true satisfies Equal<keyof CreateNodeBody, SchemaKeys<'boards', 'NodeCreate'>>,
-  true satisfies Equal<OptionalKeys<CreateNodeBody>, Opt<'boards.NodeCreate'>>,
-  true satisfies Equal<keyof PatchNodeBody, SchemaKeys<'boards', 'NodePatch'>>,
-  true satisfies Equal<OptionalKeys<PatchNodeBody>, Opt<'boards.NodePatch'>>,
+  true satisfies Equal<
+    Exclude<keyof CreateNodeBody, CreateBranchKeys>,
+    SchemaKeys<'boards', 'NodeCreate'>
+  >,
+  true satisfies Equal<
+    Exclude<OptionalKeys<CreateNodeBody>, CreateBranchKeys>,
+    Opt<'boards.NodeCreate'>
+  >,
+  true satisfies Equal<
+    Exclude<keyof PatchNodeBody, PatchBranchKeys>,
+    SchemaKeys<'boards', 'NodePatch'>
+  >,
+  true satisfies Equal<
+    Exclude<OptionalKeys<PatchNodeBody>, PatchBranchKeys>,
+    Opt<'boards.NodePatch'>
+  >,
   true satisfies Equal<keyof CreateEdgeBody, SchemaKeys<'boards', 'EdgeCreate'>>,
   true satisfies Equal<OptionalKeys<CreateEdgeBody>, Opt<'boards.EdgeCreate'>>,
   true satisfies Equal<keyof PatchEdgeBody, SchemaKeys<'boards', 'EdgePatch'>>,
