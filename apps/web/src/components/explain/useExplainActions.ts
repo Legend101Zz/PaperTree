@@ -35,11 +35,13 @@ import {
 } from '@/features/diagram';
 import { mergeStored, type ThreadMessage } from '@/features/explain/model/messages';
 import { refusedBeforeStream } from '@/features/explain/model/states';
+import { DEFAULT_LEVEL, levelOf } from '@/features/explain/model/levels';
 import { originOf } from '@/features/explain/model/threads';
 import { summaryApi } from '@/lib/api/summary';
 import { threadsApi, type CreateThreadBody } from '@/lib/api/threads';
 import {
   ApiError,
+  type AnswerLevel,
   type Message,
   type RunSummary,
   type SseEvent,
@@ -98,6 +100,12 @@ export interface ExplainState {
   readonly draft: string;
   /** The thread is a diagram's (#217): its only next turn is a Redraw, never a typed question. */
   readonly diagram: boolean;
+  /**
+   * How deep the next answer goes: Familiar until the reader switches an answer's level, then the
+   * level they chose (typed follow-ups and the go-deeper chips are asked at it). Starts over at
+   * Familiar with every new explain, thread or fresh thread.
+   */
+  readonly level: AnswerLevel;
 }
 
 const IDLE_SUMMARY: SummaryView = {
@@ -122,6 +130,7 @@ const INITIAL: ExplainState = {
   fresh: false,
   draft: '',
   diagram: false,
+  level: DEFAULT_LEVEL,
 };
 
 type Action =
@@ -133,6 +142,7 @@ type Action =
       diagram?: boolean;
     }
   | { type: 'close' }
+  | { type: 'level'; level: AnswerLevel }
   | { type: 'view'; view: PanelView }
   | { type: 'thread'; epoch: number; threadId: string }
   | {
@@ -168,6 +178,7 @@ export function explainReducer(state: ExplainState, action: Action): ExplainStat
         messages: [],
         fresh: false,
         diagram: action.diagram === true,
+        level: DEFAULT_LEVEL,
       };
     case 'fresh':
       return {
@@ -180,9 +191,12 @@ export function explainReducer(state: ExplainState, action: Action): ExplainStat
         messages: [],
         fresh: true,
         diagram: false,
+        level: DEFAULT_LEVEL,
       };
     case 'close':
       return { ...state, open: false };
+    case 'level':
+      return { ...state, level: action.level };
     case 'view':
       return { ...state, view: action.view, open: true };
     case 'thread':
@@ -198,6 +212,7 @@ export function explainReducer(state: ExplainState, action: Action): ExplainStat
         messages: [],
         fresh: false,
         diagram: action.diagram,
+        level: DEFAULT_LEVEL,
       };
     case 'hydrate':
       // A detail read for a thread the panel has left (the menu moved on) is dropped.
@@ -276,7 +291,14 @@ export interface ExplainController {
    * A question typed in the panel: a follow-up when a thread exists, else a free `ask`. Resolves
    * `not-sent` when the server refused it before the stream (the composer then keeps the text).
    */
-  readonly ask: (question: string) => Promise<AskOutcome>;
+  readonly ask: (question: string, options?: AskOptions) => Promise<AskOutcome>;
+  /**
+   * Switch an answer to another level (v0.3, #349). The level becomes the thread's (follow-ups and
+   * chips are asked at it). A level the answer already has costs no request: the panel simply shows
+   * it. Otherwise the same question is asked again at that level (`relevel_of`), as a sibling of the
+   * answer, not a new turn. `messageId` is the answer the user turn started.
+   */
+  readonly relevel: (messageId: string, level: AnswerLevel) => void;
   /** Stop the answer that is streaming; its partial text stays. */
   readonly stop: () => void;
   /** Re-run a failed, stopped or partial answer. */
@@ -300,6 +322,12 @@ export interface ExplainController {
   readonly setDraft: (text: string) => void;
 }
 
+/** How a typed or chip ask is sent. */
+export interface AskOptions {
+  /** A go-deeper chip: a fixed question the reader did not type, so the panel keeps the draft and skips the thinking pause. */
+  readonly quick?: boolean;
+}
+
 /** Whether an ask reached the AI: `not-sent` only for a refusal before the stream (#204). */
 export type AskOutcome = 'sent' | 'not-sent';
 
@@ -312,7 +340,11 @@ const REDRAW_QUESTION = 'Redraw the diagram.';
 let counter = 0;
 const nextKey = (): string => `m${String((counter += 1))}`;
 
-function blankAssistant(question: string, diagram = false): ViewMessage {
+function blankAssistant(
+  question: string,
+  diagram = false,
+  extra: Partial<ViewMessage> = {},
+): ViewMessage {
   return {
     ...(diagram ? { diagram: EMPTY_PLATE } : {}),
     key: nextKey(),
@@ -329,6 +361,7 @@ function blankAssistant(question: string, diagram = false): ViewMessage {
     question,
     createdAt: new Date().toISOString(),
     generation: null,
+    ...extra,
   };
 }
 
@@ -500,6 +533,8 @@ export function useExplainActions(options: { readonly paperId: string | null }):
       open: (signal: AbortSignal) => AsyncGenerator<SseEvent>,
       reuse?: string,
       diagramTurn?: Partial<ViewMessage>,
+      /** What the new answer carries from the start: its level, the answer it re-levels, `quick`. */
+      extra?: Partial<ViewMessage>,
     ): Promise<AskOutcome> => {
       // A diagram turn (#217) carries its plate from the start, and any live facts it is given.
       const diagram = diagramTurn !== undefined;
@@ -524,7 +559,7 @@ export function useExplainActions(options: { readonly paperId: string | null }):
           : (stateRef.current.messages.find((m) => m.key === reuse) ?? null);
       let key = reuse;
       if (key === undefined) {
-        const assistant = { ...blankAssistant(question, diagram), ...diagramTurn };
+        const assistant = { ...blankAssistant(question, diagram, extra), ...diagramTurn };
         key = assistant.key;
         dispatch({ type: 'add', epoch, message: assistant });
       } else {
@@ -559,16 +594,26 @@ export function useExplainActions(options: { readonly paperId: string | null }):
       show: boolean,
     ): Promise<AskOutcome> => {
       if (paperId === null) return Promise.resolve('sent');
+      const level = stateRef.current.level;
       const body: CreateThreadBody =
         request === null
-          ? { kind: 'ask', question: question ?? '' }
+          ? { kind: 'ask', question: question ?? '', level }
           : {
               kind: 'explain',
               anchor: request.anchor,
               ...(question === undefined ? {} : { question }),
+              level,
             };
       const shown = question ?? DEFAULT_EXPLAIN_QUESTION;
-      return startTurn(epoch, shown, show, (signal) => threadsApi.create(paperId, body, signal));
+      return startTurn(
+        epoch,
+        shown,
+        show,
+        (signal) => threadsApi.create(paperId, body, signal),
+        undefined,
+        undefined,
+        { level },
+      );
     },
     [paperId, startTurn],
   );
@@ -663,7 +708,7 @@ export function useExplainActions(options: { readonly paperId: string | null }):
   }, [halt]);
 
   const send = useCallback(
-    (question: string): Promise<AskOutcome> => {
+    (question: string, options?: AskOptions): Promise<AskOutcome> => {
       const current = stateRef.current;
       if (paperId === null || question.length === 0) return Promise.resolve('not-sent');
       if (current.messages.some((m) => m.status === 'streaming')) {
@@ -672,8 +717,15 @@ export function useExplainActions(options: { readonly paperId: string | null }):
       const epoch = current.epoch;
       if (current.threadId !== null) {
         const threadId = current.threadId;
-        return startTurn(epoch, question, true, (signal) =>
-          threadsApi.followUp(paperId, threadId, { question }, signal),
+        const level = current.level;
+        return startTurn(
+          epoch,
+          question,
+          true,
+          (signal) => threadsApi.followUp(paperId, threadId, { question, level }, signal),
+          undefined,
+          undefined,
+          { level, ...(options?.quick === true ? { quick: true } : {}) },
         );
       }
       return sendCreate(
@@ -687,11 +739,12 @@ export function useExplainActions(options: { readonly paperId: string | null }):
   );
 
   const ask = useCallback(
-    (raw: string): Promise<AskOutcome> => {
+    (raw: string, options?: AskOptions): Promise<AskOutcome> => {
       const question = raw.trim();
-      return send(question).then((outcome) => {
-        // Not sent: the words go back into the box, unless the reader has typed since.
-        if (outcome === 'not-sent' && question.length > 0) {
+      return send(question, options).then((outcome) => {
+        // Not sent: the words go back into the box, unless the reader has typed since. A chip's
+        // fixed question was never in the box.
+        if (outcome === 'not-sent' && question.length > 0 && options?.quick !== true) {
           dispatch({ type: 'draft', text: question, restore: true });
         }
         return outcome;
@@ -701,6 +754,33 @@ export function useExplainActions(options: { readonly paperId: string | null }):
   );
 
   const setDraft = useCallback((text: string): void => dispatch({ type: 'draft', text }), []);
+
+  const relevel = useCallback(
+    (messageId: string, level: AnswerLevel): void => {
+      const current = stateRef.current;
+      dispatch({ type: 'level', level });
+      const group = current.messages.filter(
+        (m) => m.role === 'assistant' && (m.messageId === messageId || m.relevelOf === messageId),
+      );
+      const root = group.find((m) => m.messageId === messageId);
+      // A level the answer already has is shown from what is held: no request, nothing re-streamed.
+      if (paperId === null || root === undefined || group.some((m) => levelOf(m) === level)) return;
+      if (current.threadId === null || current.messages.some(isStreaming)) return;
+      const threadId = current.threadId;
+      const question = root.question;
+      const body = { question, level, relevel_of: messageId };
+      void startTurn(
+        current.epoch,
+        question,
+        false,
+        (signal) => threadsApi.followUp(paperId, threadId, body, signal),
+        undefined,
+        undefined,
+        { level, relevelOf: messageId, quick: true },
+      );
+    },
+    [paperId, startTurn],
+  );
 
   // The server keeps the partial text it had; `useThreads` reads the thread again once the run
   // has settled (one path for done, Stop and failures), so the stored copy replaces this one.
@@ -716,6 +796,12 @@ export function useExplainActions(options: { readonly paperId: string | null }):
       if (current.threadId !== null) {
         const threadId = current.threadId;
         const retryOf = message.messageId;
+        // A retried answer is asked again at the level (and as the sibling) it was.
+        const asked = {
+          question,
+          ...(message.level == null ? {} : { level: message.level }),
+          ...(message.relevelOf == null ? {} : { relevel_of: message.relevelOf }),
+        };
         void startTurn(
           epoch,
           question,
@@ -724,7 +810,7 @@ export function useExplainActions(options: { readonly paperId: string | null }):
             threadsApi.followUp(
               paperId,
               threadId,
-              retryOf === null ? { question } : { question, retry_of: retryOf },
+              retryOf === null ? asked : { ...asked, retry_of: retryOf },
               signal,
             ),
           key,
@@ -745,8 +831,9 @@ export function useExplainActions(options: { readonly paperId: string | null }):
                     kind: 'explain',
                     anchor: current.request.anchor,
                     ...(question === DEFAULT_EXPLAIN_QUESTION ? {} : { question }),
+                    level: levelOf(message),
                   }
-                : { kind: 'ask', question },
+                : { kind: 'ask', question, level: levelOf(message) },
               signal,
             ),
           key,
@@ -925,6 +1012,7 @@ export function useExplainActions(options: { readonly paperId: string | null }):
       closeExplain,
       setView,
       ask,
+      relevel,
       stop,
       retry,
       summarize,
@@ -945,6 +1033,7 @@ export function useExplainActions(options: { readonly paperId: string | null }):
       closeExplain,
       setView,
       ask,
+      relevel,
       stop,
       retry,
       summarize,
