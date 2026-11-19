@@ -26,8 +26,8 @@ const AXE = join(REPO, 'apps', 'web', 'node_modules', 'axe-core', 'axe.min.js');
 /** The two schemes, by the token every surface is drawn on (`--pt-page`, DESIGN.md §2). */
 const PAGE_TOKEN = { light: '#faf8f3', dark: '#2c251f' } as const;
 
-/** "verified", "fact-checked" or "accurate" as a label; "not verified" is the honest one. */
-export const BANNED = /\bverified\b(?<!not verified)|fact-checked|\baccurate\b/i;
+/** "verified" (and so "not verified"), "fact-checked", "accurate" or "grounded" as a label (#340). */
+export const BANNED = /\bverified\b|fact-checked|\baccurate\b|\bgrounded\b/i;
 
 /**
  * Wait until no finite animation is running (an axe pass mid-fade measures the fade, not the
@@ -189,14 +189,14 @@ print(json.dumps(dict(capture_anchor(doc, block.block.block_id, anchor_id=str(uu
  * @param token - The owner's session.
  * @param paperId - The paper.
  * @param anchor - The passage the diagram is asked about.
- * @returns The plate's assistant message id and title.
+ * @returns The plate's assistant message id, title and thread.
  */
 export async function drawPlate(
   apiUrl: string,
   token: string,
   paperId: string,
   anchor: unknown,
-): Promise<{ messageId: string; title: string }> {
+): Promise<{ messageId: string; title: string; threadId: string }> {
   const stream = await fetch(`${apiUrl}/papers/${paperId}/threads`, {
     method: 'POST',
     headers: {
@@ -225,7 +225,11 @@ export async function drawPlate(
   };
   const plate = detail.messages.find((m) => m.role === 'assistant' && m.diagram !== null);
   expect(plate, 'the stored plate').toBeDefined();
-  return { messageId: plate!.message_id, title: plate!.diagram!.title };
+  return {
+    messageId: plate!.message_id,
+    title: plate!.diagram!.title,
+    threadId: thread!.thread_id,
+  };
 }
 
 /**

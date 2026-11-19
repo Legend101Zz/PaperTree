@@ -10,11 +10,10 @@ import { Button, type ControlSize } from '@papertree/ui';
 import { NotebookPen } from 'lucide-react';
 import { useEffect, useRef, useState, type MutableRefObject, type ReactNode } from 'react';
 
-import { foldedCounts, stoppedNote } from '../model/states';
+import { stoppedNote } from '../model/states';
 import { UsageLine } from './AnswerStates';
 
-import type { ViewMessage } from '@/components/explain/useExplainActions';
-import type { Coverage } from '@papertree/ui';
+import type { ViewMessage } from '@/features/explain/model/state';
 
 /** Which control takes focus when it next appears: set when the control before it had focus. */
 export type FocusHandoff = MutableRefObject<'stop' | 'retry' | null>;
@@ -105,15 +104,13 @@ export function StoppedNote({ answer, handoff, onRetry }: StoppedNoteProps): Rea
 /** Props for `FoldRow`. */
 export interface FoldRowProps {
   readonly folded: boolean;
-  readonly coverage: Coverage;
   readonly onToggle: () => void;
 }
 
-/** "4 passages · 11 citations … Show": one button that stays put, so focus stays on it. */
-export function FoldRow({ folded, coverage, onToggle }: FoldRowProps): ReactNode {
+/** "Show" / "Fold": one button that stays put, so focus stays on it. */
+export function FoldRow({ folded, onToggle }: FoldRowProps): ReactNode {
   return (
     <div className="pt-exchange__fold">
-      {folded ? <span>{foldedCounts(coverage)}</span> : null}
       <button
         type="button"
         className="pt-exchange__fold-toggle"

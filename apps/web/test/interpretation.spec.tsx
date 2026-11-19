@@ -1,25 +1,24 @@
 /**
- * interpretation.spec — the model's words are marked as the model's, and an unsupported claim is
- * flagged, not deleted (EPIC-03: "a claim not supported by cited blocks is flagged, not silently
- * emitted"). Rewritten in S6 for `AnswerView` and `RichText`, and in #202 for the exchange
- * (call slip, AI slip with numbered markers, trace) that replaced `AnswerView`.
+ * interpretation.spec — the model's words are marked as the model's, and the answer is a tutor, not
+ * an auditor (#340, #341): no verdict, chip, marker, readout or margin flag, only one quiet source
+ * line under a paragraph ("From the paper: p. 4" or "General knowledge"). Rewritten in S6 for
+ * `AnswerView`, in #202 for the exchange and in #340 for the source line.
  *
  * THE ASSERTIONS COME IN PAIRS, because either half alone is satisfied by a wrong implementation:
- * a chip that is rendered AND says "not verified" (an emit-unchanged build has no word, a
- * filter-it-out build has no chip), a quote that is in the paper's register AND an answer that is in
- * the AI register AND the ⊙ appears on only one of them.
+ * a quote that is in the paper's register AND an answer that is in the AI register AND the ⊙
+ * appears on only one of them.
  */
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { DERIVED_MARKER } from '@papertree/ui';
 
-import { RichText } from '@/components/explain/RichText';
-import type { ViewMessage } from '@/components/explain/useExplainActions';
+import type { ViewMessage } from '@/features/explain/model/state';
 import { Exchange } from '@/features/explain/components/Exchange';
 import { buildExchanges, type Exchange as ExchangeModel } from '@/features/explain/model/exchange';
 import type { Citation } from '@/lib/api/types';
 
+import { Answer } from './answer-render';
 import { anchorFixture, citation } from './s6-support';
 
 afterEach(cleanup);
@@ -36,11 +35,10 @@ function message(over: Partial<ViewMessage> = {}): ViewMessage {
     stopped: false,
     label: null,
     failure: null,
-    citations: [citation('b1') as Citation, citation('b2', { supported: false }) as Citation],
+    citations: [citation('b1') as Citation, citation('b2') as Citation],
     usage: null,
     question: 'q',
     createdAt: null,
-    coverage: null,
     generation: null,
     ...over,
   };
@@ -65,29 +63,36 @@ const view = (m: ViewMessage) => {
   );
 };
 
-describe('an unsupported claim is flagged, not deleted', () => {
-  it('keeps the claim on screen AND marks its marker and trace row "not verified" in words', () => {
+describe('an answer is a tutor, not an auditor (#340, #341)', () => {
+  it('keeps every claim on screen with no verdict, chip, marker, readout or margin flag', () => {
     view(message());
     expect(screen.getByText(/It therefore beats every later model/)).toBeTruthy();
-    const markers = document.querySelectorAll<HTMLElement>('[data-citation-id] button');
-    expect(markers).toHaveLength(2);
-    expect(markers[0]?.getAttribute('aria-label')).not.toContain('not verified');
-    expect(markers[1]?.getAttribute('aria-label')).toContain('not verified');
-    const rows = document.querySelectorAll<HTMLElement>('.pt-trace-row');
-    expect(rows[1]?.textContent).toContain('not verified');
-    expect(rows[0]?.textContent).not.toContain('not verified');
+    for (const gone of [
+      '.pt-chip',
+      '.pt-marker',
+      '.pt-ai-slip .pt-tab',
+      '.pt-trace-list',
+      '.pt-trace-row',
+      '.pt-coverage',
+      '.pt-ai-slip__aside',
+      '.pt-ai-slip__uncited',
+      '[data-citation-id]',
+    ]) {
+      expect(document.querySelector(gone), gone).toBeNull();
+    }
+    expect(document.body.textContent).not.toMatch(
+      /Stands on|not verified|\bverified\b|grounded|not found in the paper|own reading/i,
+    );
+    // The sources are one quiet line: the page both handles name, once.
+    const lines = [...document.querySelectorAll('.pt-source')].map((l) => l.textContent);
+    expect(lines).toEqual(['From the paper: p. 4']);
   });
 
-  it('an unchecked citation (supported: null) is neither verified nor flagged', () => {
-    view(
-      message({
-        citations: [citation('b1', { supported: null }) as Citation],
-        text: 'Claim [b1].',
-      }),
-    );
-    const marker = document.querySelector<HTMLElement>('[data-citation-id] button');
-    expect(marker?.getAttribute('aria-label')).not.toContain('not verified');
-    expect(document.body.textContent).not.toMatch(/not verified|\bverified\b/);
+  it('an older unsectioned paragraph with no handle has no line, and never "General knowledge"', () => {
+    view(message({ text: 'Claim [b1].\n\nAnd something the AI knows.' }));
+    const lines = [...document.querySelectorAll('.pt-source')].map((l) => l.textContent);
+    expect(lines).toEqual(['From the paper: p. 4']);
+    expect(document.querySelector('.pt-source--general')).toBeNull();
   });
 });
 
@@ -112,46 +117,44 @@ describe('the voices stay apart', () => {
 describe('handles never reach the screen as text', () => {
   const cites = [citation('b1') as Citation];
 
-  it('resolved handles become chips; an unknown handle is dropped', () => {
-    render(<RichText text="One [b1] two [b9]." citations={cites} onCite={noop} />);
+  it('a resolved handle becomes a page link; an unknown handle is dropped', () => {
+    render(<Answer text="One [b1] two [b9]." citations={cites} />);
     expect(document.body.textContent).not.toMatch(/\[b\d+\]/);
-    expect(document.querySelectorAll('[data-citation-id]')).toHaveLength(1);
+    expect(screen.getAllByRole('button')).toHaveLength(1);
     expect(document.body.textContent).toContain('One');
     expect(document.body.textContent).toContain('two');
   });
 
   it('while streaming, handles and a half-typed "[b" are hidden', () => {
-    render(
-      <RichText text="Streaming now [b1] and then [b" citations={[]} streaming onCite={noop} />,
-    );
+    render(<Answer text="Streaming now [b1] and then [b" citations={[]} status="streaming" />);
     expect(document.body.textContent).toContain('and then');
     expect(document.body.textContent).not.toMatch(/\[b/);
   });
 
-  it('a citation the text never mentions is appended, not lost', () => {
-    render(<RichText text="No handles here." citations={cites} onCite={noop} />);
-    expect(document.querySelectorAll('[data-citation-id]')).toHaveLength(1);
+  it('a citation the text never mentions is not a source of the paragraph', () => {
+    render(<Answer text="No handles here." citations={cites} />);
+    expect(screen.queryAllByRole('button')).toHaveLength(0);
   });
 
-  it('a grouped handle [b1, b2] makes two chips; lists and bold render without raw markup', () => {
+  it('a grouped handle [b1, b2] on one page is one page; lists and bold render without raw markup', () => {
     render(
-      <RichText
+      <Answer
         text={'- **Grid** cells [b1, b2]\n- plain `code`'}
         citations={[citation('b1') as Citation, citation('b2') as Citation]}
-        onCite={noop}
       />,
     );
     expect(document.querySelectorAll('li')).toHaveLength(2);
     expect(document.querySelector('strong')?.textContent).toBe('Grid');
     expect(document.querySelector('code')?.textContent).toBe('code');
-    expect(document.querySelectorAll('[data-citation-id]')).toHaveLength(2);
+    expect(screen.getAllByRole('button')).toHaveLength(1);
     expect(document.body.textContent).not.toContain('**');
   });
 
-  it('a chip click reports its citation', () => {
-    const onCite = vi.fn();
-    render(<RichText text="X [b1]" citations={cites} onCite={onCite} />);
-    fireEvent.click(document.querySelector('[data-citation-id]') as Element);
-    expect(onCite).toHaveBeenCalledWith(cites[0]);
+  it('a page click reports its citation', () => {
+    const onShow = vi.fn();
+    render(<Answer text="X [b1]" citations={cites} onShow={onShow} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Show p. 4 in the paper' }));
+    expect(onShow).toHaveBeenCalledTimes(1);
+    expect(onShow.mock.calls[0]?.[0].citation).toBe(cites[0]);
   });
 });

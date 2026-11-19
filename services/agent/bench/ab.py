@@ -416,7 +416,8 @@ class Bench:
         return row
 
     def settle_supported(self, rows: list[dict[str, Any]]) -> None:
-        """verify_grounding writes ai_citations.supported after the run; read it back."""
+        """v0.1 bench only: ai_citations.supported was dropped by 0015 (#351), so against a current
+        database the query fails and the caller logs it; the db_supported_* columns stay empty."""
         db = find_db(self.stack.data)
         time.sleep(self.args.verify_wait)
         for row in rows:

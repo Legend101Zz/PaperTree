@@ -13,12 +13,13 @@ import { useId, type ReactNode } from 'react';
 
 import { useTakeFocus, type FocusHandoff } from '@/features/explain/components/AnswerParts';
 import { FailureNote, UsageLine } from '@/features/explain/components/AnswerStates';
+import { MathText } from '@/lib/MathText';
 
 import { EMPTY_PLATE, platePhase, stoppedPlateNote } from '../model/plate';
 import { CraftedOffer } from './CraftedOffer';
 import { PlateActions, WAITING } from './PlateActions';
 
-import type { ViewMessage } from '@/components/explain/useExplainActions';
+import type { ViewMessage } from '@/features/explain/model/state';
 
 /** Props for `PlateNotes`. */
 export interface PlateNotesProps {
@@ -115,7 +116,9 @@ export function PlateNotes({
           <p>While drawing, the AI&apos;s lines were checked and some were left out:</p>
           <ul>
             {plate.notes.map((note, i) => (
-              <li key={i}>{note}</li>
+              <li key={i}>
+                <MathText text={note} />
+              </li>
             ))}
           </ul>
         </div>

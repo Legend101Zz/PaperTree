@@ -75,7 +75,7 @@ describe('explanation card', () => {
     source_message_id: 'msg_a1',
   });
 
-  it('asks in your voice and answers in the AI voice, with numbered markers and its footer', () => {
+  it('asks in your voice and answers in the AI voice, each paragraph with one source line, and its footer', () => {
     const source = explanationSource('thr_1', THREAD, 'msg_a1')!;
     const ctx = actions({ sources: sources(new Map([['msg_a1', source]])) });
     const { container } = mount(ExplanationCard, row, ctx);
@@ -84,27 +84,25 @@ describe('explanation card', () => {
     );
     const slip = screen.getByRole('note', { name: "AI answer, not the paper's words" });
     expect(slip.getAttribute('data-voice')).toBe('ai');
-    const markers = within(slip).getAllByRole('button', { name: /^Passage \d/ });
-    expect(markers.map((m) => m.getAttribute('aria-label'))).toEqual([
-      'Passage 1, p. 1 ¶1',
-      'Passage 2, p. 2 ¶2',
-      'Passage 3, p. 2 ¶3',
-      'Passage 4, p. 2 ¶4',
+    const pages = within(slip).getAllByRole('button', { name: /^Show p\. \d in the paper$/ });
+    expect(pages.map((m) => m.getAttribute('aria-label'))).toEqual([
+      'Show p. 1 in the paper',
+      'Show p. 2 in the paper',
     ]);
-    expect(slip.textContent).not.toMatch(/\[b\d/);
-    expect(within(slip).getByText('4 passages · 11 citations')).not.toBeNull();
+    expect(slip.querySelector('.pt-marker, .pt-chip, .pt-coverage')).toBeNull();
+    expect(slip.textContent).not.toMatch(/\[b\d|passages|citations/);
     expect(within(slip).getByText('6,776 tokens · ≈ $0.0027 (estimate)')).not.toBeNull();
-    fireEvent.click(markers[1]!);
+    fireEvent.click(pages[1]!);
     expect(ctx.openCitation).toHaveBeenCalledWith('cn_explanation', 'cit_b6_1', 'thr_1');
   });
 
-  it('before its thread is read: the words only, no handles, no markers, no footer', () => {
+  it('before its thread is read: the words only, no handles, no source lines, no footer', () => {
     const { container } = mount(ExplanationCard, row, actions({ sources: sources() }));
     expect(container.querySelector('[data-voice="you"]')).toBeNull();
     const slip = screen.getByRole('note', { name: "AI answer, not the paper's words" });
     expect(slip.textContent).toContain('The Transformer drops recurrence.');
-    expect(slip.textContent).not.toMatch(/\[b\d|passages|estimate/);
-    expect(within(slip).queryAllByRole('button', { name: /^Passage/ })).toHaveLength(0);
+    expect(slip.textContent).not.toMatch(/\[b\d|passages|estimate|General knowledge/);
+    expect(slip.querySelector('.pt-source')).toBeNull();
   });
 
   it('never shows the unterminated handle run a stopped answer ends with (S9-4)', () => {
@@ -119,7 +117,7 @@ describe('explanation card', () => {
     expect(slip.textContent).not.toMatch(/\[|\bb\d{1,2}\b/);
   });
 
-  it('unfolds when the keyboard reaches a marker below the fold', () => {
+  it('unfolds when the keyboard reaches a page link below the fold', () => {
     const height = (name: 'scrollHeight' | 'clientHeight', value: number) =>
       vi.spyOn(HTMLElement.prototype, name, 'get').mockReturnValue(value);
     const spies = [height('scrollHeight', 480), height('clientHeight', 120)];
@@ -130,7 +128,7 @@ describe('explanation card', () => {
       actions({ sources: sources(new Map([['msg_a1', source]])) }),
     );
     expect(container.querySelector('[data-expanded="false"]')).not.toBeNull();
-    fireEvent.focus(screen.getAllByRole('button', { name: /^Passage 4/ })[0]!);
+    fireEvent.focus(screen.getAllByRole('button', { name: 'Show p. 2 in the paper' })[0]!);
     expect(container.querySelector('[data-expanded="true"]')).not.toBeNull();
     spies.forEach((spy) => spy.mockRestore());
   });
@@ -209,8 +207,8 @@ describe('notebook and diagram cards', () => {
     );
     expect(container.querySelector('[data-plate-mini="6"]')).not.toBeNull();
     expect(container.querySelectorAll('.pt-plate-mini .pt-plate__box')).toHaveLength(6);
-    expect(container.querySelector('[data-verdict="inferred"]')).not.toBeNull();
-    expect(screen.getByText('6 parts · 5 cited')).not.toBeNull();
+    expect(container.querySelector('[data-verdict]')).toBeNull();
+    expect(screen.getByText('6 parts')).not.toBeNull();
   });
 
   it('a plate that did not finish says so on its card (review N8)', () => {
@@ -221,7 +219,7 @@ describe('notebook and diagram cards', () => {
       cardRow('diagram', { title: 'Scaled dot-product attention', source_diagram_id: 'msg_a' }),
       actions({ sources: sources(new Map(), new Map(), new Map([['msg_a', stopped]])) }),
     );
-    expect(screen.getByText('3 parts · 3 cited · stopped')).not.toBeNull();
+    expect(screen.getByText('3 parts · stopped')).not.toBeNull();
   });
 });
 

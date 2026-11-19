@@ -123,7 +123,7 @@ test.describe('S4 review regressions — each glyph once; the 64-anchor limit', 
     const points = await pointsFor(page, first, last);
     await drag(page, points.from, points.to);
     const selection = await selectionRects(page);
-    const hit = await hitTest(page, 'Highlight');
+    const hit = await hitTest(page, 'Highlight in amber');
     expect(hit.hit).toBe('button');
     const posted = page.waitForResponse(
       (r) => r.url().endsWith(`/papers/${paperId}/highlights`) && r.request().method() === 'POST',
@@ -202,7 +202,7 @@ test.describe('S4 review regressions — each glyph once; the 64-anchor limit', 
     expect(made).toBeGreaterThan(5000);
     const toolbar = page.getByRole('toolbar', { name: 'Selection actions' });
     await expect(toolbar).toBeVisible();
-    const button = page.getByRole('button', { name: 'Highlight', exact: true });
+    const button = page.getByRole('button', { name: 'Highlight in amber', exact: true });
     await expect(button).toBeDisabled();
     const said = (await toolbar.textContent()) ?? '';
     note(`the bar says: "${said.replace(/\s+/g, ' ').trim()}"`);

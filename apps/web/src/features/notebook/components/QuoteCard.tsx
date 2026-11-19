@@ -74,17 +74,8 @@ export const QuoteCard = memo(function QuoteCard(props: QuoteCardProps): ReactNo
       <div className="pt-nb-quote__head">
         {passage === null ? null : (
           <>
-            <NumberedMarker
-              n={passage.n}
-              label={where ?? ''}
-              notVerified={passage.supported === false}
-              onFlash={focus}
-            />
-            <PageTab
-              page={passage.page}
-              para={passage.para}
-              status={passage.supported === false ? 'not-verified' : 'cited'}
-            />
+            <NumberedMarker n={passage.n} label={where ?? ''} onFlash={focus} />
+            <PageTab page={passage.page} para={passage.para} />
             {passage.cited > 1 ? (
               <span
                 className="pt-nb-quote__count"

@@ -17,14 +17,19 @@ import type { IndexedDocument } from '@papertree/anchoring';
 import type { PendingSelection } from '@/components/reader/useSelectionCapture';
 import type { FloatingGeometry } from '@/components/reader/VirtualPageList';
 
-/** The margin bar's width: `.pt-seltool--margin` (five 24 px wash targets, padding, border). */
-export const MARGIN_BAR_WIDTH = 130;
-
-/** Sizes before the first measurement: one row docked, every item in the margin column. */
-const FIRST_GUESS = { margin: 260, docked: 52 } as const;
+/**
+ * Sizes before the first measurement: the margin column fits "Send to board" and its chevron (the
+ * prototype draws 190), one row docked. After the first paint the bar's own size is what counts.
+ */
+const FIRST_GUESS = { margin: { width: 190, height: 230 }, docked: 48 } as const;
 
 /** The toolbar's actions: everything but where it goes and its measurement. */
 export type ToolbarActions = Omit<SelectionToolbarProps, 'placement' | 'onMeasure'>;
+
+interface Sizes {
+  readonly margin: { readonly width: number; readonly height: number };
+  readonly docked: number;
+}
 
 /** What `useSelectionToolbar` needs. */
 export interface UseSelectionToolbarArgs {
@@ -56,18 +61,22 @@ export interface SelectionToolbarMount {
 export function useSelectionToolbar(args: UseSelectionToolbarArgs): SelectionToolbarMount {
   const { selection, doc, narrow, sheetOpen, actions } = args;
   const [dockHost, setDockHost] = useState<HTMLDivElement | null>(null);
-  const [heights, setHeights] = useState<{ margin: number; docked: number }>(FIRST_GUESS);
+  const [sizes, setSizes] = useState<Sizes>(FIRST_GUESS);
   const measureMargin = useCallback(
-    (size: { readonly height: number }) =>
-      setHeights((h) =>
-        h.margin === size.height || size.height <= 0 ? h : { ...h, margin: size.height },
+    (size: { readonly width: number; readonly height: number }) =>
+      setSizes((s) =>
+        (s.margin.width === size.width && s.margin.height === size.height) ||
+        size.width <= 0 ||
+        size.height <= 0
+          ? s
+          : { ...s, margin: { width: size.width, height: size.height } },
       ),
     [],
   );
   const measureDocked = useCallback(
     (size: { readonly height: number }) =>
-      setHeights((h) =>
-        h.docked === size.height || size.height <= 0 ? h : { ...h, docked: size.height },
+      setSizes((s) =>
+        s.docked === size.height || size.height <= 0 ? s : { ...s, docked: size.height },
       ),
     [],
   );
@@ -82,8 +91,8 @@ export function useSelectionToolbar(args: UseSelectionToolbarArgs): SelectionToo
       typeArea: lines.typeArea,
       selection: lines.lines,
       levelWith: lines.levelWith,
-      toolbar: { width: MARGIN_BAR_WIDTH, height: heights.margin },
-      dockHeight: heights.docked,
+      toolbar: sizes.margin,
+      dockHeight: sizes.docked,
       viewport: geometry.viewport,
     });
     if (placed.kind === 'margin') {

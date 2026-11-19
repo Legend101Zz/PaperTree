@@ -8,7 +8,7 @@
  */
 import { useEffect, useRef, type KeyboardEvent, type ReactNode } from 'react';
 
-import type { AskOutcome } from '@/components/explain/useExplainActions';
+import type { AskOutcome } from '@/features/explain/model/controller';
 
 /** Props for `Composer`. */
 export interface ComposerProps {

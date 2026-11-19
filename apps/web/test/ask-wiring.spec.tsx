@@ -46,7 +46,7 @@ function answerFrames(extra: string[] = []): string[] {
     status({ phase: 'tool', label: 'Reading p. 4 · §2.1' }),
     text('YOLO frames detection as one regression problem [b1]'),
     text(', and the grid cell holds the centre [b2].'),
-    frame('citations', { items: [citation('b1'), citation('b2', { supported: false })] }),
+    frame('citations', { items: [citation('b1'), citation('b2')] }),
     usage(),
     done(),
     ...extra,
@@ -57,8 +57,8 @@ async function ask(): Promise<void> {
   fireEvent.click(screen.getByRole('button', { name: 'ask one' }));
 }
 
-describe('Ask: a streamed answer with markers, a usage line and nothing raw', () => {
-  it('POSTs an explain thread with the anchor, streams, then shows markers that flash the passage', async () => {
+describe('Ask: a streamed answer with a quiet source line, a usage line and nothing raw', () => {
+  it('POSTs an explain thread with the anchor, streams, then shows one page link that flashes the passage', async () => {
     const { calls } = installFetch({
       [THREADS]: (_c, signal) => sseResponse(answerFrames(), { signal }),
     });
@@ -71,29 +71,28 @@ describe('Ask: a streamed answer with markers, a usage line and nothing raw', ()
     expect((post?.body as Record<string, unknown>)['question']).toBeUndefined();
 
     // Deterministic (#252): wait until the answer has settled and its stored re-read has been
-    // asked for (a 404 here), so the click below lands on the markers that stay.
+    // asked for (a 404 here), so the click below lands on the page link that stays.
     await waitFor(() =>
       expect(
         calls.some((c) => c.method === 'GET' && c.path === `/papers/${PAPER}/threads/thr_1`),
       ).toBe(true),
     );
-    // Both passages arrive with the citations event as numbered markers (#202); the second is
-    // not verified, in words.
-    const markers = await waitFor(() => {
-      const found = document.querySelectorAll('[data-citation-id] button');
-      expect(found).toHaveLength(2);
+    // Both passages are on p. 4: the citations event gives the paragraph ONE page link (#340),
+    // and no marker, no chip and no verdict.
+    const pages = await waitFor(() => {
+      const found = document.querySelectorAll('.pt-source button');
+      expect(found).toHaveLength(1);
       return found;
     });
-    expect(markers[1]?.getAttribute('aria-label')).toBe('Passage 2, p. 4, not verified');
-    expect(markers[0]?.getAttribute('aria-label')).toBe('Passage 1, p. 4');
+    expect(pages[0]?.getAttribute('aria-label')).toBe('Show p. 4 in the paper');
+    expect(document.querySelector('.pt-source')?.textContent).toMatch(/^From the paper: p\. 4/);
+    expect(document.querySelector('.pt-marker, .pt-chip, [data-citation-id]')).toBeNull();
+    expect(document.body.textContent).not.toMatch(/not verified/);
 
-    fireEvent.click(markers[0] as Element);
+    fireEvent.click(pages[0] as Element);
     expect(focusAnchor).toHaveBeenCalledTimes(1);
     expect(focusAnchor.mock.calls[0]?.[0]).toMatchObject({ id: 'anchor-b1' });
-    expect(focusAnchor.mock.calls[0]?.[1]).toEqual({
-      flash: true,
-      from: { n: 1, page: 4, para: null, notVerified: false },
-    });
+    expect(focusAnchor.mock.calls[0]?.[1]).toEqual({ flash: true });
 
     // The usage line: tokens and an estimate marker.
     expect(document.querySelector('[data-usage-line]')?.textContent).toBe(
@@ -125,8 +124,8 @@ describe('Ask: a streamed answer with markers, a usage line and nothing raw', ()
     );
     handle?.push(text('Now writing'));
     await waitFor(() => expect(screen.getByText(/Now writing/)).toBeTruthy());
-    // Once text flows the tab row says the AI is writing (#204), never the tool.
-    expect(screen.getByRole('status').textContent).toBe('Writing…');
+    // Once text flows the foot says the AI is writing (#204), never the tool.
+    expect(screen.getByRole('status').textContent).toBe('writing…');
     handle?.push(done());
     handle?.close();
   });
@@ -146,7 +145,7 @@ describe('Ask: a streamed answer with markers, a usage line and nothing raw', ()
     });
     render(<Harness />);
     await ask();
-    await waitFor(() => expect(document.querySelectorAll('[data-citation-id]')).toHaveLength(2));
+    await waitFor(() => expect(document.querySelectorAll('.pt-source button')).toHaveLength(1));
 
     fireEvent.change(screen.getByLabelText('Ask a question about this paper'), {
       target: { value: 'What does that mean?' },
@@ -154,7 +153,7 @@ describe('Ask: a streamed answer with markers, a usage line and nothing raw', ()
     fireEvent.click(screen.getByRole('button', { name: 'Ask' }));
     await waitFor(() => expect(screen.getByText(/one network pass/)).toBeTruthy());
     const follow = calls.find((c) => c.path === `/papers/${PAPER}/threads/thr_1/messages`);
-    expect(follow?.body).toEqual({ question: 'What does that mean?' });
+    expect(follow?.body).toEqual({ question: 'What does that mean?', level: 'familiar' });
     expect(screen.getByText('What does that mean?')).toBeTruthy();
   });
 

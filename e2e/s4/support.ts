@@ -523,7 +523,10 @@ export async function hitTest(
   page: Page,
   name: string,
 ): Promise<{ x: number; y: number; hit: string }> {
-  const button = page.getByRole('button', { name, exact: true });
+  // Scoped to the selection menu: the header has an "Explain" toggle of its own.
+  const button = page
+    .getByRole('toolbar', { name: 'Selection actions' })
+    .getByRole('button', { name, exact: true });
   const box = await button.boundingBox();
   if (box === null) throw new Error(`no ${name} button`);
   const x = box.x + box.width / 2;

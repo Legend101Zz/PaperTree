@@ -333,18 +333,6 @@
   cursor: pointer;
 }
 
-.pt-nb-exchange__margin {
-  display: inline-flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.pt-nb-exchange__claim {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-}
-
 .pt-nb-exchange__usage {
   font: var(--pt-t-num-s) var(--pt-font-you);
   font-variant-numeric: lining-nums tabular-nums;

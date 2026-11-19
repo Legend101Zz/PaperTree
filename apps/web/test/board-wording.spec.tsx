@@ -16,7 +16,7 @@ import { boardsApi } from '@/lib/api/boards';
 
 import { anchorFixture, citation } from './s6-support';
 
-import type { ViewMessage } from '@/components/explain/useExplainActions';
+import type { ViewMessage } from '@/features/explain/model/state';
 import type { Anchor, Citation } from '@/lib/api/types';
 
 vi.mock('@/lib/api/boards', () => ({ boardsApi: { get: vi.fn(), createNode: vi.fn() } }));
@@ -96,7 +96,6 @@ describe('“board”, never “canvas”, around the board (#214)', () => {
       <SelectionToolbar
         placement={{ kind: 'sheet' }}
         onHighlight={() => undefined}
-        onCopy={() => undefined}
         onExplain={() => undefined}
         onAsk={() => undefined}
         onSendToBoard={() => undefined}

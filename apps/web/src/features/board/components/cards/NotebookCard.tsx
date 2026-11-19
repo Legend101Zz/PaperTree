@@ -64,7 +64,7 @@ const UNFINISHED: Partial<Record<MessageDiagram['status'], string>> = {
   error: 'cut short',
 };
 
-/** "6 parts · 5 cited", and "· stopped" / "· cut short" for a plate that did not finish (N8). */
+/** "6 parts", and "· stopped" / "· cut short" for a plate that did not finish (N8). */
 function plateCounts(plate: MessageDiagram): string | null {
   const counts = plateReadout(plate.parts, false, false);
   const unfinished = UNFINISHED[plate.status];

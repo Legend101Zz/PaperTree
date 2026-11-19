@@ -14,6 +14,7 @@ import { NotebookView } from '@/features/notebook';
 import { moreParagraphs } from '@/features/notebook/components/ExchangeBlock';
 import { strokeToWire } from '@/features/notebook/model/wire';
 
+import { sourceLines } from './answer-render';
 import { PAGE, PAPER, pageView, stubApi, wireItem } from './s5c-notebook-fixtures';
 
 import type { Call } from './s5c-notebook-fixtures';
@@ -75,14 +76,15 @@ async function mountPhone(): Promise<Call[]> {
     </QueryClientProvider>,
   );
   await screen.findByRole('toolbar', { name: 'Notebook tools' });
-  await screen.findAllByRole('listitem');
+  await screen.findByRole('region', { name: 'The exchange this page started from' });
+  await waitFor(() => expect(document.querySelector('.pt-source')).not.toBeNull());
   return calls;
 }
 
 const bar = (): HTMLElement => screen.getByRole('toolbar', { name: 'Notebook tools' });
 
 describe('the stack (08c)', () => {
-  it('reads ask → answer → trace: the AI slip collapsed, the trace as rows that open the paper', async () => {
+  it('reads ask → answer: the AI slip collapsed to one paragraph and its one source line, no trace', async () => {
     await mountPhone();
     const exchange = screen.getByRole('region', { name: 'The exchange this page started from' });
     expect(exchange.querySelector('[data-voice="you"]')).not.toBeNull();
@@ -90,15 +92,18 @@ describe('the stack (08c)', () => {
     const more = within(exchange).getByRole('button', { name: 'Read the whole answer' });
     expect(more.getAttribute('aria-expanded')).toBe('false');
     expect(exchange.textContent).toContain('4 more paragraphs');
+    expect(sourceLines(exchange)).toEqual(['From the paper: p. 1']);
     fireEvent.click(more);
     expect(within(exchange).getByRole('button', { name: 'Show less' })).toBeTruthy();
-
-    const trace = screen.getByRole('list', { name: 'Passages the answer stands on' });
-    const rows = within(trace).getAllByRole('button');
-    expect(rows).toHaveLength(4);
-    expect(rows[0]!.textContent).toMatch(/^Show in paper: 1p\. 1 ¶1.*cited/);
-    fireEvent.click(rows[1]!);
-    expect(push).toHaveBeenCalledWith(`/paper/${PAPER}/read?nb=${PAGE}&item=ni_quote0002`);
+    expect(sourceLines(exchange).at(-1)).toBe('From the paper: p. 1 · p. 2');
+    // No numbered passage list, no coverage line: the quote cards are the page's, not a trace.
+    expect(screen.queryByRole('list', { name: 'Passages the answer stands on' })).toBeNull();
+    expect(document.querySelector('.pt-trace-list, .pt-trace-row, .pt-coverage')).toBeNull();
+    // A page link opens the paper at the passage it cites.
+    fireEvent.click(
+      within(exchange).getAllByRole('button', { name: 'Show p. 1 in the paper' })[0]!,
+    );
+    expect(push).toHaveBeenCalledWith(`/paper/${PAPER}/read?nb=${PAGE}&item=ni_quote0001`);
   });
 
   it('shows the ink view only: drawn, never a surface, and no key takes it up to erase', async () => {
@@ -220,12 +225,13 @@ describe('deleting on the phone (review blocker)', () => {
     expect(calls.some((c) => c.method === 'POST' && c.body?.['body'] === 'never mind')).toBe(false);
   });
 
-  it('gives the answer’s markers the shared 44 px touch target', async () => {
+  it('gives each page of the answer the touch-size target', async () => {
     await mountPhone();
     const exchange = screen.getByRole('region', { name: 'The exchange this page started from' });
-    const markers = exchange.querySelectorAll('.pt-marker:not(.pt-marker--static)');
-    expect(markers.length).toBeGreaterThan(0);
-    for (const m of markers) expect(m.classList.contains('pt-marker--touch')).toBe(true);
+    const pages = exchange.querySelectorAll('.pt-source button');
+    expect(pages.length).toBeGreaterThan(0);
+    for (const m of pages) expect(m.classList.contains('pt-source__page--touch')).toBe(true);
+    expect(exchange.querySelector('.pt-marker')).toBeNull();
   });
 });
 

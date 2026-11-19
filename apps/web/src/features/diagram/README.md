@@ -1,16 +1,17 @@
 # diagram
 
-The engraved plate (#217, frames 07a–07c, DESIGN.md §1 "Diagrams", ADR-004 §2.9): "Explain with a diagram" on
-a selection draws a small figure of lettered parts A–L in the explain panel, each part with the passage it
-stands on. The backend is S7a (#216): a `diagram` thread, the `diagram-v1` prompt, parts streamed as SSE
-`plate` / `part` / `link` events with each quote already resolved to an Anchor.
+The engraved plate (#217, frames 07a–07c, DESIGN.md §1 "Diagrams", ADR-004 §2.9): a small figure of lettered
+parts A–L in the explain panel, each part with the passage it stands on. The reader no longer starts one from a
+selection ("Explain with a diagram" left the selection menu in #346: diagrams live inside answers, #339); a
+`diagram` thread stored by v0.2 still renders in the panel, and its plate can be redrawn. The backend is S7a
+(#216): a `diagram` thread, the `diagram-v1` prompt, parts streamed as SSE `plate` / `part` / `link` events with
+each quote already resolved to an Anchor.
 
 ## Data flow
 
-UI (the selection toolbar's "Explain with a diagram" → `components/reader/SourcePane` →
-`ReaderActions.explainWithDiagram`) → controller (`components/explain/useExplainActions`: `openDiagram`, the
-stream reader, `redraw`; the plate rides on the panel's message as `diagram`) → `lib/api/threads` →
-`POST /papers/{id}/threads {kind: "diagram", anchor}` and, for a Redraw,
+UI (a stored diagram thread opened in the explain panel) → controller (`features/explain/hooks/useExplainActions`:
+`selectThread`, the stream reader, `redraw`; the plate rides on the panel's message as `diagram`) → `lib/api/threads` →
+`GET /papers/{id}/threads/{tid}` and, for a Redraw,
 `POST /papers/{id}/threads/{tid}/messages {question, redraw_of}` (`services/api` `routers/threads.py`) → DB
 (`ai_diagram_parts` rows, one per part as it arrives; `ai_messages.diagram_json` for the title and links;
 migration 0011). The stored read (`GET /papers/{id}/threads/{tid}`, each message's `diagram`) replaces the live
@@ -25,23 +26,17 @@ plate once it settles (`features/explain/model/messages.mergeStored`), keyed by 
 - **A dropped letter keeps its row.** The API keeps the agent's letters; a part it dropped (an unreadable line, or
   one the table refused) leaves an empty row ("Part C was left out of the plate."), never renumbered. A dropped
   LAST letter leaves no row: nothing after it shows that it was ever there.
-- **Every part says where it stands** (DESIGN.md §4): **cited** (the quote is word for word in the passage:
-  marker, solid tab, the quote in the paper's voice), **not verified** (near a passage: dashed marker and tab;
-  or found nowhere: no marker, "not verified · not found in the paper"; either way the quote is the AI's, never
-  shown in the paper's voice), or **inferred** (no quote: a dashed box, "Inferred, no passage", the AI's own
-  line). In the drawing only a cited part has a hatched shadow; a not-verified one is dotted, captioned "not
-  verified", with a dashed marker (or "?" when its quote was found nowhere); an inferred one is dashed and
-  captioned. The readout counts them from the data: "6 parts · 5 cited · drawn by AI from p. 4" ("so far" while
-  it draws; a not-verified part is counted in words; "drawn by AI" alone when nothing is cited).
+- **A part may say where it came from, quietly** (#340): when the part has a passage of the paper behind it (an
+  Anchor), its key row ends in "From the paper: p. 4"; a part with none says nothing. No verdict ("cited / not
+  verified / inferred"), no marker, no tab, no caption, no hatching difference: every box looks alike. The
+  readout is "6 parts · drawn by AI from p. 4" ("so far" while it draws; "drawn by AI" alone when no part has a
+  page).
 - **The key is the plate's text alternative.** The drawing is `aria-hidden`; each key row is a button named by its
-  own words (no `aria-label`), with hidden words for what only the drawing shows: "Part E: … Passage 2, p. 4
-  ¶2. “…” Arrows in from D and A (V). Show in paper." and "Link back to B (again)." for a feedback link.
-- **Passage numbers** are the thread's (`model/plate.numberPlatePassages`): 1..k in the order the plates first
-  stand on a passage (keyed by the Anchor's block), so two parts on one paragraph share a marker and a Redraw's
-  plate keeps the same numbers.
-- **Tap a part** (its box or its key row) and the reader flashes its passage (`ReaderActions.focusAnchor`, with
-  `from.part`, so the margin tab says "from part C, Scale ÷ √dk"). A part with nothing to flash says so in a
-  polite live region instead.
+  own words (no `aria-label`), with hidden words for what only the drawing shows: "Part E: … The AI's line. From
+  the paper: p. 4. Arrows in from D and A (V). Show in paper." and "Link back to B (again)." for a feedback link.
+- **Tap a part** (its box or its key row) and the reader flashes its passage (`ReaderActions.focusAnchor`; the
+  flash has no margin tab). A part with nothing to flash says so in a polite live region instead ("Part F has no
+  passage in the paper to show.").
 - **What the run left out** (the API's writing-phase `status` labels: a skipped line, a dropped arrow) is listed
   under the plate. It is live only: a stored read does not carry it.
 - **Stop** (S4d's, on the tab row) freezes the plate: the run is cancelled, the parts that arrived stay
@@ -89,8 +84,8 @@ plate once it settles (`features/explain/model/messages.mergeStored`), keyed by 
 
 - `model/layout.ts`: the slot grid. Pure, tested (`layout.spec.ts`: stability under streaming on the recorded
   run, determinism, arrows only from earlier letters, gaps kept, a 12-part plate in well under 16 ms).
-- `model/plate.ts`: events → plate, verdicts, readout, passage numbers, tabs, the phase. Pure, tested on the
+- `model/plate.ts`: events → plate, the readout, a part's page, the phase. Pure, tested on the
   recorded faux runs (`plate.spec.ts`). `model/fit.ts`: a box label at 15 or 13 px, on one or two lines, else cut;
   an edge label cut to its lane (`fit.spec.ts`).
-- `e2e/v02/diagram.spec.ts`: the walk on the faux agent (select → plate → tap B → Send to board → the board card).
+- `e2e/v02/stored-plate.spec.ts`: the walk on the faux agent (a stored diagram thread → plate in the panel → tap B → Send to board → the board card).
 - `apps/web/test/s7b-plate.spec.tsx`: the panel on recorded SSE frames (`test/fixtures/diagram-plate*.sse`).
