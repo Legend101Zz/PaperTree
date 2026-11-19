@@ -524,9 +524,14 @@ test.describe('S4 Journey B — highlight, reload, zoom, modes, orphan, 390 px',
     // measured with it open.
     const layout = await readingControls(mobile, () =>
       mobile.evaluate(() => {
+        // Every radio in the menu must fit (the reading mode, and since #345 the Aa page and room
+        // switches too); only the reading mode's own radios are counted as the three modes.
         const radios = Array.from(document.querySelectorAll('[role="radio"]')).map(
           (r) => r.getBoundingClientRect().right,
         );
+        const modeRadios = document.querySelectorAll(
+          '[role="radiogroup"][aria-label="Reading mode"] [role="radio"]',
+        ).length;
         const pageEl = document.querySelector('.papertree-page');
         return {
           scrollWidth: document.documentElement.scrollWidth,
@@ -536,13 +541,15 @@ test.describe('S4 Journey B — highlight, reload, zoom, modes, orphan, 390 px',
           zoomLabel:
             (document.querySelector('#papertree-zoom-select') as HTMLSelectElement | null)
               ?.selectedOptions[0]?.textContent ?? '',
-          radioCount: radios.length,
+          radioCount: modeRadios,
+          allRadios: radios.length,
         };
       }),
     );
     note(`390 px: ${JSON.stringify(layout)}`);
     expect(layout.scrollWidth).toBeLessThanOrEqual(390);
     expect(layout.radioCount, 'the three modes are measured, not an empty list').toBe(3);
+    expect(layout.allRadios, 'the Aa page and room radios are in the menu too').toBeGreaterThan(3);
     expect(layout.radioRight).toBeLessThanOrEqual(390);
     expect(layout.pageWidth).toBeLessThanOrEqual(390);
     expect(layout.zoomLabel).toBe('Fit width');
