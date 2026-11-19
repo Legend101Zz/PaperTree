@@ -54,6 +54,7 @@ GROUPS: Final[dict[str, tuple[tuple[type[BaseModel], Mode], ...]]] = {
         (s.PaperFigure, OUT),
         (s.PaperAbstract, OUT),
         (s.PlatePut, IN),
+        (s.PaperRename, IN),
     ),
     "highlights": (
         (s.Highlight, OUT),

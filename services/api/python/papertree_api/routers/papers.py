@@ -5,6 +5,7 @@ POST   /papers                     the bytes -> uploads/<id>.pdf, a paper_owners
 GET    /papers                     LibraryPaper[], one per paper, newest first
 GET    /papers/{id}                one LibraryPaper
 GET    /library/links              citation links between the caller's own papers (#194)
+PATCH  /papers/{id}                rename: the title the library shows (v0.3 #337)
 DELETE /papers/{id}                the rows, the paper's jobs, its upload, crops and staging
 POST   /papers/{id}/retry          the dead-lettered generation again, as a new attempt
 POST   /papers/{id}/reparse        generation next_generation
@@ -62,6 +63,7 @@ from ..schemas import (
     LibraryLinks,
     LibraryPaper,
     LibraryReference,
+    PaperRename,
     ReadingStateUpdate,
     ReparseRequest,
     UploadAccepted,
@@ -315,6 +317,29 @@ async def get_paper(
     if gen is not None and gen not in call.db.list_generations(call.db_owner, PaperId(paper_id)):
         raise ApiError("not_found", "no such generation")
     return paper
+
+
+@router.patch("/papers/{paper_id}", response_model=LibraryPaper)
+async def rename_paper(
+    request: Request,
+    call: CallerDep,
+    settings: SettingsDep,
+    paper_id: str,
+    body: Annotated[PaperRename, Depends(json_body(PaperRename))],
+) -> LibraryPaper:
+    """Gives the paper the name the person typed on its opened book (v0.3 #337) and answers with
+    the library row, whose `title` is now that name.
+
+    Stored beside the paper, not in the parse (0012), so a re-parse keeps it. It changes what the
+    library lists and the reader's header reads; the parsed title is untouched, and it is still
+    what citation matching and the model's paper context use. 404 for a paper that is not the
+    caller's (the same answer as for one that does not exist); 422 for a blank or over-long title
+    (`PaperRename` trims first)."""
+    try:
+        call.db.set_paper_title(call.db_owner, PaperId(paper_id), body.title)
+    except PaperNotFound as exc:
+        raise ApiError("not_found", "no such paper") from exc
+    return _library_paper(call, paper_id, _signer(request, settings))
 
 
 @router.put("/papers/{paper_id}/reading-state", status_code=status.HTTP_204_NO_CONTENT)
