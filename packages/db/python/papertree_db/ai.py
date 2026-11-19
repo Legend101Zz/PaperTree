@@ -50,10 +50,12 @@ else:
     _Base = object
 
 THREAD_KINDS: Final = frozenset({"explain", "ask", "diagram"})
-#: Every kind 0011's CHECK allows. ``topic`` (the topic Flash run, #242) is not built yet, but a
-#: row of it is already recorded, reserved for (``RUN_RESERVE_USD``) and counted in ``GET /usage``,
-#: so the day one exists it cannot break the spend cap or the usage read.
-RUN_KINDS: Final = frozenset({"explain", "ask", "summary", "diagram", "topic"})
+#: Every kind 0017's CHECK allows (besides ``glance``, 0013's, built on another branch). ``topic``
+#: (the topic Flash run, #242) and ``image`` (the image ask, v0.3 #348) are runs of their own: a row
+#: of each is recorded, reserved for (``RUN_RESERVE_USD``) and counted in ``GET /usage`` like any
+#: other, so neither can break the spend cap or the usage read. An image thread is an ``ask`` thread
+#: (``THREAD_KINDS``) told apart by its run.
+RUN_KINDS: Final = frozenset({"explain", "ask", "summary", "diagram", "topic", "image"})
 #: ``ai_diagram_parts.part_kind`` (0011): how the plate draws a part (DESIGN.md §1 "Diagrams").
 DIAGRAM_PART_KINDS: Final = frozenset({"input", "step", "output", "concept"})
 #: A plate holds at most twelve parts, lettered A-L in arrival order.
@@ -1078,7 +1080,11 @@ class AiMixin(_Base):
 
 
 _THREAD_SELECT: Final = (
-    "SELECT t.thread_id, t.paper_id, t.kind, t.title, t.origin_anchor_json, t.agent_state_json, "
+    # An image thread (v0.3 #348) is stored as an `ask` thread (0017 does not rebuild the thread
+    # table) and read back as kind `image`: the kind of its run.
+    "SELECT t.thread_id, t.paper_id, CASE WHEN t.kind = 'ask' AND EXISTS (SELECT 1 FROM ai_runs r "
+    "WHERE r.owner_id = t.owner_id AND r.thread_id = t.thread_id AND r.kind = 'image') "
+    "THEN 'image' ELSE t.kind END AS kind, t.title, t.origin_anchor_json, t.agent_state_json, "
     "t.created_at, t.updated_at, COUNT(m.message_id) AS message_count, "
     # The thread list's `ask` and `last_status` (#201) ride on the same query as two scalar
     # subqueries, so a list of N threads is still one statement (no N+1). The ask is bounded here;

@@ -322,7 +322,7 @@ export interface Message {
 
 export interface Thread {
   thread_id: string;
-  kind: 'explain' | 'ask' | 'diagram';
+  kind: 'explain' | 'ask' | 'diagram' | 'image';
   title: string;
   origin_anchor: Anchor | null;
   created_at: string;

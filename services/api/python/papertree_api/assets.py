@@ -93,6 +93,46 @@ def signed_url(
     return f"{base_url}papers/{paper_id}/assets/{kind}/{block_id}?{query}"
 
 
+#: The ``kind`` a signed REGION crop URL is signed under (``GET /papers/{id}/crop``, v0.3 #348). It
+#: is not in ``ASSET_KINDS``: the asset route never serves it, and a signature made for a figure
+#: crop cannot be replayed for a region (the kind is in the MAC) nor the other way round.
+CROP_KIND: Final = "crop"
+
+
+def signed_crop_url(
+    base_url: str,
+    secret: str,
+    *,
+    paper_id: str,
+    gen: int,
+    page: int,
+    box: tuple[float, float, float, float],
+    exp: int,
+) -> str:
+    """The absolute URL of one region crop, signed until ``exp``. ``base_url`` ends with ``/``.
+
+    The MAC covers the paper, the generation, the page and the box in tenths of a point
+    (``region_crops.canonical_box``): another box is another signature. The query carries the box
+    rounded to tenths, so what is signed is what is read.
+    """
+    from .region_crops import canonical_box  # a leaf of this one: imported late, no cycle
+
+    rounded = [round(v * 10) / 10 for v in box]
+    query = urlencode(
+        {
+            "page": page,
+            "x0": rounded[0],
+            "y0": rounded[1],
+            "x1": rounded[2],
+            "y1": rounded[3],
+            "gen": gen,
+            "exp": exp,
+            "sig": sign(secret, paper_id, gen, CROP_KIND, canonical_box(page, box), exp),
+        }
+    )
+    return f"{base_url}papers/{paper_id}/crop?{query}"
+
+
 def rewrite_asset_uris(
     document: Any, *, paper_id: str, url_for: Callable[[int, str, str], str]
 ) -> int:

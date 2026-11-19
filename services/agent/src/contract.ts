@@ -123,20 +123,32 @@ function conditionalFields(schemaPath: string): string[] {
   return Object.keys(then?.properties ?? {});
 }
 
-export type Kind = 'explain' | 'ask' | 'summary' | 'diagram' | 'topic';
+export type Kind = 'explain' | 'ask' | 'summary' | 'diagram' | 'topic' | 'image';
 /** The reader's level an explain/ask answer is written for (v0.3, #339). */
 export type Level = 'new' | 'familiar' | 'expert';
 export const LEVELS: readonly Level[] = ['new', 'familiar', 'expert'];
 /** Whether an answer may, must or must not carry its ```diagram fence (v0.3, #343). */
 export type DiagramUse = 'may' | 'never' | 'always';
 
-export type PromptVersion = 'explain-v1' | 'ask-v1' | 'summary-v1' | 'diagram-v1' | 'topic-v1';
+export type PromptVersion =
+  'explain-v1' | 'ask-v1' | 'summary-v1' | 'diagram-v1' | 'topic-v1' | 'image-v1';
 
 export interface SeedPassage {
   readonly handle: string;
   readonly label: string;
   readonly text: string;
 }
+
+/** A picture attached to an `image` run (v0.3, #348); see `images` in run-request.schema.json. */
+export interface RunImage {
+  readonly media_type: 'image/png' | 'image/jpeg';
+  readonly data_base64: string;
+  readonly caption?: string;
+  readonly page?: number;
+}
+
+/** The most bytes one attached picture may decode to (the schema bounds its base64 to match). */
+export const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
 
 export interface RunLimits {
   readonly deadline_ms: number;
@@ -175,6 +187,8 @@ export interface RunRequest {
   readonly check?: boolean;
   /** v0.3 (#343): the ```diagram fence is optional (`may`), required or refused; absent reads `may`. */
   readonly diagram?: DiagramUse;
+  /** v0.3 (#348): the picture(s) of an `image` run; present exactly on that kind. */
+  readonly images?: readonly RunImage[];
 }
 
 /** The prompt each kind runs under. A request that pairs them otherwise is refused (S0 left it open). */
@@ -184,6 +198,7 @@ export const PROMPT_FOR_KIND: Readonly<Record<Kind, PromptVersion>> = {
   summary: 'summary-v1',
   diagram: 'diagram-v1',
   topic: 'topic-v1',
+  image: 'image-v1',
 };
 
 /**
@@ -240,9 +255,37 @@ export function validateRunRequest(body: unknown): Validation {
       detail: 'question: a topic run takes "Category: …" and "Existing topics: [...]" lines',
     };
   }
+  const picture = imageProblem(request.images ?? []);
+  if (picture !== null) return { ok: false, detail: `images: ${picture}` };
   const history = historyProblem(request.history?.entries ?? []);
   if (history !== null) return { ok: false, detail: `history.entries: ${history}` };
   return { ok: true, request };
+}
+
+/** The first bytes of each media type: a body that claims PNG but is not one is refused. */
+const MAGIC: Readonly<Record<RunImage['media_type'], readonly number[]>> = {
+  'image/png': [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a],
+  'image/jpeg': [0xff, 0xd8, 0xff],
+};
+
+/**
+ * What the schema cannot say about a picture: its base64 is well formed, it decodes to at most
+ * `MAX_IMAGE_BYTES`, and what it decodes to starts like its declared media type (PNG or JPEG
+ * only). A problem names the picture; null when every one is fine.
+ */
+function imageProblem(images: readonly RunImage[]): string | null {
+  for (const [i, image] of images.entries()) {
+    const encoded = image.data_base64;
+    if (!/^[A-Za-z0-9+/]+={0,2}$/.test(encoded) || encoded.length % 4 !== 0)
+      return `image ${String(i)} is not standard base64`;
+    const bytes = Buffer.from(encoded, 'base64');
+    if (bytes.length > MAX_IMAGE_BYTES)
+      return `image ${String(i)} is ${String(bytes.length)} bytes; at most ${String(MAX_IMAGE_BYTES)}`;
+    const magic = MAGIC[image.media_type];
+    if (!magic.every((byte, at) => bytes[at] === byte))
+      return `image ${String(i)} is not a ${image.media_type}`;
+  }
+  return null;
 }
 
 const ROLES = new Set(['user', 'assistant', 'toolResult']);

@@ -50,6 +50,7 @@ from pydantic.fields import FieldInfo
 from pydantic_core import InitErrorDetails, PydanticCustomError
 
 from .errors import ErrorCode, RunErrorCode
+from .image_anchor import image_box
 from .wiretime import wire_time
 
 # ── building blocks ──────────────────────────────────────────────────────────────────────────
@@ -774,10 +775,12 @@ class ResolutionsPut(Wire):
 # ── §2.5 AI threads, messages, citations, runs ───────────────────────────────────────────────
 
 MessageStatus = Literal["streaming", "complete", "partial", "error", "aborted"]
-ThreadKind = Literal["explain", "ask", "diagram"]
+#: ``image`` (v0.3 #348): a question about a figure or region, answered from its crop. It is stored
+#: as an ``ask`` thread (0017 does not rebuild the thread table) and read back as ``image``.
+ThreadKind = Literal["explain", "ask", "diagram", "image"]
 #: The reader's level an explain/ask answer is written for (v0.3, #339; 0014).
 AnswerLevel = Literal["new", "familiar", "expert"]
-RunKind = Literal["explain", "ask", "summary", "diagram", "topic"]
+RunKind = Literal["explain", "ask", "summary", "diagram", "topic", "image"]
 DoneStatus = Literal["complete", "partial", "error", "aborted"]
 
 
@@ -936,26 +939,51 @@ class ThreadDetail(Wire):
 DEFAULT_QUESTION: Final = "Explain this passage."
 #: A `diagram` thread's question when the client sends none.
 DIAGRAM_QUESTION: Final = "Explain with a diagram."
+#: An `image` thread's question when the client sends none: what "Explain" on a figure asks.
+IMAGE_QUESTION: Final = "Explain this figure."
 
 
 class ThreadCreate(Wire):
-    """`POST /papers/{id}/threads`. `anchor` is required for `explain` and `diagram`; a diagram's
-    default question is `DIAGRAM_QUESTION`."""
+    """`POST /papers/{id}/threads`. `anchor` is required for `explain`, `diagram` and `image`; a
+    diagram's default question is `DIAGRAM_QUESTION`, an image's `IMAGE_QUESTION`.
+
+    An `image` thread (v0.3 #348) is about a figure or a free region of a page: its `anchor` is an
+    IMAGE anchor (`image_anchor`: targetKind `figure` or `figure_region`, a PageSelector and ONE
+    ShapeSelector quad, no text quote), the API renders the crop and sends it to the model with the
+    figure's caption and the paragraph that first mentions it. `with_text_anchor` (image only) is
+    the text anchor of a paragraph the reader selected together with the figure ("figure +
+    paragraph together"): its words go beside the picture.
+    """
 
     kind: ThreadKind
     anchor: AnchorV1In | None = omittable(validate_default=True)
     question: str = Field(default=DEFAULT_QUESTION, min_length=1, max_length=2000)
     #: The level the first answer is written for (stored on the answer). Ignored by a `diagram`.
     level: AnswerLevel = "familiar"
+    #: `image` only: a text anchor selected together with the figure.
+    with_text_anchor: AnchorV1In | None = omittable()
 
     @field_validator("anchor", mode="after")
     @classmethod
     def _explain_needs_an_anchor(cls, value: AnchorV1In | None, info: ValidationInfo) -> Any:
         kind = info.data.get("kind")
-        if value is None and kind in ("explain", "diagram"):
-            article = "an" if kind == "explain" else "a"
+        if value is None and kind in ("explain", "diagram", "image"):
+            article = "an" if kind in ("explain", "image") else "a"
             raise PydanticCustomError("missing", f"Field required for {article} {kind} thread")
+        if value is not None and kind == "image":
+            try:
+                image_box(value.model_dump(mode="json"))
+            except ValueError as exc:
+                raise PydanticCustomError("image_anchor", str(exc)) from exc
         return value
+
+    @model_validator(mode="after")
+    def _with_text_is_for_an_image(self) -> Self:
+        if self.with_text_anchor is not None and self.kind != "image":
+            raise PydanticCustomError(
+                "extra_forbidden", "with_text_anchor: only an image thread takes one"
+            )
+        return self
 
 
 class FollowUp(Wire):
@@ -1079,6 +1107,8 @@ class UsageByKind(Wire):
     diagram: UsageBucket
     #: The topic run (#242) is not built yet; its bucket is 0 until it is.
     topic: UsageBucket
+    #: The image ask (v0.3 #348): a run shown a crop of a figure.
+    image: UsageBucket
 
 
 class UsageTotals(Wire):
@@ -1659,6 +1689,16 @@ class AgentSeed(Wire):
     passages: list[AgentPassage]
 
 
+class AgentImage(Wire):
+    """A picture of an `image` run (v0.3 #348): a crop PNG, base64, at most 4 MiB of bytes."""
+
+    media_type: Literal["image/png", "image/jpeg"]
+    data_base64: str = Field(min_length=8, max_length=5_592_408)
+    #: The figure's caption as one short line, and its 0-based page.
+    caption: str | None = omittable(max_length=600)
+    page: NonNegative | None = omittable()
+
+
 class AgentHistory(Wire):
     session_id: str = Field(pattern=server_id("thr"))
     #: Pi's `exportEntries()` as of the thread's last completed turn. Opaque to the API.
@@ -1680,7 +1720,9 @@ class AgentRunRequest(Wire):
     run_id: str = Field(pattern=server_id("run"))
     request_id: str = Field(pattern=server_id("req"))
     kind: RunKind
-    prompt_version: Literal["explain-v1", "ask-v1", "summary-v1", "diagram-v1", "topic-v1"]
+    prompt_version: Literal[
+        "explain-v1", "ask-v1", "summary-v1", "diagram-v1", "topic-v1", "image-v1"
+    ]
     tool: AgentToolAccess
     datamark: str = Field(pattern=r"^\^[0-9a-f]{8}$")
     paper: AgentPaper
@@ -1695,12 +1737,22 @@ class AgentRunRequest(Wire):
     #: v0.3 (#343): whether the answer may / must / must not carry a ```diagram fence. `may` is the
     #: tutor shape's own rule; a board ask's `uses.diagram` sets the others.
     diagram: Literal["may", "never", "always"] = "may"
+    #: v0.3 (#348): the crop(s) of an `image` run: required there, refused on every other kind.
+    images: list[AgentImage] | None = omittable(min_length=1, max_length=2)
+
+    @model_validator(mode="after")
+    def _images_exactly_on_an_image_run(self) -> Self:
+        if (self.kind == "image") != (self.images is not None):
+            raise PydanticCustomError(
+                "images_kind", "images: required on an image run and refused on any other kind"
+            )
+        return self
 
     @field_validator("seed", mode="after")
     @classmethod
     def _seed_matches_kind(cls, value: AgentSeed | None, info: ValidationInfo) -> Any:
         kind = info.data.get("kind")
-        if kind in ("summary", "explain", "diagram", "topic") and value is None:
+        if kind in ("summary", "explain", "diagram", "topic", "image") and value is None:
             raise PydanticCustomError("missing", f"Field required for a {kind} run")
         return value
 

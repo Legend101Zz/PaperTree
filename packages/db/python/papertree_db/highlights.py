@@ -55,6 +55,11 @@ MAX_ANCHORS_PER_HIGHLIGHT: Final = 64
 MAX_RESOLUTIONS_PER_PUT: Final = 500
 RESOLUTION_STATES: Final = frozenset({"anchored", "approximate", "orphan"})
 PROVENANCE_CLASSES: Final = frozenset({"source", "ai_generated"})
+#: The target kinds of an IMAGE anchor (v0.3 #348): a whole float (``figure``, with its block) or a
+#: free rectangle of a page (``figure_region``). They hold no words, so they need no
+#: TextQuoteSelector; what makes one complete is a PageSelector and ONE ShapeSelector quad (the
+#: rectangle, in the page's PDF space), which is also what the crop endpoint renders.
+IMAGE_TARGET_KINDS: Final = frozenset({"figure", "figure_region"})
 #: The largest value SQLite's INTEGER holds (a signed 64-bit integer). JSON integers are unbounded,
 #: so every integer this module binds — a generation, a page index — is checked against it FIRST:
 #: one past it raised ``OverflowError`` out of the driver, which the route turned into a 500.
@@ -801,7 +806,23 @@ def _prepare_anchor(
         None,
     )
     page = next((s for s in selectors if s["type"] == "PageSelector"), None)
-    if require_complete and (quote is None or shape is None or page is None):
+    if require_complete and target_kind in IMAGE_TARGET_KINDS:
+        # An image anchor: a page and exactly one non-empty quad, no words (v0.3 #348).
+        missing = [
+            name
+            for name, found in (("a PageSelector", page), ("a ShapeSelector with 1 quad", shape))
+            if found is None
+        ]
+        if missing:
+            raise HighlightRejected("anchor_incomplete", f"{where} lacks {' and '.join(missing)}")
+        assert shape is not None
+        quads = shape["quads"]
+        if len(quads) != 1 or not (quads[0][2] > quads[0][0] and quads[0][3] > quads[0][1]):
+            raise HighlightRejected(
+                "anchor_incomplete",
+                f"{where}: an image anchor holds exactly one rectangle with a positive area",
+            )
+    elif require_complete and (quote is None or shape is None or page is None):
         # contracts.md §6: "User highlights must include PageSelector, TextQuoteSelector and a
         # ShapeSelector with >= 1 quad". §2.4's `anchor_incomplete` named only the last two; the
         # page is the same kind of absence, so it gets the same code (S4; listed in the report).
