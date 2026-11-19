@@ -52,6 +52,7 @@ vi.mock('@/features/board', () => {
             drop
           </button>
           <span data-testid="arrival">{host.arrival?.cardId ?? 'none'}</span>
+          <span data-testid="centre">{String(host.arrival?.centre)}</span>
           <span data-testid="pages">{[...host.visiblePages].join(',')}</span>
         </div>
       );
@@ -208,6 +209,28 @@ describe('Board beside, as the reader mounts it', () => {
       expect.objectContaining({ kind: 'excerpt', toast: 'none', at: { x: 356, y: 372 } }),
     );
     await waitFor(() => expect(screen.getByTestId('arrival').textContent).toBe('cn_dropped'));
+  });
+
+  it('a drop on a passage already on the board with a tree pans to it and glows it; a moved or new one keeps the view', async () => {
+    sent.mockImplementation((_paper: string, input: { onOutcome?: (o: string) => void }) => {
+      input.onOutcome?.('existing');
+      return Promise.resolve('cn_has_tree');
+    });
+    mount();
+    fireEvent.keyDown(document.body, { key: 'b' });
+    setDraggedPassage({ anchor: anchorFixture('dragged'), text: 'Dragged words.' });
+    fireEvent.click(screen.getByRole('button', { name: 'drop' }));
+    await waitFor(() => expect(screen.getByTestId('arrival').textContent).toBe('cn_has_tree'));
+    expect(screen.getByTestId('centre').textContent).toBe('true');
+
+    sent.mockImplementation((_paper: string, input: { onOutcome?: (o: string) => void }) => {
+      input.onOutcome?.('moved');
+      return Promise.resolve('cn_moved');
+    });
+    setDraggedPassage({ anchor: anchorFixture('dragged'), text: 'Dragged words.' });
+    fireEvent.click(screen.getByRole('button', { name: 'drop' }));
+    await waitFor(() => expect(screen.getByTestId('arrival').textContent).toBe('cn_moved'));
+    expect(screen.getByTestId('centre').textContent).toBe('false');
   });
 
   it('says so when the dropped passage cannot be sent', async () => {

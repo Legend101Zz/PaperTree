@@ -34,6 +34,12 @@ export type SendToCanvasInput =
       anchor: Anchor;
       toast?: 'added' | 'none';
       at?: { readonly x: number; readonly y: number };
+      /**
+       * Told what a drop (`at`) did: `added` (a new card at the drop point), `moved` (the passage
+       * was already a root with no tree, and now sits at the drop point) or `existing` (it is on
+       * the board with a tree under it, so the board pans to it instead).
+       */
+      onOutcome?: (outcome: 'added' | 'moved' | 'existing') => void;
     }
   | { kind: 'explanation'; messageId: string }
   /** A diagram answer's plate (#217): the card keeps the message id and draws the stored parts. */

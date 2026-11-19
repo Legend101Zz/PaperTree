@@ -967,9 +967,18 @@ export function ReaderActionsMount({
         const passage = draggedPassage();
         if (passage === null) return;
         setDraggedPassage(null);
-        sendToCanvas(paperId, { kind: 'excerpt', anchor: passage.anchor, toast: 'none', at })
+        // A passage already on the board is moved to the drop point (when it has no tree yet) and
+        // the view stays; otherwise the board pans to it and glows it.
+        let landed: 'added' | 'moved' | 'existing' = 'added';
+        sendToCanvas(paperId, {
+          kind: 'excerpt',
+          anchor: passage.anchor,
+          toast: 'none',
+          at,
+          onOutcome: (outcome) => (landed = outcome),
+        })
           .then((cardId) => {
-            if (cardId !== null) arriveAt(cardId, false);
+            if (cardId !== null) arriveAt(cardId, landed === 'existing');
           })
           .catch(() => onNotice("Couldn't send this passage to the board. Try again."));
       },

@@ -118,6 +118,23 @@ export async function sendToCanvas(
       // The same passage twice would be two identical cards: say so and point at the board.
       const existing = findExcerptFor(view.nodes, input.anchor);
       if (existing !== null) {
+        // A drop on a passage already there: a root with no tree yet goes to the drop point (the
+        // reader let go there); one with a tree is not torn from it, the board pans to it instead.
+        const movable =
+          input.at !== undefined &&
+          existing.parent_id == null &&
+          !view.nodes.some((n) => n.parent_id === existing.node_id) &&
+          view.board !== null;
+        if (movable && input.at !== undefined && view.board !== null) {
+          await boardsApi.patchNode(view.board.board_id, existing.node_id, {
+            version: existing.version,
+            x: Math.round(input.at.x),
+            y: Math.round(input.at.y),
+          });
+          input.onOutcome?.('moved');
+          return existing.node_id;
+        }
+        if (input.at !== undefined) input.onOutcome?.('existing');
         // With the board about to open (or beside), the board says it by arriving on the card.
         if (input.toast !== 'none') {
           showCanvasToast({
@@ -129,6 +146,7 @@ export async function sendToCanvas(
         return existing.node_id;
       }
       added = newNodeId();
+      input.onOutcome?.('added');
       await boardsApi.createNode(paperId, {
         node_id: added,
         kind: 'excerpt',
