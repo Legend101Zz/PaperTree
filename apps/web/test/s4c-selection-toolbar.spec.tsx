@@ -1,8 +1,8 @@
 /**
- * s4c-selection-toolbar: the selection toolbar's items (#203, DESIGN.md §3 item 12) and the Ask that
- * waits for the reader's own question. Explain · Ask · Highlight with five washes · Send to board ·
- * Copy, in that order; "Explain with a diagram" only when the diagram slice provides it (never an
- * inert placeholder); a refused Highlight says why in the bar and greys its washes too.
+ * s4c-selection-toolbar: the selection menu's items (#203, #346, P4 step 5) and the Ask that waits
+ * for the reader's own question. Explain · Ask… · Send to board (Board beside, Just send) · Note ·
+ * the five colours, in that order; no Copy and no "Explain with a diagram"; one tab stop with
+ * arrows inside; a refused Highlight says why in the bar and greys its colours and Note too.
  */
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { useMemo, type ReactNode } from 'react';
@@ -45,7 +45,7 @@ function names(): string[] {
 }
 
 describe('the selection toolbar', () => {
-  it('lists the design’s items in order, as a vertical bar in the margin', () => {
+  it('lists the prototype’s items in order, as a vertical bar in the margin', () => {
     render(
       <SelectionToolbar
         placement={MARGIN}
@@ -53,85 +53,132 @@ describe('the selection toolbar', () => {
         onAsk={() => undefined}
         onHighlight={() => undefined}
         onSendToBoard={() => undefined}
-        onCopy={() => undefined}
+        onNote={() => undefined}
       />,
     );
     const bar = screen.getByRole('toolbar', { name: 'Selection actions' });
     expect(bar.getAttribute('aria-orientation')).toBe('vertical');
     expect(bar.getAttribute('data-placement')).toBe('margin');
     expect(names()).toEqual([
-      'Explain this passage',
-      'Ask about this passage',
-      'Highlight',
+      'Explain',
+      'Ask…',
+      'Send to board',
+      'Note',
       'Highlight in amber',
       'Highlight in green',
       'Highlight in blue',
       'Highlight in pink',
       'Highlight in purple',
-      'Send to board',
-      'Copy',
     ]);
-    // The visible words are the design's; the names begin with them (WCAG 2.5.3).
-    expect(within(bar).getByText('Explain')).toBeTruthy();
-    expect(within(bar).getByText('Ask')).toBeTruthy();
+    // The names are the visible words (WCAG 2.5.3).
+    for (const word of ['Explain', 'Ask…', 'Send to board', 'Note']) {
+      expect(within(bar).getByText(word)).toBeTruthy();
+    }
   });
 
-  it('Highlight uses the last colour; a wash highlights in that colour', () => {
-    const onHighlight = vi.fn();
+  it('has no Copy, no standalone Highlight and no “Explain with a diagram”', () => {
     render(
-      <SelectionToolbar placement={MARGIN} onHighlight={onHighlight} onCopy={() => undefined} />,
+      <SelectionToolbar
+        placement={MARGIN}
+        onExplain={() => undefined}
+        onHighlight={() => undefined}
+        onSendToBoard={() => undefined}
+      />,
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Highlight' }));
-    expect(onHighlight).toHaveBeenLastCalledWith();
+    for (const gone of ['Copy', 'Highlight', 'Explain with a diagram', 'Diagram']) {
+      expect(screen.queryByRole('button', { name: gone })).toBeNull();
+    }
+  });
+
+  it('a colour highlights in that colour', () => {
+    const onHighlight = vi.fn();
+    render(<SelectionToolbar placement={MARGIN} onHighlight={onHighlight} />);
     fireEvent.click(screen.getByRole('button', { name: 'Highlight in green' }));
     expect(onHighlight).toHaveBeenLastCalledWith('green');
   });
 
-  it('draws "Explain with a diagram" only when it is wired, and Ask only when it is', () => {
+  it('draws Ask and Note only when they are wired', () => {
     const { rerender } = render(
-      <SelectionToolbar
-        placement={MARGIN}
-        onHighlight={() => undefined}
-        onCopy={() => undefined}
-      />,
+      <SelectionToolbar placement={MARGIN} onHighlight={() => undefined} />,
     );
-    expect(screen.queryByRole('button', { name: 'Explain with a diagram' })).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Ask about this passage' })).toBeNull();
-    const diagram = vi.fn();
+    expect(screen.queryByRole('button', { name: 'Ask…' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Note' })).toBeNull();
+    const onNote = vi.fn();
     rerender(
       <SelectionToolbar
         placement={{ kind: 'docked', edge: 'top' }}
         onHighlight={() => undefined}
-        onCopy={() => undefined}
-        onExplainWithDiagram={diagram}
+        onNote={onNote}
       />,
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Explain with a diagram' }));
-    expect(diagram).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole('button', { name: 'Note' }));
+    expect(onNote).toHaveBeenCalledTimes(1);
     expect(
       screen.getByRole('toolbar', { name: 'Selection actions' }).getAttribute('aria-orientation'),
     ).toBe('horizontal');
   });
 
-  it('a refused Highlight says why in the bar, and its washes are refused too', () => {
+  it('Send to board offers Board beside and Just send, and says which was chosen', () => {
+    const onSendToBoard = vi.fn();
+    render(
+      <SelectionToolbar
+        placement={MARGIN}
+        onHighlight={() => undefined}
+        onSendToBoard={onSendToBoard}
+      />,
+    );
+    const send = screen.getByRole('button', { name: 'Send to board' });
+    expect(send.getAttribute('aria-expanded')).toBe('false');
+    fireEvent.click(send);
+    expect(send.getAttribute('aria-expanded')).toBe('true');
+    const choices = within(screen.getByRole('group', { name: 'Send to board' })).getAllByRole(
+      'button',
+    );
+    expect(choices.map((c) => c.textContent)).toEqual([
+      'Board besideopens it next to the paper',
+      'Just sendkeep reading',
+    ]);
+    fireEvent.click(choices[1] as HTMLElement);
+    expect(onSendToBoard).toHaveBeenLastCalledWith('just-send');
+    // The choices close once one is made.
+    expect(screen.queryByRole('group', { name: 'Send to board' })).toBeNull();
+    fireEvent.click(send);
+    fireEvent.click(screen.getByRole('button', { name: /^Board beside/ }));
+    expect(onSendToBoard).toHaveBeenLastCalledWith('beside');
+  });
+
+  it('the docked row uses the short label for Send to board; its name stays whole', () => {
+    render(
+      <SelectionToolbar
+        placement={{ kind: 'docked', edge: 'top' }}
+        onHighlight={() => undefined}
+        onSendToBoard={() => undefined}
+      />,
+    );
+    const send = screen.getByRole('button', { name: 'Send to board' });
+    expect(send.textContent).toBe('Board');
+  });
+
+  it('a refused Highlight says why in the bar, and its colours and Note are refused too', () => {
     const onHighlight = vi.fn();
     render(
       <SelectionToolbar
         placement={MARGIN}
         onHighlight={onHighlight}
-        onCopy={() => undefined}
+        onNote={() => undefined}
+        onExplain={() => undefined}
         highlightDisabledReason="This selection covers 80 passages; one highlight holds up to 64."
       />,
     );
-    const highlight = screen.getByRole('button', { name: 'Highlight' }) as HTMLButtonElement;
-    expect(highlight.disabled).toBe(true);
-    const note = document.getElementById(highlight.getAttribute('aria-describedby') ?? '');
+    const colours = screen.getByRole('group', { name: 'Highlight colour' });
+    const note = document.getElementById(colours.getAttribute('aria-describedby') ?? '');
     expect(note?.textContent).toMatch(/up to 64/);
     const amber = screen.getByRole('button', { name: 'Highlight in amber' }) as HTMLButtonElement;
     expect(amber.disabled).toBe(true);
     fireEvent.click(amber);
     expect(onHighlight).not.toHaveBeenCalled();
-    expect((screen.getByRole('button', { name: 'Copy' }) as HTMLButtonElement).disabled).toBe(
+    expect((screen.getByRole('button', { name: 'Note' }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole('button', { name: 'Explain' }) as HTMLButtonElement).disabled).toBe(
       false,
     );
   });
@@ -141,12 +188,41 @@ describe('the selection toolbar', () => {
       <SelectionToolbar
         placement={MARGIN}
         onHighlight={() => undefined}
-        onCopy={() => undefined}
+        onExplain={() => undefined}
       />,
     );
     const event = new PointerEvent('pointerdown', { bubbles: true, cancelable: true });
-    screen.getByRole('button', { name: 'Highlight' }).dispatchEvent(event);
+    screen.getByRole('button', { name: 'Explain' }).dispatchEvent(event);
     expect(event.defaultPrevented).toBe(true);
+  });
+
+  it('is one tab stop, and the arrows walk its items', () => {
+    render(
+      <SelectionToolbar
+        placement={MARGIN}
+        onHighlight={() => undefined}
+        onExplain={() => undefined}
+        onAsk={() => undefined}
+        onNote={() => undefined}
+      />,
+    );
+    const bar = screen.getByRole('toolbar', { name: 'Selection actions' });
+    const buttons = within(bar).getAllByRole('button');
+    expect(buttons.filter((b) => b.tabIndex === 0)).toHaveLength(1);
+    expect(buttons[0]?.tabIndex).toBe(0);
+    buttons[0]?.focus();
+    fireEvent.keyDown(bar, { key: 'ArrowDown' });
+    expect(document.activeElement).toBe(buttons[1]);
+    expect(buttons[1]?.tabIndex).toBe(0);
+    expect(buttons[0]?.tabIndex).toBe(-1);
+    fireEvent.keyDown(bar, { key: 'ArrowRight' });
+    expect(document.activeElement).toBe(buttons[2]);
+    fireEvent.keyDown(bar, { key: 'End' });
+    expect(document.activeElement).toBe(buttons[buttons.length - 1]);
+    fireEvent.keyDown(bar, { key: 'ArrowRight' });
+    expect(document.activeElement).toBe(buttons[0]);
+    fireEvent.keyDown(bar, { key: 'ArrowLeft' });
+    expect(document.activeElement).toBe(buttons[buttons.length - 1]);
   });
 });
 
@@ -253,7 +329,7 @@ function PlacedBar(): ReactNode {
     doc: null,
     narrow: false,
     sheetOpen: false,
-    actions: { onHighlight: () => undefined, onCopy: () => undefined },
+    actions: { onHighlight: () => undefined },
   });
   return (
     <>
@@ -272,7 +348,6 @@ describe('the placement uses the bar as drawn (review B1)', () => {
         <SelectionToolbar
           placement={{ kind: 'docked', edge: 'top' }}
           onHighlight={() => undefined}
-          onCopy={() => undefined}
           onMeasure={onMeasure}
         />,
       );

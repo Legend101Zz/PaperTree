@@ -7,8 +7,8 @@ stands on. The backend is S7a (#216): a `diagram` thread, the `diagram-v1` promp
 
 ## Data flow
 
-UI (the selection toolbar's "Explain with a diagram" → `components/reader/SourcePane` →
-`ReaderActions.explainWithDiagram`) → controller (`components/explain/useExplainActions`: `openDiagram`, the
+UI (the selection menu's "Explain with a diagram" was the way in until #346 removed it, because diagrams live
+inside answers (#339); `useExplainActions.openDiagram` has no caller in the app now and is driven by tests only) → controller (`components/explain/useExplainActions`: `openDiagram`, the
 stream reader, `redraw`; the plate rides on the panel's message as `diagram`) → `lib/api/threads` →
 `POST /papers/{id}/threads {kind: "diagram", anchor}` and, for a Redraw,
 `POST /papers/{id}/threads/{tid}/messages {question, redraw_of}` (`services/api` `routers/threads.py`) → DB

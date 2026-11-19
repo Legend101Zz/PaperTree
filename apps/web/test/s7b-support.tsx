@@ -30,7 +30,6 @@ function Reader(): ReactNode {
   const actions = useMemo<ReaderActions>(
     () => ({
       openExplain: explain.openExplain,
-      explainWithDiagram: explain.openDiagram,
       // The real send: the board read, then the node, through the stubbed fetch.
       sendToCanvas: (input) => sendToCanvas(PAPER, input),
       focusAnchor: (anchor, opts) => focusAnchor(anchor, opts),
@@ -42,7 +41,9 @@ function Reader(): ReactNode {
       <button
         type="button"
         onClick={() =>
-          actions.explainWithDiagram?.({
+          // The toolbar no longer offers it (diagrams live inside answers, #339); the plate flow
+          // is still driven directly until it is retired with them.
+          explain.openDiagram({
             anchor: anchorFixture('sel'),
             quote: 'We call our particular attention "Scaled Dot-Product Attention" (Figure 2).',
           })
