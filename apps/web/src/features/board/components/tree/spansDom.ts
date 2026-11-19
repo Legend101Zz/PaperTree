@@ -22,10 +22,13 @@ interface Plain {
  * @returns The text and, for each character, where it sits in the DOM.
  */
 function plainOfDom(root: HTMLElement): Plain {
-  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  // Every node is visited and the text ones kept: happy-dom's SHOW_TEXT filter returns nothing, and
+  // the cost is the same in a browser.
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_ALL);
   const at: { node: Text; offset: number }[] = [];
   let text = '';
   for (let node = walker.nextNode(); node !== null; node = walker.nextNode()) {
+    if (node.nodeType !== Node.TEXT_NODE) continue;
     const t = node as Text;
     if (t.parentElement?.closest(SKIP) != null) continue;
     for (let i = 0; i < t.data.length; i += 1) {
@@ -40,6 +43,36 @@ function plainOfDom(root: HTMLElement): Plain {
     }
   }
   return { text, at };
+}
+
+/**
+ * Where, in the visible words, a range starts: the first character at or after its start point.
+ * (Counted by position in the text, not by asking the range for its text, so a range that starts
+ * inside a text node is exact.)
+ *
+ * @param plain The visible words of the answer.
+ * @param range The selection's range.
+ * @returns An index into `plain.text`.
+ */
+function startIndex(plain: Plain, range: Range): number {
+  const { startContainer: from, startOffset: offset } = range;
+  if (from.nodeType === Node.TEXT_NODE) {
+    const at = plain.at.findIndex((a) =>
+      a.node === from
+        ? a.offset >= offset
+        : (from.compareDocumentPosition(a.node) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0,
+    );
+    return at === -1 ? plain.text.length : at;
+  }
+  const edge = from.childNodes[offset];
+  const at = plain.at.findIndex((a) =>
+    edge === undefined
+      ? (from.compareDocumentPosition(a.node) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0 &&
+        !from.contains(a.node)
+      : edge.contains(a.node) ||
+        (edge.compareDocumentPosition(a.node) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0,
+  );
+  return at === -1 ? plain.text.length : at;
 }
 
 /** What a selection says: the words and which occurrence of them it is. */
@@ -64,11 +97,7 @@ export function selectedWords(root: HTMLElement): SelectedWords | null {
   const quote = normaliseWords(selection.toString());
   if (quote.length < 2) return null;
   const plain = plainOfDom(root);
-  const before = document.createRange();
-  before.selectNodeContents(root);
-  before.setEnd(range.startContainer, range.startOffset);
-  const start = normaliseWords(before.toString()).length;
-  const nth = occurrencesBefore(plain.text, quote, start);
+  const nth = occurrencesBefore(plain.text, quote, startIndex(plain, range));
   const rects = typeof range.getClientRects === 'function' ? range.getClientRects() : null;
   const last = rects !== null && rects.length > 0 ? rects[rects.length - 1] : undefined;
   return { quote, nth, last: last ?? range.getBoundingClientRect() };

@@ -16,7 +16,6 @@ import { citationHref } from '../model/chrome';
 import { DRAFT_ID } from '../model/display';
 import { heightCap } from '../model/layout';
 import { viewToCentre } from '../model/panes';
-import { downChild, childrenOf } from '../model/tree';
 import { onPathIds } from '../model/ui';
 import { useBoardAsk, type BoardAsk } from './useBoardAsk';
 import { useBoardTree, type TreeView } from './useBoardTree';
@@ -146,10 +145,9 @@ export function useBranchBoard(
     if (card === undefined || row === undefined) return;
     if (!heights.has(cardParam)) return; // its words are not measured yet
     // A card with nothing under it opens its ask box, so the pair is what gets centred.
-    const wantsBox =
-      (row.kind === 'excerpt' || row.kind === 'explanation') &&
-      childrenOf(tree, cardParam).length === 0 &&
-      downChild(tree, cardParam) === undefined;
+    // (The ask box itself is a child in the tree, so the question is about the stored cards.)
+    const hasChildren = ctl.nodes.some((n) => n.data.node.parent_id === cardParam);
+    const wantsBox = (row.kind === 'excerpt' || row.kind === 'explanation') && !hasChildren;
     const box = layout.cards.get(DRAFT_ID);
     if (wantsBox && control.ui.draft === null) {
       openAsk(cardParam);
@@ -171,7 +169,18 @@ export function useBranchBoard(
     const calm = reducedMotion();
     void flow.setViewport(target, { duration: calm ? 0 : 400 });
     setArrivedId(cardParam);
-  }, [cardParam, control.ui.draft, ctl.status, flow, heights, layout, openAsk, stage, tree]);
+  }, [
+    cardParam,
+    control.ui.draft,
+    ctl.nodes,
+    ctl.status,
+    flow,
+    heights,
+    layout,
+    openAsk,
+    stage,
+    tree,
+  ]);
 
   // One glow, then it goes: reduced motion gets a still ring for a second instead.
   useEffect(() => {

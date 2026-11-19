@@ -92,7 +92,7 @@ export function BranchCard({
     if (text !== null && text.firstElementChild !== null) observer.observe(text.firstElementChild);
     return () => observer.disconnect();
     // `characters` is a cheap stand-in for "the words changed": the observers cover growth.
-  }, [id, reports, body, characters]);
+  }, [id, reports, root, body, characters]);
 
   return (
     // The card's own keyboard path is xyflow's focusable wrapper: Enter on it focuses the path

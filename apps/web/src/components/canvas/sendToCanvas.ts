@@ -8,7 +8,7 @@
  *
  * A board is created ONLY here, by an explicit send: the first `createNode` creates it in the
  * same transaction (ADR-002 §3.7). The new node is placed where it overlaps no existing node, and
- * a toast says so with an "Open board" link: a passage from the selection toolbar's "Send to board"
+ * a toast says so with an "Open board" link that opens the board ON the new card (`?card=`, #342): a passage from the selection toolbar's "Send to board"
  * (#203) and an answer from the explain panel's "Send to board" alike (#214). A failure throws (the reader shows its notice); an
  * explanation send also shows its own error toast, because the explain panel is another slice's.
  */
@@ -51,8 +51,12 @@ async function messageText(
   return null;
 }
 
-/** The board's route (#214; `/canvas` redirects to it). */
-const boardHref = (paperId: string): string => `/paper/${encodeURIComponent(paperId)}/board`;
+/**
+ * The board's route (#214; `/canvas` redirects to it). With a card, the board opens on it: it pans
+ * so the card is centred, glows once and opens its ask box (`?card=<id>`, #342).
+ */
+const boardHref = (paperId: string, cardId?: string): string =>
+  `/paper/${encodeURIComponent(paperId)}/board${cardId === undefined ? '' : `?card=${encodeURIComponent(cardId)}`}`;
 
 function sentence(error: unknown): string {
   if (error instanceof ApiError && error.detail.length > 0) return error.detail;
@@ -71,20 +75,26 @@ export async function sendToCanvas(
   }
   try {
     const view = await boardsApi.get(paperId);
+    /** The card this send made: the board opens on it. */
+    let added: string | undefined;
     const size = DEFAULT_SIZE[input.kind];
     const spot = freeSpot(view.nodes, size);
     if (input.kind === 'diagram') {
       // One plate, one card: a second send points at the card already there (#217).
-      if (view.nodes.some((n) => n.kind === 'diagram' && n.source_diagram_id === input.messageId)) {
+      const existing = view.nodes.find(
+        (n) => n.kind === 'diagram' && n.source_diagram_id === input.messageId,
+      );
+      if (existing !== undefined) {
         showCanvasToast({
           message: 'This plate is already on your board',
-          href: boardHref(paperId),
+          href: boardHref(paperId, existing.node_id),
           linkLabel: 'Open board',
         });
         return;
       }
+      added = newNodeId();
       await boardsApi.createNode(paperId, {
-        node_id: newNodeId(),
+        node_id: added,
         kind: 'diagram',
         ...spot,
         ...size,
@@ -93,16 +103,18 @@ export async function sendToCanvas(
       });
     } else if (input.kind === 'excerpt') {
       // The same passage twice would be two identical cards: say so and point at the board.
-      if (findExcerptFor(view.nodes, input.anchor) !== null) {
+      const existing = findExcerptFor(view.nodes, input.anchor);
+      if (existing !== null) {
         showCanvasToast({
           message: 'Already on your board',
-          href: boardHref(paperId),
+          href: boardHref(paperId, existing.node_id),
           linkLabel: 'Open board',
         });
         return;
       }
+      added = newNodeId();
       await boardsApi.createNode(paperId, {
-        node_id: newNodeId(),
+        node_id: added,
         kind: 'excerpt',
         ...spot,
         ...size,
@@ -119,8 +131,9 @@ export async function sendToCanvas(
           false,
         );
       }
+      added = newNodeId();
       await boardsApi.createNode(paperId, {
-        node_id: newNodeId(),
+        node_id: added,
         kind: 'explanation',
         ...spot,
         ...size,
@@ -131,7 +144,7 @@ export async function sendToCanvas(
     }
     showCanvasToast({
       message: ADDED[input.kind],
-      href: boardHref(paperId),
+      href: boardHref(paperId, added),
       linkLabel: 'Open board',
     });
   } catch (error) {

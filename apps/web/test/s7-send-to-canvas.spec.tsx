@@ -83,7 +83,8 @@ describe('sendToCanvas', () => {
     const link = document.querySelector<HTMLAnchorElement>('[data-testid="canvas-toast"] a');
     // #203: the toolbar says "Send to board", and its toast agrees.
     expect(link?.textContent).toBe('Open board');
-    expect(link?.getAttribute('href')).toBe(`/paper/${PAPER}/board`);
+    // #342: the board opens ON the card this send made.
+    expect(link?.getAttribute('href')).toBe(`/paper/${PAPER}/board?card=${body.node_id}`);
   });
 
   it('places the new node clear of the nodes already on the board', async () => {
@@ -193,7 +194,10 @@ describe('sendToCanvas', () => {
       );
       const toast = document.querySelector('[data-testid="canvas-toast"]')!;
       expect(toast.textContent).toContain('Already on your board');
-      expect(toast.querySelector('a')?.getAttribute('href')).toBe(`/paper/${PAPER}/board`);
+      // It opens on the card that is already there.
+      expect(toast.querySelector('a')?.getAttribute('href')).toBe(
+        `/paper/${PAPER}/board?card=cn_passage0001`,
+      );
       expect(toast.querySelector('a')?.textContent).toBe('Open board');
     });
 
