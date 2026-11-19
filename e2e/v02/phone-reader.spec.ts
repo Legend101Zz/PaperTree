@@ -169,7 +169,12 @@ test.describe('v0.2 frame 08b: the phone reader and its explain sheet (faux agen
     await whole.click();
     await expect(labels).toContainText(['tl;dr', 'in plain words', 'how it works', 'in the paper']);
     await expect(sheet.locator('.pt-source')).toHaveCount(1);
-    await expect(whole).toHaveAttribute('aria-expanded', 'true');
+    // The one button turns into "Show less" (so focus stays on it) and reports itself open.
+    await expect(sheet.getByRole('button', { name: 'Read the whole answer' })).toHaveCount(0);
+    await expect(sheet.getByRole('button', { name: 'Show less' })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    );
 
     // The quote on two lines; page links under the paragraphs that answer taps 19 px out (a ~44 px target).
     const lines = await sheet.locator('.pt-call-slip__quote-text').evaluate((el) => {
