@@ -61,8 +61,10 @@ def test_a_database_at_0011_gets_0012_alone_without_a_backup(tmp_path: Path) -> 
     conn = raw_connect(file)
     try:
         result = migrate(conn, MIGRATIONS_DIR)
-        assert result.applied == (12,) and result.head == HEAD_VERSIONS
-        assert result.backups == ()
+        assert result.applied == tuple(v for v in HEAD_VERSIONS if v >= 12)
+        assert result.head == HEAD_VERSIONS
+        # 0012 takes no backup; a later migration that rebuilds a table (0013) does.
+        assert all(".pre-0012." not in path.name for path in result.backups)
         assert conn.execute("SELECT COUNT(*) FROM papers").fetchone()[0] == 1
     finally:
         conn.close()

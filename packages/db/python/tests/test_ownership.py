@@ -64,6 +64,8 @@ OWNED_TABLES = (
     "paper_plate",
     # 0012_paper_title.sql (v0.3 #337).
     "paper_title",
+    # 0013_glance.sql (v0.3 #337).
+    "paper_glance",
 )
 
 #: The 9 tables contracts.md §1 says 0005 adds to the owner-FK audit (0007's three follow them).
@@ -294,6 +296,7 @@ def test_conn_is_a_forbidden_token_outside_papertree_db() -> None:
         "packages/db/python/papertree_db/notebook.py",
         "packages/db/python/papertree_db/plate.py",
         "packages/db/python/papertree_db/title.py",
+        "packages/db/python/papertree_db/glance.py",
     }
     # Parsed, not grepped: an `ast.Attribute` named `_conn` is a real access, whereas a grep also
     # hits every docstring that explains the rule — including the ones in this repo that do.

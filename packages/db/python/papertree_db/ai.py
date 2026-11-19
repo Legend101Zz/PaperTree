@@ -50,10 +50,11 @@ else:
     _Base = object
 
 THREAD_KINDS: Final = frozenset({"explain", "ask", "diagram"})
-#: Every kind 0011's CHECK allows. ``topic`` (the topic Flash run, #242) is not built yet, but a
-#: row of it is already recorded, reserved for (``RUN_RESERVE_USD``) and counted in ``GET /usage``,
-#: so the day one exists it cannot break the spend cap or the usage read.
-RUN_KINDS: Final = frozenset({"explain", "ask", "summary", "diagram", "topic"})
+#: Every kind 0013's CHECK allows. ``topic`` (the topic Flash run, #242) and ``glance`` (the
+#: spread's "At a glance" sheet, v0.3 #337) are background runs: a row of each is recorded, reserved
+#: for (``RUN_RESERVE_USD``) and counted in ``GET /usage`` like any other, so neither can break the
+#: spend cap or the usage read.
+RUN_KINDS: Final = frozenset({"explain", "ask", "summary", "diagram", "topic", "glance"})
 #: ``ai_diagram_parts.part_kind`` (0011): how the plate draws a part (DESIGN.md §1 "Diagrams").
 DIAGRAM_PART_KINDS: Final = frozenset({"input", "step", "output", "concept"})
 #: A plate holds at most twelve parts, lettered A-L in arrival order.

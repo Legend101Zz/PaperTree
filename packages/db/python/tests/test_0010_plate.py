@@ -114,7 +114,9 @@ def test_a_database_already_at_0011_still_gets_0010(tmp_path: Path) -> None:
         # 0010, and any migration numbered above the 0011 this database was built to.
         assert result.applied == tuple(v for v in HEAD_VERSIONS if v == 10 or v > 11)
         assert result.head == HEAD_VERSIONS
-        assert result.backups == () and 10 not in BACKUP_BEFORE_VERSIONS
+        # 0010 takes no backup; a later migration that rebuilds a table (0013) does.
+        assert 10 not in BACKUP_BEFORE_VERSIONS
+        assert all(".pre-0010." not in path.name for path in result.backups)
         assert {t: conn.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0] for t in _COUNTED} == (
             before
         )

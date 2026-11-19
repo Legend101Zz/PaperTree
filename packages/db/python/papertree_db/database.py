@@ -66,6 +66,7 @@ from ._support import Row, now_iso, opt_json, row_to_dict, to_json
 from .ai import AiMixin
 from .canvas import CanvasMixin
 from .errors import OwnershipError
+from .glance import GlanceMixin
 from .highlights import HighlightsMixin
 from .ids import (
     BlockId,
@@ -645,6 +646,7 @@ class PaperTreeDb(
     TopicsMixin,
     PlateMixin,
     TitleMixin,
+    GlanceMixin,
     LibraryMixin,
     ReadingMixin,
     HighlightsMixin,
