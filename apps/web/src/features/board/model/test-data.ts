@@ -82,7 +82,7 @@ export const THREAD: readonly Message[] = [
     },
     run: {
       run_id: 'run_1',
-      model: 'MiniMax-M3.1-Flash-Preview',
+      model: 'MiniMax-M3.1-Flash',
       provider: 'minimax',
       agent_sdk: 'pi',
       input_tokens: 6286,

@@ -380,7 +380,7 @@ describe('the Topics view (#198)', () => {
       topic: { topic_id: 'top_1', name: 'Transformers & attention', cloth: null },
       suggested_name: null,
       source: 'model',
-      source_detail: 'MiniMax-M3.1-Flash-Preview',
+      source_detail: 'MiniMax-M3.1-Flash',
       arxiv_category: 'cs.CL',
     };
     const before = topicsApi.ofPaper.getMockImplementation();

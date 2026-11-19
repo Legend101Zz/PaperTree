@@ -39,7 +39,7 @@ ATTENTION = "corpus/attention-is-all-you-need.pdf"
 BERT = "corpus/bert-2col.pdf"
 DDPM = "fresh/pdfs/ddpm-2006.11239.pdf"
 SECRET = "test-agent-secret-not-a-real-one"
-FLASH = "MiniMax-M3.1-Flash-Preview"
+FLASH = "MiniMax-M3.1-Flash"
 TRANSFORMERS = "Transformers & attention"
 VISION = "Vision & detection"
 

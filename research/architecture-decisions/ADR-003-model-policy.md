@@ -102,3 +102,14 @@ Reasons: Flash's follow-ups cited wrong passages nine times against none for M3,
 Changes: `DEFAULT_MODELS.ask` is `MiniMax-M3` in `services/agent/src/models.ts` (so `ask` has no effort: `null` in `/healthz`); the default test in `test/models.test.ts` pins it. `PAPERTREE_MODEL_ASK=MiniMax-M3.1-Flash-Preview` puts ask back on Flash with no code change. Follow-ups of an `explain` thread run as `kind: explain` (contracts 2.5) and so stay on Flash; the panel's follow-ups were asks, and no explain follow-up was measured.
 
 What this does not settle: three items per cell, one machine, loads that differ by arm. The next re-take is the T0 bench (`services/agent/bench/ab.py`) with more asks.
+
+## Revision 2026-11-19: Flash GA, the default for every kind
+
+Status: **Accepted** by the owner (issue #323's wave W0; ruling of 2026-11-19: "Flash is smarter and faster now, so it is the default for every kind").
+
+- **Model.** `MiniMax-M3.1-Flash` is generally available. `MiniMax-M3.1-Flash-Preview` now aliases to it and responses report `MiniMax-M3.1-Flash`. Flash accepts images. `FLASH_MODEL_ID` is the GA id; the `-Preview` id is no longer an accepted override (no legacy shim). Stored `ai_runs.model` rows and cached summaries that carry it stay readable as data (`KNOWN_MODELS` in `agent_client.py`).
+- **Defaults.** `DEFAULT_MODELS` is Flash for `explain`, `ask`, `summary`, `diagram` and `topic`. This reverses the 2026-10-15 revision (ask and summary on M3), which rested on the v0.1 preview measurements; it is not a re-measurement, and the T0 bench (`services/agent/bench/ab.py`) should be re-run on the GA model when quality is next judged.
+- **Efforts.** One default per kind (`DEFAULT_EFFORTS`): `explain` low (a short answer from one selection, speed matters); `ask` medium (an open question over a path through the paper, more reasoning); `summary` medium (the whole paper, structure and citations); `diagram` low (a short, structured plate from one selection, shaped like an explain, no evidence yet that more thinking helps it keep to the line format); `topic` low (one short JSON object). `PAPERTREE_MODEL_EFFORT` and `PAPERTREE_MODEL_EFFORT_<KIND>` override as before.
+- **Price.** MiniMax's pricing page (platform.minimax.io/docs/guides/pricing, read 2026-11-19) lists Flash at $0.15 input, $0.60 output and $0.015 cache read per million tokens, with no cache-write price (recorded as 0). M3 is $0.30 / $1.20 / $0.06 (input up to 512k). Flash costs are therefore published rates, not an "estimate on M3 rates"; `/healthz` `cost_basis` says so.
+- **M3 kept.** `MiniMax-M3` remains an allowed value for `PAPERTREE_MODEL` and `PAPERTREE_MODEL_<KIND>`; it takes no effort (`null`).
+- **Still true.** Flash is not in Pi 0.87.1's catalog, so `registerFlash` stays. The image ask (Wave 5) will add its own kind to the tables.

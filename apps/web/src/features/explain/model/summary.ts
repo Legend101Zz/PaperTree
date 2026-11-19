@@ -183,7 +183,7 @@ export function summaryDay(iso: string, timeZone?: string): string {
 }
 
 /**
- * `MiniMax-M3.1-Flash-Preview` → `M3.1 Flash`: the design's short model name; the vendor is implied.
+ * `MiniMax-M3.1-Flash` → `M3.1 Flash`: the design's short model name; the vendor is implied.
  *
  * @param model The stored model id.
  * @returns The short name, or "AI model" when unknown.

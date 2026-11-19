@@ -140,7 +140,7 @@ describe('the exchange labels', () => {
   });
 
   it('shortens the model id for the slip', () => {
-    expect(modelLabel('MiniMax-M3.1-Flash-Preview')).toBe('M3.1 Flash');
+    expect(modelLabel('MiniMax-M3.1-Flash')).toBe('M3.1 Flash');
     expect(modelLabel(null)).toBe('the AI');
   });
 });
