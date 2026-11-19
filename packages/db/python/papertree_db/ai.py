@@ -59,6 +59,8 @@ DIAGRAM_PART_KINDS: Final = frozenset({"input", "step", "output", "concept"})
 #: A plate holds at most twelve parts, lettered A-L in arrival order.
 MAX_DIAGRAM_PARTS: Final = 12
 MESSAGE_ROLES: Final = frozenset({"user", "assistant"})
+#: The levels an answer is written at (0014, v0.3).
+ANSWER_LEVELS: Final = frozenset({"new", "familiar", "expert"})
 MESSAGE_STATUSES: Final = frozenset({"streaming", "complete", "partial", "error", "aborted"})
 #: ``finish_run`` moves a run OUT of ``running`` into one of these; the token dies with it.
 FINISHED_RUN_STATUSES: Final = frozenset({"done", "error", "aborted"})
@@ -318,13 +320,21 @@ class AiMixin(_Base):
         content: str,
         status: str,
         run_id: str | None = None,
+        level: str | None = None,
+        sibling_of: str | None = None,
     ) -> Row:
-        """The next message of a thread (ordinal = count so far), in one transaction."""
+        """The next message of a thread (ordinal = count so far), in one transaction.
+
+        ``level`` (``new``/``familiar``/``expert``) is the level an assistant answer is written at;
+        ``sibling_of`` is the first answer of the question it re-answers at another level (0014).
+        """
         owner_id = self._resolve(owner)
         if role not in MESSAGE_ROLES:
             raise ValueError(f"role={role!r} is not one of {sorted(MESSAGE_ROLES)}")
         if status not in MESSAGE_STATUSES:
             raise ValueError(f"status={status!r} is not one of {sorted(MESSAGE_STATUSES)}")
+        if level is not None and level not in ANSWER_LEVELS:
+            raise ValueError(f"level={level!r} is not one of {sorted(ANSWER_LEVELS)}")
         _int_or_none("generation", generation)
         now = _now()
         with self.transaction():
@@ -343,8 +353,8 @@ class AiMixin(_Base):
             completed_at = None if status == "streaming" else now
             self._conn.execute(
                 "INSERT INTO ai_messages (message_id, owner_id, thread_id, ordinal, role, "
-                "generation, content, status, error_code, run_id, created_at, completed_at) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?)",
+                "generation, content, status, error_code, run_id, created_at, completed_at, "
+                "level, sibling_of) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?)",
                 (
                     message_id,
                     owner_id,
@@ -357,6 +367,8 @@ class AiMixin(_Base):
                     run_id,
                     now,
                     completed_at,
+                    level,
+                    sibling_of,
                 ),
             )
             self._conn.execute(
@@ -1081,7 +1093,7 @@ _THREAD_SELECT: Final = (
 #: Every ``ai_messages`` column; ``diagram_json`` comes back parsed, as ``diagram``.
 _MESSAGE_SELECT: Final = (
     "SELECT message_id, thread_id, ordinal, role, generation, content, status, error_code, run_id, "
-    "created_at, completed_at, diagram_json FROM ai_messages"
+    "created_at, completed_at, diagram_json, level, sibling_of FROM ai_messages"
 )
 
 
