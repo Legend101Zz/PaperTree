@@ -134,7 +134,6 @@ describe('Show in paper', () => {
       cited: 1,
       anchorIds: [],
       blockId: null,
-      supported: true,
     };
     render(<QuoteCard item={quote} passage={passage} onFocusAnchor={focus} />);
     fireEvent.click(

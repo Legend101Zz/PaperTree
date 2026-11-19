@@ -260,7 +260,13 @@ test.describe('S8: the prototype flow, 14 steps, at 1440 and 390, both schemes (
           SENTENCE[0],
         );
         await expect(exchange.locator('[data-voice="ai"]').first()).toBeVisible();
-        // One quiet source line under the paragraph; nothing that audits the AI (#340, #341).
+        if (phone) {
+          // A tutor answer has four sections: the sheet opens on the TL;DR, and the one source line,
+          // at the end of "In the paper", waits behind "Read the whole answer" (#205, #339).
+          await expect(exchange.locator('.pt-source')).toHaveCount(0);
+          await exchange.getByRole('button', { name: 'Read the whole answer' }).tap();
+        }
+        // One quiet source line, at the end of "In the paper"; nothing that audits the AI (#340, #341).
         await expect(exchange.locator('.pt-source').first()).toContainText('From the paper: p.');
         await expect(exchange.locator('.pt-coverage, .pt-trace-list, .pt-marker')).toHaveCount(0);
         // The usage line ends "(estimate)": in the pinned footer on a phone (08b).
@@ -330,7 +336,12 @@ test.describe('S8: the prototype flow, 14 steps, at 1440 and 390, both schemes (
         await expect(page.locator('[data-voice="you"]').first()).toBeVisible();
         await expect(page.locator('[data-voice="ai"]').first()).toBeVisible();
         if (phone) {
-          // The phone stack (08c): the answer with its source line; it says what it leaves to bigger screens.
+          // The phone stack (08c): the answer opens on its TL;DR; "Read the whole answer" brings the
+          // source line (the one under "In the paper"). It says what it leaves to bigger screens.
+          await page
+            .locator('.pt-nb-stack')
+            .getByRole('button', { name: 'Read the whole answer' })
+            .tap();
           await expect(page.locator('.pt-nb-stack .pt-source').first()).toBeVisible();
           await expect(page.locator('.pt-nb-stack .pt-trace-row')).toHaveCount(0);
           const tools = page.getByRole('toolbar', { name: 'Notebook tools' });
@@ -344,8 +355,10 @@ test.describe('S8: the prototype flow, 14 steps, at 1440 and 390, both schemes (
             page.getByText('Lasso, shapes and templates: on a tablet or computer'),
           ).toBeVisible();
         } else {
-          await expect(page.locator('.pt-nb-quote')).toHaveCount(2);
-          await expect(page.locator('.pt-nb-quote[data-passage="2"]')).toHaveCount(1);
+          // The tutor answer rests on one passage of the paper (one handle, under "In the paper"),
+          // so Dive in brings one quote card.
+          await expect(page.locator('.pt-nb-quote')).toHaveCount(1);
+          await expect(page.locator('.pt-nb-quote[data-passage="1"]')).toHaveCount(1);
           await expect(page.locator('.pt-nb-quote [data-voice="paper"]').first()).toBeVisible();
         }
       });
