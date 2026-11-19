@@ -173,7 +173,10 @@
     },
     {
       "if": { "properties": { "kind": { "const": "image" } } },
-      "then": { "required": ["images"], "properties": { "seed": { "type": "object" } } },
+      "then": {
+        "required": ["images"],
+        "properties": { "images": { "type": "array" }, "seed": { "type": "object" } }
+      },
       "else": { "properties": { "images": false } }
     }
   ]

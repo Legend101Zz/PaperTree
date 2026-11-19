@@ -319,6 +319,32 @@ def test_the_run_request_examples(name: str) -> None:
     assert body["tool"]["base_url"].endswith(body["run_id"])
 
 
+def test_the_image_request_example_and_its_rules_are_in_both_checkers() -> None:
+    """v0.3 (#348): `images` is required on an image run and refused on every other kind, in the
+    hand-written schema and in the pydantic model alike."""
+    image = json.loads((AGENT / "examples" / "run-request-image.json").read_text("utf-8"))
+    explain = json.loads((AGENT / "examples" / "run-request-explain.json").read_text("utf-8"))
+    assert not validate(image, REQUEST_SCHEMA)
+    model = AgentRunRequest.model_validate_json(json.dumps(image))
+    assert model.kind == "image" and model.prompt_version == "image-v1" and model.images
+    picture = image["images"][0]
+    assert {**picture, "media_type": "image/png"} == picture  # a PNG
+    assert not validate({**image, "images": [picture, picture]}, REQUEST_SCHEMA)  # two are allowed
+    for bad in (
+        {k: v for k, v in image.items() if k != "images"},  # an image run needs its picture
+        {**image, "images": []},
+        {**image, "images": [picture, picture, picture]},  # at most two
+        {**image, "images": [{**picture, "media_type": "image/gif"}]},  # PNG or JPEG only
+        {**image, "images": [{**picture, "data_base64": ""}]},
+        {**image, "images": [{**picture, "extra": 1}]},
+        {**explain, "images": [picture]},  # no other kind carries one
+        {**image, "seed": None},
+    ):
+        assert validate(bad, REQUEST_SCHEMA), bad
+        with pytest.raises(ValidationError):
+            AgentRunRequest.model_validate_json(json.dumps(bad))
+
+
 def test_the_followup_resumes_the_explain_turn() -> None:
     """A follow-up's `history.entries` is the thread's state as of its last COMPLETED turn: the
     `entries` the explain run's `done` handed back."""
