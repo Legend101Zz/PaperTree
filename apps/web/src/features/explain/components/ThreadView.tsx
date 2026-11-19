@@ -21,6 +21,7 @@ import { opensFolded, wasStopped } from '../model/states';
 import { shortModelName } from '../model/summary';
 import { Composer } from './Composer';
 import { Exchange } from './Exchange';
+import { ImageHead } from './ImageHead';
 import { PinnedFooter } from './PinnedFooter';
 import { SummaryExchange } from './SummaryExchange';
 import { ThreadReadFailure } from './ThreadReadFailure';
@@ -178,7 +179,12 @@ export function ThreadView({
           />
         ) : (
           <>
-            {offline && state.request !== null ? <SelectedPassage request={state.request} /> : null}
+            {state.request?.image === undefined ? null : (
+              <ImageHead request={state.request} paperId={paperId} />
+            )}
+            {offline && state.request !== null && state.request.image === undefined ? (
+              <SelectedPassage request={state.request} />
+            ) : null}
             {offline ? (
               <p className="pt-explain__empty" role="note">
                 This is a sample paper, and a sample has no server to ask. Upload a PDF to ask
@@ -197,8 +203,14 @@ export function ThreadView({
               state.request !== null && state.messages.length === 0 ? (
                 // The toolbar's Ask (#203): the passage waits for the reader's own question.
                 <>
-                  <SelectedPassage request={state.request} />
-                  <p className="pt-explain__empty">Type your question about this passage below.</p>
+                  {state.request.image === undefined ? (
+                    <SelectedPassage request={state.request} />
+                  ) : null}
+                  <p className="pt-explain__empty">
+                    {state.request.image === undefined
+                      ? 'Type your question about this passage below.'
+                      : 'Type your question about this picture below.'}
+                  </p>
                 </>
               ) : (
                 <p className="pt-explain__empty">

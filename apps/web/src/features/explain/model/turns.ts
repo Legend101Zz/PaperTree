@@ -7,6 +7,8 @@ import { EMPTY_PLATE } from '@/features/diagram';
 import type { ThreadMessage } from '@/features/explain/model/messages';
 
 export const DEFAULT_EXPLAIN_QUESTION = 'Explain this passage.';
+/** What an image thread asks when the reader typed nothing (the server's own default). */
+export const DEFAULT_IMAGE_QUESTION = 'Explain this figure.';
 /** A Redraw's ask: it names the exchange it opens in the thread menu (#217). */
 export const REDRAW_QUESTION = 'Redraw the diagram.';
 
