@@ -215,6 +215,27 @@ const CHECK_EXAMPLE = [
   '```',
 ].join('\n');
 
+/**
+ * The inline ```diagram instruction of an explain / ask answer (v0.3). One concrete 5-part figure
+ * with a branch and a join, so the model sees what "parts" and `after` mean; a bare line grammar
+ * got a one-box figure (live check 2026-11-20). The topic is another paper's, and every label is a
+ * word (a single-letter label is rejected, diagram.ts).
+ */
+export const INLINE_DIAGRAM = [
+  'When the mechanism is a flow of 4 or more parts (a block, pipeline, loop), add one ```diagram ' +
+    'fence in "## How it works": a box-and-arrow figure of 4-8 parts, one per step or component ' +
+    '(never a single box), each "after" listing the earlier parts (A = first line) that feed it; ' +
+    'kind: input, step, output or concept. Skip it for a plain definition. Example:',
+  '```diagram',
+  '{"t":"plate","title":"Hybrid search"}',
+  '{"t":"part","label":"Query","text":"what the user types","kind":"input","after":[],"cite":null}',
+  '{"t":"part","label":"Keyword index","text":"exact word matches","kind":"step","after":["A"],"cite":null}',
+  '{"t":"part","label":"Vector index","text":"similar meaning","kind":"step","after":["A"],"cite":null}',
+  '{"t":"part","label":"Merge","text":"combine both ranked lists","kind":"step","after":["B","C"],"cite":null}',
+  '{"t":"part","label":"Results","text":"the final top ten","kind":"output","after":["D"],"cite":null}',
+  '```',
+].join('\n');
+
 /** The explain / ask / follow-up answer: a tutor's, in the v0.3 shape (#339; spec §1). */
 function answerRules(request: RunRequest): string {
   const level = request.level ?? 'familiar';
@@ -231,10 +252,7 @@ function answerRules(request: RunRequest): string {
     'Cite the passage a sentence rests on by its handle in square brackets, [b3] or [b1, b4]: at ' +
       'most once per sentence, only where it rests on the paper, and only handles that appear in ' +
       'this prompt or a tool result.',
-    'Only if a picture helps, one ```diagram fence in "## How it works", the diagram lines: ' +
-      '{"t":"plate","title":"<name>"} then at most 8 {"t":"part","label":"<words, never a ' +
-      'letter>","text":"<one line>","kind":"input|step|output|concept","after":["A"],"cite":null} ' +
-      '(lettered by order).',
+    INLINE_DIAGRAM,
     request.check === true
       ? `End with one fence of exactly these keys (accept: fills separated by |):\n${CHECK_EXAMPLE}`
       : 'No ```check fence.',

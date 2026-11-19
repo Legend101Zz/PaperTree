@@ -6,7 +6,15 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 
 import type { RunRequest } from '../src/contract.ts';
-import { markBlock, markInline, systemPrompt, untrustedQuote, userText } from '../src/prompts.ts';
+import { cleanDiagramFence } from '../src/diagram.ts';
+import {
+  INLINE_DIAGRAM,
+  markBlock,
+  markInline,
+  systemPrompt,
+  untrustedQuote,
+  userText,
+} from '../src/prompts.ts';
 
 import { readExample } from './support/contract.ts';
 
@@ -143,9 +151,23 @@ describe('the explain and ask prompts (v0.3, #339)', () => {
     const prompt = base('ask');
     assert.match(prompt, /```diagram/);
     assert.match(prompt, /"t":"plate"/);
-    assert.match(prompt, /at most 8/);
+    assert.match(prompt, /4-8 parts/);
     assert.match(prompt, /"cite":null/);
-    assert.match(prompt, /never a letter/);
+    assert.match(prompt, /never a single box/);
+  });
+
+  test("the inline diagram's example is a real 5-part figure with a branch and a join, and reads cleanly", () => {
+    const body = INLINE_DIAGRAM.split('\n').slice(2, -1).join('\n');
+    const lines = (cleanDiagramFence(body) ?? '').split('\n');
+    const parts = lines.slice(1).map((l) => JSON.parse(l) as { label: string; after: string[] });
+    assert.equal(parts.length, 5);
+    assert.deepEqual(parts[3]?.after, ['B', 'C'], 'a join');
+    assert.ok(
+      parts.every((p) => p.label.length > 1),
+      'no label is a bare letter',
+    );
+    assert.equal(lines.join('\n'), body, 'the example is already in the canonical shape');
+    assert.ok(systemPrompt(request('explain')).includes(body));
   });
 
   test('an ask or follow-up answers from the seed and thread first, and keeps the tools', () => {
@@ -165,7 +187,10 @@ describe('the explain and ask prompts (v0.3, #339)', () => {
   test('stay short: the old rule list is gone', () => {
     const seed = { ...request('explain').seed!, passages: [] };
     const worst = base('explain', { check: true, level: 'new', seed });
-    assert.ok(worst.length < 2500, `well under the old 2,700: ${String(worst.length)}`);
+    assert.ok(
+      worst.length < 3300,
+      `the old 2,700 plus the one inline-diagram example: ${String(worst.length)}`,
+    );
     assert.doesNotMatch(base('explain'), /Cite every claim/);
     assert.match(base('explain'), /^Example: "## TL;DR/m, 'one compact example of the shape');
   });
@@ -196,8 +221,8 @@ describe('the explain and ask prompts are a short contract (#339, P2)', () => {
   const BEFORE = { 'explain-v1': 2772, 'ask-v1': 2670 } as const;
 
   for (const version of ['explain-v1', 'ask-v1'] as const) {
-    test(`${version}: well under its former length (the tutor shape adds some)`, () => {
-      assert.ok(bare(version).length * 10 <= BEFORE[version] * 8, String(bare(version).length));
+    test(`${version}: no longer than before #339, the inline-diagram example included`, () => {
+      assert.ok(bare(version).length <= BEFORE[version], String(bare(version).length));
     });
   }
 
