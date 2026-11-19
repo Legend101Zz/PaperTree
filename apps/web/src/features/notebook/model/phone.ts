@@ -3,8 +3,6 @@
  * the answer (your ink, stickies, typed notes, in reading order), and the box the view-only ink is
  * cropped to. The stack reads the page; it never moves anything on it.
  */
-import { dehyphenate } from '@/lib/markdown';
-
 import { strokeBounds } from './hitTest';
 import { readingOrder } from './layout';
 

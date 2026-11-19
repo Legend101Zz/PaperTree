@@ -24,7 +24,7 @@
  * selection, or docked across the top or bottom of the column, never over the selected lines.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import {
   frameForPdfPage,
