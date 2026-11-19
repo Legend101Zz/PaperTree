@@ -10,6 +10,7 @@ caption, the passages and their order, the kind, the limits and the prompt versi
 from __future__ import annotations
 
 import base64
+import json
 import sqlite3
 from pathlib import Path
 from typing import Any
@@ -391,9 +392,10 @@ def test_every_ask_down_an_image_roots_path_sends_the_roots_crop(tmp_path: Path)
         assert one["history"] is None
         assert len(two["history"]["entries"]) == 2 and len(three["history"]["entries"]) == 4
         assert "data_base64" not in str(two["history"]) and "image" not in str(two["history"])
-        # paper: page gives the caption and the mention; paper: off, the caption only.
+        # The caption and the first mention ride on every ask, `paper: off` too: they describe the
+        # image itself (`plan_image_seed`).
         assert [p["handle"] for p in one["seed"]["passages"]] == ["b1", "b2"]
-        assert [p["handle"] for p in three["seed"]["passages"]] == ["b1"]
+        assert [p["handle"] for p in three["seed"]["passages"]] == ["b1", "b2"]
         # Tools only for paper: whole; the board's default (page) and off have none.
         assert one["limits"]["max_tool_calls"] == 0 and three["limits"]["max_tool_calls"] == 0
         assert [r["kind"] for r in _runs(h)] == ["image", "image", "image"]
@@ -449,3 +451,74 @@ def test_the_quick_asks_work_on_an_image_root(tmp_path: Path, quick: str) -> Non
         assert frames[-1].data["status"] == "complete" and node["question"]
         (sent,) = h.fake.requests
         assert sent["kind"] == "image" and len(sent["images"]) == 1
+
+
+# ── the review's hardening: bad image anchors on a board, and a huge quad ────────────────────
+
+
+def _bad_anchors(doc: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    two: dict[str, Any] = image_anchor(doc, kind="figure", page=1, box=FIG2_BOX, block_id=FIG2)
+    two["selectors"][-1]["quads"].append([1, 2, 30, 40])
+    no_page: dict[str, Any] = image_anchor(doc, kind="figure", page=1, box=FIG2_BOX)
+    no_page["selectors"] = [s for s in no_page["selectors"] if s["type"] != "PageSelector"]
+    return {
+        "two quads": two,
+        "no area": image_anchor(doc, page=1, box=(50, 50, 50, 90)),
+        "no page selector": no_page,
+        "a huge finite quad": image_anchor(doc, page=1, box=(10.0, 10.0, 1e308, 1e308)),
+    }
+
+
+def test_a_board_card_with_a_malformed_image_anchor_is_refused_where_it_is_written(
+    tmp_path: Path,
+) -> None:
+    with ai_harness(tmp_path, _script()) as h:
+        token, paper_id, doc = _setup(h)
+        for label, bad in _bad_anchors(doc).items():
+            made = h.client.post(
+                f"/papers/{paper_id}/board/nodes",
+                json={"node_id": "cn_bad0000000001", "kind": "excerpt", "x": 0, "y": 0, "w": 300,
+                      "h": 200, "source_anchor": bad},
+                headers=auth(token),
+            )  # fmt: skip
+            assert_envelope(made, 422, "validation_failed")
+            assert "source_anchor" in made.text or "anchor" in made.text, label
+        assert h.count("canvas_nodes") == 0
+
+
+def test_an_ask_on_a_stored_image_anchor_that_is_malformed_is_a_422_not_a_500(
+    tmp_path: Path,
+) -> None:
+    """A card written before the check (or by a client that skipped it) must not 500 the ask."""
+    with ai_harness(tmp_path, _script()) as h:
+        b = ImageBoard(h)
+        doc = paragraph_anchor()["doc"]
+        for bad in _bad_anchors(doc).values():
+            conn = sqlite3.connect(h.settings.database_file)
+            conn.execute(
+                "UPDATE canvas_nodes SET source_anchor_json = ? WHERE node_id = ?",
+                (json.dumps({**bad, "doc": {**bad["doc"], "paperId": b.paper_id}}), b.root),
+            )
+            conn.commit()
+            conn.close()
+            response = h.client.post(
+                f"/boards/{b.board_id}/nodes/{b.root}/asks",
+                json={"question": "What is this?"},
+                headers={**auth(b.token), **SSE},
+            )
+            assert_envelope(response, 422, "validation_failed")
+        assert h.fake.requests == [] and h.count("ai_runs") == 0, "no run was started"
+
+
+def test_a_huge_finite_quad_is_a_422_not_an_overflow_500(tmp_path: Path) -> None:
+    with ai_harness(tmp_path, _script()) as h:
+        token, paper_id, doc = _setup(h)
+        for box in ((10.0, 10.0, 1e308, 1e308), (-1e308, 10.0, 50.0, 90.0), (0, 0, 2e6, 50)):
+            response = _image(h, token, paper_id, image_anchor(doc, page=1, box=box))
+            assert_envelope(response, 422, "validation_failed")
+        assert h.count("ai_threads") == h.count("ai_runs") == 0
+        assert h.fake.requests == []
+        # A box well inside the bound but far off the page is clipped to it, a normal ask.
+        clipped = _image(h, token, paper_id, image_anchor(doc, page=1, box=(10.0, 10.0, 9e5, 9e5)))
+        assert clipped.status_code == 200, clipped.text
+        read_sse(clipped)

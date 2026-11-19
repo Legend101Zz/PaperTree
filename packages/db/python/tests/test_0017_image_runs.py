@@ -113,3 +113,36 @@ def test_a_fresh_database_gets_a_strict_ai_runs_and_no_backup(tmp_path: Path) ->
         assert strict["ai_runs"] == 1 and strict["ai_run_handles"] == 1
     finally:
         conn.close()
+
+
+def _plan(conn: sqlite3.Connection, sql: str, params: tuple[str, ...]) -> str:
+    return " | ".join(str(row[3]) for row in conn.execute(f"EXPLAIN QUERY PLAN {sql}", params))
+
+
+def test_the_thread_read_probes_ai_runs_by_an_index_not_a_scan(tmp_path: Path) -> None:
+    """``_THREAD_SELECT`` asks ``EXISTS (... ai_runs ... thread_id ... kind = 'image')`` per thread.
+    Without an index on the run's thread that is a walk of the owner's runs per thread row."""
+    from papertree_db.ai import _THREAD_SELECT
+
+    for upgraded in (False, True):  # a fresh database, and one migrated up from 0016
+        (tmp_path / str(upgraded)).mkdir()
+        file = _at_0016(tmp_path / str(upgraded)) if upgraded else tmp_path / "fresh.sqlite"
+        with open_database(file) as db:
+            db.migrate()
+        conn = sqlite3.connect(file)
+        try:
+            indexes = {
+                row[1]: [c[2] for c in conn.execute(f"PRAGMA index_info({row[1]})")]
+                for row in conn.execute("PRAGMA index_list(ai_runs)").fetchall()
+            }
+            assert ["owner_id", "thread_id", "kind"] in indexes.values(), indexes
+            plan = _plan(
+                conn,
+                _THREAD_SELECT + " WHERE t.owner_id = ? AND t.paper_id = ? GROUP BY t.thread_id",
+                ("o", "p"),
+            )
+            probes = [part for part in plan.split(" | ") if "ai_runs" in part]
+            assert probes, plan
+            assert all("USING" in part and "INDEX" in part for part in probes), plan
+        finally:
+            conn.close()

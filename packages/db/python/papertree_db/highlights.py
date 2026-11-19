@@ -43,6 +43,7 @@ from typing import TYPE_CHECKING, Any, Final
 from ._support import Row, canonical_json, client_json, now_iso
 from .errors import GenerationNotFound, HighlightConflict, HighlightRejected, PaperNotFound
 from .ids import OwnerId, PaperId
+from .image_anchor import IMAGE_TARGET_KINDS
 
 if TYPE_CHECKING:
     from .database import DatabaseCore as _Base
@@ -55,11 +56,10 @@ MAX_ANCHORS_PER_HIGHLIGHT: Final = 64
 MAX_RESOLUTIONS_PER_PUT: Final = 500
 RESOLUTION_STATES: Final = frozenset({"anchored", "approximate", "orphan"})
 PROVENANCE_CLASSES: Final = frozenset({"source", "ai_generated"})
-#: The target kinds of an IMAGE anchor (v0.3 #348): a whole float (``figure``, with its block) or a
-#: free rectangle of a page (``figure_region``). They hold no words, so they need no
-#: TextQuoteSelector; what makes one complete is a PageSelector and ONE ShapeSelector quad (the
-#: rectangle, in the page's PDF space), which is also what the crop endpoint renders.
-IMAGE_TARGET_KINDS: Final = frozenset({"figure", "figure_region"})
+# IMAGE_TARGET_KINDS (v0.3 #348: ``figure``, a whole float, and ``figure_region``, a free rectangle)
+# is ``image_anchor``'s. They hold no words, so they need no TextQuoteSelector; what makes one
+# complete is a PageSelector and ONE ShapeSelector quad (the rectangle, in the page's PDF space),
+# which is also what the crop endpoint renders.
 #: The largest value SQLite's INTEGER holds (a signed 64-bit integer). JSON integers are unbounded,
 #: so every integer this module binds — a generation, a page index — is checked against it FIRST:
 #: one past it raised ``OverflowError`` out of the driver, which the route turned into a 500.

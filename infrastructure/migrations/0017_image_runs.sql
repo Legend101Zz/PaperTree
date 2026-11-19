@@ -100,3 +100,11 @@ ALTER TABLE ai_run_handles_new RENAME TO ai_run_handles;
 --;;
 CREATE INDEX ai_runs_by_owner ON ai_runs (owner_id, started_at);
 --;;
+-- The thread read (`ai.py` `_THREAD_SELECT`) turns an `ask` thread into an `image` one with
+-- `EXISTS (SELECT 1 FROM ai_runs r WHERE r.owner_id = t.owner_id AND r.thread_id = t.thread_id AND
+-- r.kind = 'image')` once per thread row. With only `ai_runs_by_owner` that probe walks every run
+-- of the owner for every thread listed; this index answers it from the index alone (COVERING: the
+-- three columns it filters on). Created here, in the rebuild, because 0017 is the migration that
+-- makes the kind readable from the runs.
+CREATE INDEX ai_runs_by_thread ON ai_runs (owner_id, thread_id, kind);
+--;;

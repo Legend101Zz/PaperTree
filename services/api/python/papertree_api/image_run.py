@@ -24,6 +24,7 @@ from starlette.concurrency import run_in_threadpool
 
 from . import evidence
 from .errors import ApiError
+from .image_anchor import image_box
 from .image_context import ImageContext, image_caption_line, image_context, plan_image_seed
 from .region_crops import CropError, render_crop
 from .schemas import AgentImage
@@ -56,15 +57,24 @@ async def prepare_image_run(
     datamark: str,
     question: str,
     with_text_anchor: Mapping[str, Any] | None = None,
-    include_mention: bool = True,
+    include_nearby: bool = True,
 ) -> ImageRun:
     """Build the image run for ``anchor`` (an image anchor, already checked against the paper).
 
     ``with_text_anchor``: a text anchor the reader selected with the figure (its passages go
-    first). ``include_mention`` false (a board ask whose paper is ``off``) sends the figure and its
-    own caption and no paragraph of the paper. ``ApiError`` ``not_found`` when the PDF is not on
-    this host, ``validation_failed`` for a page past the end or a box off the page.
+    first, trimmed to the budget the caption and the first mention leave: those two are always sent,
+    ``plan_image_seed``). ``include_nearby`` false (a board ask whose paper is ``off``) drops only
+    the text near a region in no float; the figure's caption and first mention still go, they
+    describe the image itself. ``ApiError`` ``not_found`` when the PDF is not on this host,
+    ``validation_failed`` for a page past the end, a box off the page or an anchor that is not a
+    usable image anchor (a stored one that predates the check).
     """
+    # An anchor stored before it was validated where it is written (a board card's) must not be a
+    # 500 at ask time: the same validator `create_thread` uses, then a clean 422.
+    try:
+        image_box(anchor)
+    except ValueError as exc:
+        raise ApiError("validation_failed", f"anchor: not a usable image anchor ({exc})") from exc
     context = image_context(index, anchor)
     chosen = (
         evidence.plan_seed(index, with_text_anchor, datamark=datamark)
@@ -72,7 +82,7 @@ async def prepare_image_run(
         else None
     )
     seed = plan_image_seed(
-        index, context, datamark=datamark, with_text=chosen, include_mention=include_mention
+        index, context, datamark=datamark, with_text=chosen, include_nearby=include_nearby
     )
     try:
         crop = await run_in_threadpool(
@@ -101,5 +111,5 @@ async def prepare_image_run(
         seed=seed,
         images=[image],
         title=evidence.header_text(named or question, limit=80),
-        dpi=crop.plan.dpi,
+        dpi=crop.dpi,
     )

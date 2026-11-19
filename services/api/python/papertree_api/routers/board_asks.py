@@ -270,7 +270,7 @@ async def ask_on_board(
             generation=generation,
             datamark=datamark,
             question=question,
-            include_mention=uses.paper != "off",
+            include_nearby=uses.paper != "off",
         )
         seed_plan = prepared.seed
     elif anchor is not None:

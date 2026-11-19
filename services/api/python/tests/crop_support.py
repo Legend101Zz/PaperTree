@@ -73,3 +73,37 @@ def image_anchor(
         "selectors": selectors,
         "created": {"mode": "source", "at": "2026-11-20T10:00:00.000Z", "client": "api-tests"},
     }
+
+
+def make_geometry_pdf(
+    *,
+    rotation: int = 0,
+    media: tuple[float, float, float, float] | None = None,
+    crop: tuple[float, float, float, float] | None = None,
+) -> tuple[bytes, tuple[float, float, float, float], tuple[float, float]]:
+    """A one-page PDF whose page boxes are not the plain ``(0, 0, w, h)`` (AGENTS.md section 4:
+    "PyMuPDF reports its two page boxes in two different coordinate spaces"): a ``/Rotate``, a
+    MediaBox not at the origin, a CropBox inside it.
+
+    A red 80 x 60 pt box is drawn on a 300 x 500 pt page, plus a blue one far from it. Returns the
+    PDF, the red box in the IR's space and the page's ``(width, height)`` in that space. The IR
+    space is the one the worker puts every bbox in (``pdf.py``): MuPDF's crop-relative, top-left
+    rects times ``page.rotation_matrix``, so a rotated page is measured as it is DISPLAYED.
+    """
+    document = pymupdf.open()
+    page = document.new_page(width=300, height=500)
+    if media is not None:
+        page.set_mediabox(pymupdf.Rect(*media))
+    if crop is not None:
+        page.set_cropbox(pymupdf.Rect(*crop))
+    page.draw_rect(pymupdf.Rect(60, 120, 140, 180), color=(1, 0, 0), fill=(1, 0, 0))
+    page.draw_rect(pymupdf.Rect(150, 300, 230, 360), color=(0, 0, 1), fill=(0, 0, 1))
+    if rotation:
+        page.set_rotation(rotation)
+    red = next(d["rect"] for d in page.get_drawings() if d["fill"] == (1.0, 0.0, 0.0))
+    box = pymupdf.Rect(red) * page.rotation_matrix
+    box.normalize()
+    size = (float(page.rect.width), float(page.rect.height))
+    out: bytes = document.tobytes()
+    document.close()
+    return out, (box.x0, box.y0, box.x1, box.y1), size
