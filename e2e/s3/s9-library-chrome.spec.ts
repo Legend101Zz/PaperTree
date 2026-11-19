@@ -23,7 +23,7 @@ test('console stays clean and the card status text has no stray period', async (
 }, testInfo) => {
   test.setTimeout(600_000);
   const shot = (name: string) => shotPath(name, testInfo.outputPath('shots'));
-  const { token } = await seedPaper(stack.apiUrl, 's9-chrome');
+  const { token, paperId } = await seedPaper(stack.apiUrl, 's9-chrome');
   for (const vp of VIEWPORTS) {
     for (const theme of ['light', 'dark'] as const) {
       const context = await browser.newContext({
@@ -44,7 +44,9 @@ test('console stays clean and the card status text has no stray period', async (
       await expect(page.getByRole('heading', { name: 'Your library' })).toBeVisible();
       // #195: the card grid's status badge became the spine's accessible name and, since v0.3,
       // the opened book's state line; the same checks run on both.
-      const spine = page.locator('button[data-paper-id]').first();
+      // The seeded book's own spine: the e2e web also shelves sample books, and a sample is read
+      // in place, never taken out (`canOpenBook`), so the first spine on the shelf may not open.
+      const spine = page.locator(`[aria-label="Your shelf"] button[data-paper-id="${paperId}"]`);
       await expect(spine).toBeVisible();
       await expect(spine).toHaveAttribute('data-processing-state', 'complete');
       const name = (await spine.getAttribute('aria-label')) ?? '';

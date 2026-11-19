@@ -18,6 +18,7 @@ import type { Page } from '@playwright/test';
 import { expect, test } from '../harness/test';
 import { register, REPO, shotPath, upload, waitParsed } from '../s4/support';
 import { tokenInit } from '../s7/support';
+import { settle } from './flow-support';
 
 const ATTENTION = join(REPO, 'research', 'benchmarks', 'corpus', 'attention-is-all-you-need.pdf');
 const AXE = join(REPO, 'apps', 'web', 'node_modules', 'axe-core', 'axe.min.js');
@@ -69,6 +70,9 @@ test('shelf → Enter → the spread → Figure 1 as the plate → Esc → Read'
     for (const colorScheme of ['light', 'dark'] as const) {
       await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
       await page.emulateMedia({ colorScheme });
+      // An axe pass mid-fade measures the fade, not the page (the scheme's colours and the
+      // spread's own motion run for a moment after the change): wait until nothing is moving.
+      await settle(page);
       expect(await axeSerious(page), `${String(width)} ${colorScheme}`).toEqual([]);
     }
   }
