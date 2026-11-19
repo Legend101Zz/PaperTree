@@ -127,7 +127,10 @@ test('the spread’s ⋯ menu: Esc order, Rename persists, Delete → Undo resto
   const book = page.locator(`[aria-label="Your shelf"] button[data-paper-id="${paperId}"]`);
   await expect(book).toHaveAttribute('data-spine-state', 'ready', { timeout: 60_000 });
   const dialog = page.getByRole('dialog', { name: 'Attention Is All You Need' });
-  const more = () => dialog.getByRole('button', { name: /^More: rename, topic, delete/ });
+  // The book's name follows a rename, so after it the dialog is found by its role alone: it is the
+  // only one on the page.
+  const open = page.getByRole('dialog');
+  const more = () => open.getByRole('button', { name: /^More: rename, topic, delete/ });
   const deletes: string[] = [];
   page.on('request', (r) => {
     if (r.method() === 'DELETE' && r.url().endsWith(`/papers/${paperId}`)) deletes.push(r.url());
@@ -171,7 +174,7 @@ test('the spread’s ⋯ menu: Esc order, Rename persists, Delete → Undo resto
   // ── Delete asks nothing: the book closes, the spine goes, Undo brings it back untouched ──
   await book.click();
   await more().click();
-  await dialog.getByRole('menuitem', { name: /^Delete this paper/ }).click();
+  await open.getByRole('menuitem', { name: /^Delete this paper/ }).click();
   const toast = page.getByText(/^Deleted “My Attention”/);
   await expect(toast).toBeVisible();
   await expect(book).toHaveCount(0);
@@ -187,7 +190,7 @@ test('the spread’s ⋯ menu: Esc order, Rename persists, Delete → Undo resto
     (r) => r.url().endsWith(`/papers/${paperId}`) && r.request().method() === 'DELETE',
     { timeout: 30_000 },
   );
-  await dialog.getByRole('menuitem', { name: /^Delete this paper/ }).click();
+  await open.getByRole('menuitem', { name: /^Delete this paper/ }).click();
   await expect(book).toHaveCount(0);
   expect(deletes).toEqual([]);
   expect((await gone).status()).toBe(204);
