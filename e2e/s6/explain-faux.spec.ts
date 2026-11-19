@@ -110,8 +110,8 @@ test.describe('S6 Journey C (faux agent) — explain, follow-up, chip, summary, 
     await expect(panel.locator('[data-explain-quote]')).toContainText('We reframe object');
     const answer = panel.locator('[data-message-status]').first();
     await expect(answer).toHaveAttribute('data-message-status', 'complete', { timeout: 120_000 });
-    // #202, #340: the answer is an AI slip (the AI's voice); its sources are one quiet line under a
-    // paragraph, never chips or markers.
+    // #202, #340: the answer is an AI slip (the AI's voice); its sources are ONE quiet line, at the
+    // end of "In the paper", never chips or markers.
     await expect(panel.locator('[data-voice="ai"]').first()).toBeVisible();
     const text = (await panel.innerText()).replace(/\s+/g, ' ');
     expect(text).not.toMatch(/\[b\d+\]|\bmsg_|\bthr_|\brun_|\bblk_|\{"|"citation_id"/);
@@ -122,6 +122,7 @@ test.describe('S6 Journey C (faux agent) — explain, follow-up, chip, summary, 
       `first answer complete; ${String(pageCount)} source pages; usage "${await panel.locator('[data-usage-line]').first().innerText()}"`,
     );
     expect(pageCount).toBeGreaterThan(0);
+    await expect(panel.locator('.pt-exchange').first().locator('.pt-source')).toHaveCount(1);
     await expect(panel.locator('[data-usage-line]').first()).toContainText('(estimate)');
     await page.screenshot({ path: shot('c02-answer-1440.png') });
 

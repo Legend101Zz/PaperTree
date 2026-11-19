@@ -3,9 +3,13 @@
  * the paper it draws on. Pure; `exchange.ts` pairs answers with their asks.
  *
  * THE AI IS A TUTOR, NOT AN AUDITOR. A paragraph's sources are the pages its `[bN]` handles point
- * at, de-duplicated and in page order ("From the paper: p. 1 · p. 4"); a paragraph none of whose
- * handles resolved has none, and the screen says "General knowledge" under it once the answer has
- * settled. There is no verdict, no count and no readout. The handles stay in the model's text (the
+ * at, de-duplicated ("From the paper: p. 1 · p. 4"). WHERE THAT LINE SITS (#340, V3-AI-NOTES): in a
+ * SECTIONED answer (the tutor format) there is exactly one, at the end of the "In the paper"
+ * section, gathering every handle of the whole answer in document order; an answer with no handle
+ * at all says "General knowledge" there instead, once it has settled. No other paragraph carries
+ * a line. An UNSECTIONED answer (stored before v0.3) and a summary bullet keep a line under each
+ * paragraph that has handles, and never say "General knowledge". There is no verdict, no count
+ * and no readout. The handles stay in the model's text (the
  * agent still emits them); the renderer never draws them, it gathers them here.
  *
  * While an answer streams, a handle resolves as soon as the thread has seen its citation (a
@@ -67,6 +71,11 @@ export interface AnswerParagraph {
   readonly sources: readonly PaperSource[];
   /** The tutor format's section it sits in (the TL;DR one is the lead); null in an older answer. */
   readonly section?: SectionKey | null;
+  /**
+   * Whether the paragraph draws its own source line (when it has sources). False in a sectioned
+   * answer, whose one line is the `source` block; absent (= true) on a summary bullet.
+   */
+  readonly ownLine?: boolean;
 }
 
 /** One thing to draw, in reading order: a section label, a paragraph, the figure or the check. */
@@ -74,7 +83,12 @@ export type AnswerBlock =
   | { readonly k: 'label'; readonly section: SectionKey }
   | { readonly k: 'p'; readonly paragraph: AnswerParagraph }
   | { readonly k: 'diagram'; readonly body: string; readonly closed: boolean }
-  | { readonly k: 'check'; readonly spec: CheckSpec };
+  | { readonly k: 'check'; readonly spec: CheckSpec }
+  /**
+   * A sectioned answer's one source line: every page the whole answer draws on, in document order
+   * (none: "General knowledge", said once the answer has settled).
+   */
+  | { readonly k: 'source'; readonly sources: readonly PaperSource[] };
 
 /** An answer, ready to draw. */
 export interface AnswerModel {
@@ -82,6 +96,8 @@ export interface AnswerModel {
   readonly paragraphs: readonly AnswerParagraph[];
   /** Everything in reading order: labels, paragraphs, the inline figure and the check. */
   readonly blocks: readonly AnswerBlock[];
+  /** The tutor format's sections are present: the one source line is a block, not per paragraph. */
+  readonly sectioned: boolean;
   /** Still streaming (or stopped and waiting for its stored copy): no "General knowledge" yet. */
   readonly live: boolean;
 }
@@ -129,6 +145,40 @@ export function sourcesOf(citations: readonly Citation[]): PaperSource[] {
 }
 
 /**
+ * The pages a set of citations draws on in the order they are met, each page once.
+ *
+ * @param citations The citations, in document order.
+ * @returns One source per page (the first citation seen on it).
+ */
+function sourcesInOrder(citations: readonly Citation[]): PaperSource[] {
+  const byPage = new Map<number, PaperSource>();
+  for (const citation of citations) {
+    const page = pageOf(citation);
+    if (!byPage.has(page)) byPage.set(page, { page, passage: quoteOf(citation.anchor), citation });
+  }
+  return [...byPage.values()];
+}
+
+/**
+ * Where a sectioned answer's one source line goes: right after the last block of its "In the
+ * paper" section. While the answer streams and that section has not started, nowhere (the line
+ * must not appear under another section and then move); once settled without one, after the last
+ * paragraph.
+ *
+ * @param blocks The answer's blocks.
+ * @param live The answer is still arriving.
+ * @returns The index to insert at, or -1 when the line has no place (yet).
+ */
+function sourceLineAt(blocks: readonly AnswerBlock[], live: boolean): number {
+  const inPaper = (b: AnswerBlock): boolean =>
+    (b.k === 'label' && b.section === 'paper') || (b.k === 'p' && b.paragraph.section === 'paper');
+  const last = (test: (b: AnswerBlock) => boolean): number => blocks.findLastIndex(test) + 1 || -1;
+  const inSection = last(inPaper);
+  if (inSection !== -1 || live) return inSection;
+  return last((b) => b.k === 'p');
+}
+
+/**
  * The drawable model of an answer's text: its blocks and paragraphs, each paragraph with the pages
  * its handles point at. Shared by the panel, the board card and the notebook page, so the same
  * answer reads the same everywhere.
@@ -145,7 +195,9 @@ export function answerModel(
 ): AnswerModel {
   const paragraphs: AnswerParagraph[] = [];
   const blocks: AnswerBlock[] = [];
-  for (const item of parseAnswerItems(text, live)) {
+  const items = parseAnswerItems(text, live);
+  const sectioned = items.some((item) => item.k === 'label');
+  for (const item of items) {
     if (item.k === 'label') blocks.push(item);
     else if (item.k === 'diagram') {
       // A cut-off answer's open fence is no figure: never show raw lines, never a placeholder
@@ -159,6 +211,7 @@ export function answerModel(
         index: paragraphs.length,
         text: item.text,
         section: item.section,
+        ownLine: !sectioned,
         sources: sourcesOf(
           handleRuns(item.text)
             .flat()
@@ -169,7 +222,20 @@ export function answerModel(
       blocks.push({ k: 'p', paragraph });
     }
   }
-  return { paragraphs, blocks, live };
+  if (sectioned) {
+    const at = sourceLineAt(blocks, live);
+    if (at !== -1) {
+      const sources = sourcesInOrder(
+        paragraphs.flatMap((p) =>
+          handleRuns(p.text)
+            .flat()
+            .flatMap((h) => resolve(h) ?? []),
+        ),
+      );
+      blocks.splice(at, 0, { k: 'source', sources });
+    }
+  }
+  return { paragraphs, blocks, sectioned, live };
 }
 
 /**

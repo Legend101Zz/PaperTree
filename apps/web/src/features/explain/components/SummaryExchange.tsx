@@ -77,7 +77,7 @@ export function SummaryExchange({
           <ul className="pt-summary__bullets">
             {model.bullets.map((bullet) => (
               <li key={bullet.index} className="pt-summary__bullet" data-summary-bullet>
-                <AnswerText paragraph={bullet} streaming={false} general onShow={onShow} />
+                <AnswerText paragraph={bullet} streaming={false} onShow={onShow} />
               </li>
             ))}
           </ul>

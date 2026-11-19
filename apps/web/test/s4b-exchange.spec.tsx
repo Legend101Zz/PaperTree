@@ -4,7 +4,8 @@
  *
  * - the three voices: the ask is yours (`data-voice="you"`), the quote the paper's, the answer the
  *   AI's; no chip, marker, margin flag, trace or readout anywhere;
- * - each paragraph ends in ONE quiet line: `From the paper: p. 1 · p. 2`, or `General knowledge`;
+ * - each paragraph with handles ends in ONE quiet line: `From the paper: p. 1 · p. 2` (an unsectioned
+ *   answer never says `General knowledge`; a sectioned one has its one line under "In the paper");
  * - hovering or focusing a page peeks the passage; a click runs the citation flash on the cited
  *   Anchor (no margin tab);
  * - every page is reachable by Tab;
@@ -139,19 +140,18 @@ describe('the exchange: ask → answer, one quiet source line per paragraph', ()
     expect(exchange.textContent).not.toMatch(/\[b\d/);
   });
 
-  it('ends each paragraph in the pages it draws on, once each, or "General knowledge"', async () => {
+  it('ends each paragraph that has handles in the pages it draws on, once each; none says "General knowledge"', async () => {
     await openGolden();
     expect(sourceLines(firstExchange())).toEqual([
       'From the paper: p. 1',
       'From the paper: p. 1 · p. 2',
       'From the paper: p. 2',
       'From the paper: p. 1 · p. 2',
-      'General knowledge',
     ]);
-    // The last paragraph is the AI's own words: the line is the same quiet line, no warning.
-    const general = firstExchange().querySelector('.pt-source--general') as HTMLElement;
-    expect(general.previousElementSibling?.textContent).toMatch(/This is my reading/);
-    expect(general.querySelector('button')).toBeNull();
+    // The last paragraph is the AI's own words: it has no line (an unsectioned answer never says
+    // "General knowledge"), and no warning.
+    expect(firstExchange().querySelector('.pt-source--general')).toBeNull();
+    expect(firstExchange().textContent).toMatch(/This is my reading/);
   });
 
   it('hovering or focusing a page peeks the passage’s first words, and leaving closes it', async () => {
@@ -536,7 +536,7 @@ describe('stable answers (review 1.1, 1.3, #252)', () => {
     );
   });
 
-  it('a claim whose handle matched no passage has no page: it is general knowledge, with no raw handle', () => {
+  it('a claim whose handle matched no passage has no page and no line, with no raw handle', () => {
     const answer = goldenMessages()[1]!;
     const b1 = answer.citations.find((c) => c.marker === 'b1')!;
     const ask = { ...goldenMessages()[0]! };
@@ -554,7 +554,7 @@ describe('stable answers (review 1.1, 1.3, #252)', () => {
         onSendToCanvas={async () => undefined}
       />,
     );
-    expect(sourceLines(document.body)).toEqual(['From the paper: p. 1', 'General knowledge']);
+    expect(sourceLines(document.body)).toEqual(['From the paper: p. 1']);
     expect(document.body.textContent).not.toContain('[b9]');
     expect(document.querySelector('.pt-coverage, [data-unresolved]')).toBeNull();
   });

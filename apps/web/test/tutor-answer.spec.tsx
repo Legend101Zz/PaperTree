@@ -123,8 +123,13 @@ describe('the tutor answer in the Explain panel', () => {
     // No raw fence, NDJSON, handle or heading mark.
     const slip = panel.querySelector('.pt-ai-slip__grid') as HTMLElement;
     expect(slip.textContent).not.toMatch(/```|\{"t"|\[b\d\]|## |\$/);
-    // The paragraph that cites the paper keeps its one quiet source line.
-    expect(document.querySelector('.pt-source')?.textContent).toMatch(/^From the paper: p\. 4/);
+    // ONE quiet source line, at the end of "In the paper", gathering the whole answer's handles.
+    const lines = [...panel.querySelectorAll('.pt-source')];
+    expect(lines).toHaveLength(1);
+    expect(lines[0]?.textContent).toMatch(/^From the paper: p\. 4/);
+    expect(lines[0]?.closest('.pt-ai-sourceline')?.previousElementSibling?.textContent).toBe(
+      'The paper notes there are no extra parameters.',
+    );
     // The level shows, Familiar by default.
     expect(
       within(panel).getByRole('button', { name: 'Familiar' }).getAttribute('aria-pressed'),

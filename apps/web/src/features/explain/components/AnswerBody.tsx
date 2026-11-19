@@ -4,12 +4,14 @@
  * An answer's body in the tutor format (v0.3, prototype Explain panel), shared by every surface
  * that shows an answer: the Explain panel, the board's explanation card and the notebook page. It
  * draws the answer's blocks in reading order: the small lower-case section labels, each paragraph
- * through `AnswerText` (the TL;DR as the lead; every other one with its one quiet source line),
- * the figure of a ```diagram fence, and, only where a `check` is handed in, the Check yourself block.
+ * through `AnswerText` (the TL;DR as the lead), the answer's ONE quiet source line at the end of "In
+ * the paper" (#340; an older unsectioned answer keeps a line under each paragraph with handles), the figure of a ```diagram fence, and, only where a `check` is handed in, the Check yourself block.
  *
  * Small surfaces pass no `check`: the block is heavy in a 328 px card (#349) and a notebook page
  * has no one to ask, so it is simply not drawn there, and never as raw text.
  */
+import { SourceLine } from '@papertree/ui';
+
 import { InlineDiagram } from '@/features/diagram';
 
 import { SECTION_LABEL } from '../model/sections';
@@ -29,8 +31,13 @@ export interface CheckControl {
 }
 
 /** Props for `AnswerBody`. */
-export interface AnswerBodyProps extends Pick<AnswerTextProps, 'streaming' | 'general' | 'onShow'> {
+export interface AnswerBodyProps extends Pick<AnswerTextProps, 'streaming' | 'onShow'> {
   readonly blocks: readonly AnswerBlock[];
+  /**
+   * Say "General knowledge" in the source line of an answer with no paper source. False until the
+   * answer has settled: a handle may not have resolved yet, and the line must never flip.
+   */
+  readonly general: boolean;
   /** The phone sheet: each page answers taps over 44 px. */
   readonly touch?: boolean;
   /** The paragraph that ends the text so far: the typed caret sits on it while streaming. */
@@ -63,11 +70,24 @@ export function AnswerBody({
             key={i}
             paragraph={block.paragraph}
             streaming={streaming}
-            general={general}
             caret={caretAt === block.paragraph.index}
             onShow={onShow}
             touch={touch}
           />
+        );
+      case 'source':
+        return (
+          <div key={i} className="pt-ai-slip__row pt-ai-sourceline">
+            <SourceLine
+              general={general}
+              touch={touch}
+              sources={block.sources.map((s) => ({
+                page: s.page,
+                passage: s.passage,
+                onShow: () => onShow(s),
+              }))}
+            />
+          </div>
         );
       case 'diagram':
         return <InlineDiagram key={i} body={block.body} closed={block.closed} />;

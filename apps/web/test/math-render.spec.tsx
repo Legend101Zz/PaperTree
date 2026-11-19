@@ -49,7 +49,6 @@ const answerText = (text: string, streaming = false): ReactElement => (
   <AnswerText
     paragraph={{ index: 0, text, sources: [] }}
     streaming={streaming}
-    general={false}
     onShow={() => undefined}
   />
 );

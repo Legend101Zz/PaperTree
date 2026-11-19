@@ -4,9 +4,12 @@ Ask → answer in the reader's explain panel (#202, #340, #341, DESIGN.md §3–
 a call slip (your ask) and an AI slip (the answer). **The AI is a tutor, not an auditor**: there is no
 "verified / not verified", no numbered chip or marker, no margin column of page flags, no "Stands on N passages"
 readout and no passage list. The agent still writes `[bN]` handles after a claim; the renderer never draws
-them, it gathers them per paragraph (`model/answer.sourcesOf`) into ONE quiet line under it:
-`From the paper: p. 1 · p. 4` (pages de-duplicated, in page order), or `General knowledge` when no handle of the
-paragraph resolved. Each page is a button (`SourceLine` in `@papertree/ui`): hover or focus peeks the passage's
+them, it gathers them into quiet source lines (`model/answer`). In a SECTIONED (tutor format) answer there is
+ONE line, a `source` block at the end of the "In the paper" section, gathering every handle of the whole answer
+(`From the paper: p. 7 · p. 2`, pages de-duplicated, in document order); an answer with no handle at all says
+`General knowledge` there once it has settled, and no other paragraph carries a line. An UNSECTIONED older answer
+and a summary bullet keep a line only under a paragraph that has handles (page order) and never say
+`General knowledge`. Each page is a button (`SourceLine` in `@papertree/ui`): hover or focus peeks the passage's
 first words, a click runs the reader's citation flash on the cited Anchor. The flash has no margin tab.
 
 ## Data flow

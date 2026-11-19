@@ -88,11 +88,11 @@ describe('an answer is a tutor, not an auditor (#340, #341)', () => {
     expect(lines).toEqual(['From the paper: p. 4']);
   });
 
-  it('a paragraph with no handle says "General knowledge" in the same quiet line', () => {
+  it('an older unsectioned paragraph with no handle has no line, and never "General knowledge"', () => {
     view(message({ text: 'Claim [b1].\n\nAnd something the AI knows.' }));
     const lines = [...document.querySelectorAll('.pt-source')].map((l) => l.textContent);
-    expect(lines).toEqual(['From the paper: p. 4', 'General knowledge']);
-    expect(document.querySelector('.pt-source--general')?.getAttribute('role')).toBeNull();
+    expect(lines).toEqual(['From the paper: p. 4']);
+    expect(document.querySelector('.pt-source--general')).toBeNull();
   });
 });
 

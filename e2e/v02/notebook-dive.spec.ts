@@ -77,7 +77,8 @@ test.describe('S5e — Dive in, the tablet and phone notebook (faux agent)', () 
     await page.locator('.pt-reader__explain').click();
     const panel = page.getByRole('complementary', { name: 'Explain' });
     await expect(panel.locator('.pt-exchange')).toHaveCount(1);
-    // The panel's answer carries one quiet source line per paragraph and no numbered passage list.
+    // The panel's answer carries a quiet source line (under a paragraph with handles) and no numbered
+    // passage list.
     await expect(panel.locator('.pt-source').first()).toBeVisible();
     await expect(panel.locator('.pt-trace-row, .pt-trace-list')).toHaveCount(0);
 

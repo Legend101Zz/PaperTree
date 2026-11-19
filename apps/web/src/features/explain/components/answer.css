@@ -45,6 +45,11 @@
   margin-block-start: calc(var(--pt-space-3) * -0.6);
 }
 
+/* The answer's one source line sits close under the end of "In the paper" (#340). */
+.pt-ai-slip__grid > .pt-ai-sourceline {
+  margin-block-start: calc(var(--pt-space-3) * -0.6);
+}
+
 /* ── Check yourself ─────────────────────────────────────────────────────────────────────── */
 
 .pt-check {

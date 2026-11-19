@@ -95,7 +95,7 @@ describe('the stack (08c)', () => {
     expect(sourceLines(exchange)).toEqual(['From the paper: p. 1']);
     fireEvent.click(more);
     expect(within(exchange).getByRole('button', { name: 'Show less' })).toBeTruthy();
-    expect(sourceLines(exchange).at(-1)).toBe('General knowledge');
+    expect(sourceLines(exchange).at(-1)).toBe('From the paper: p. 1 · p. 2');
     // No numbered passage list, no coverage line: the quote cards are the page's, not a trace.
     expect(screen.queryByRole('list', { name: 'Passages the answer stands on' })).toBeNull();
     expect(document.querySelector('.pt-trace-list, .pt-trace-row, .pt-coverage')).toBeNull();
