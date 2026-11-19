@@ -392,9 +392,10 @@ def test_every_ask_down_an_image_roots_path_sends_the_roots_crop(tmp_path: Path)
         assert one["history"] is None
         assert len(two["history"]["entries"]) == 2 and len(three["history"]["entries"]) == 4
         assert "data_base64" not in str(two["history"]) and "image" not in str(two["history"])
-        # paper: page gives the caption and the mention; paper: off, the caption only.
+        # The caption and the first mention ride on every ask, `paper: off` too: they describe the
+        # image itself (`plan_image_seed`).
         assert [p["handle"] for p in one["seed"]["passages"]] == ["b1", "b2"]
-        assert [p["handle"] for p in three["seed"]["passages"]] == ["b1"]
+        assert [p["handle"] for p in three["seed"]["passages"]] == ["b1", "b2"]
         # Tools only for paper: whole; the board's default (page) and off have none.
         assert one["limits"]["max_tool_calls"] == 0 and three["limits"]["max_tool_calls"] == 0
         assert [r["kind"] for r in _runs(h)] == ["image", "image", "image"]

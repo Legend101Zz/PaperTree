@@ -25,7 +25,7 @@ from papertree_api import evidence, image_anchor, image_context
 from papertree_api.image_anchor import image_box
 from papertree_db import PaperId, PaperTreeDb, generation, new_id
 from papertree_document_worker.pipeline import ParserConfig, parse_document
-from papertree_retrieval import PaperIndex
+from papertree_retrieval import DEFAULT_TOKEN_ESTIMATOR, PaperIndex
 
 CORPUS_DIR = Path(__file__).resolve().parents[4] / "research" / "benchmarks" / "corpus"
 FETCH_SCRIPT = "./research/benchmarks/fetch_corpus.sh"
@@ -247,11 +247,11 @@ def test_the_seed_puts_the_caption_first_then_the_mention_each_labelled_and_mark
     assert seed.page_label == "p. 2" and seed.quote == ""
     caption = fixture_index.block(CAP2)
     assert caption is not None and "Residual learning" in seed.passages[0][2]
-    # `paper: off` keeps the figure's own caption and drops every paragraph of the paper.
+    # `paper: off` still keeps the caption AND the first mention (they describe the image itself).
     off = image_context.plan_image_seed(
-        fixture_index, context, datamark=DATAMARK, include_mention=False
+        fixture_index, context, datamark=DATAMARK, include_nearby=False
     )
-    assert off.block_ids == (CAP2,)
+    assert off.block_ids == (CAP2, FIRST_MENTION_OF_FIG2)
 
 
 def test_a_selected_paragraph_rides_first_and_is_not_repeated(fixture_index: PaperIndex) -> None:
@@ -353,3 +353,91 @@ def test_real_parse_figure_two_is_found_although_the_parser_gave_it_no_edges(
     assert seed.block_ids[:2] == (context.caption_id, context.mention_id)
     assert seed.passages[0][2].count("Residual") == 1 and "Figure 2." in seed.passages[0][2]
     assert image_context.image_caption_line(real_index, context).startswith("Figure 2.")
+
+
+# ── the caption and the first mention are ALWAYS sent (#348's comment) ───────────────────────
+
+
+def _long_paragraph_index(tmp_path: Path, block_id: str) -> PaperIndex:
+    document = copy.deepcopy(load_fixture("resnet-cvpr-2col"))
+    for block in document["blocks"]:
+        if block["block_id"] == block_id:
+            block["text"] = "A long selected paragraph about shortcuts and layers. " * 400
+    return index_of(document, tmp_path)
+
+
+def _fig2_context(index: PaperIndex) -> image_context.ImageContext:
+    return image_context.image_context(
+        index, anchor(1, (98.0, 78.0, 232.0, 156.0), "figure", block_id=FIG2)
+    )
+
+
+def test_a_large_selected_text_is_trimmed_never_the_caption_or_the_mention(tmp_path: Path) -> None:
+    selected = "blk_pfqc4u4uxptpww4s"  # a long body paragraph of page 1
+    index = _long_paragraph_index(tmp_path, selected)
+    context = _fig2_context(index)
+    block = index.block(selected)
+    assert block is not None and len(block.text) > 20_000
+    huge = evidence.SeedPlan(
+        block_ids=(selected,),
+        quote="Shortcut connections",
+        page_label="p. 2",
+        section=None,
+        passages=((selected, "p. 2 · the selected text", f"{DATAMARK} {block.text} {DATAMARK}"),),
+        total_tokens=DEFAULT_TOKEN_ESTIMATOR.estimate(block.text),
+    )
+    assert huge.total_tokens > image_context.SEED_TOKENS * 3  # on its own it blows the budget
+    seed = image_context.plan_image_seed(index, context, datamark=DATAMARK, with_text=huge)
+    assert seed.block_ids == (selected, CAP2, FIRST_MENTION_OF_FIG2)
+    by_id = {b: text for b, _label, text in seed.passages}
+    # The caption and the mention are whole (their own caps, nothing taken from them) ...
+    solo = image_context.plan_image_seed(index, context, datamark=DATAMARK)
+    assert by_id[CAP2] == dict((b, t) for b, _l, t in solo.passages)[CAP2]
+    assert (
+        by_id[FIRST_MENTION_OF_FIG2]
+        == dict((b, t) for b, _l, t in solo.passages)[FIRST_MENTION_OF_FIG2]
+    )
+    # ... and the selection is what was cut, to what the budget has left.
+    assert 0 < len(by_id[selected]) < len(block.text) / 5
+    assert seed.total_tokens <= image_context.SEED_TOKENS
+    assert seed.quote == "Shortcut connections"
+
+
+def test_the_caption_and_the_mention_are_sent_even_when_they_alone_exceed_the_budget(
+    fixture_index: PaperIndex,
+) -> None:
+    context = _fig2_context(fixture_index)
+    seed = image_context.plan_image_seed(fixture_index, context, datamark=DATAMARK, budget_tokens=5)
+    assert seed.block_ids == (CAP2, FIRST_MENTION_OF_FIG2)
+
+
+def test_a_selected_caption_or_mention_is_that_reserved_passage_once_and_stays_first(
+    fixture_index: PaperIndex,
+) -> None:
+    context = _fig2_context(fixture_index)
+    text_anchor = {
+        "targetKind": "text",
+        "selectors": [{"type": "BlockSelector", "blockId": FIRST_MENTION_OF_FIG2}],
+    }
+    chosen = evidence.plan_seed(fixture_index, text_anchor, datamark=DATAMARK)
+    seed = image_context.plan_image_seed(
+        fixture_index, context, datamark=DATAMARK, with_text=chosen, budget_tokens=5
+    )
+    assert seed.block_ids == (FIRST_MENTION_OF_FIG2, CAP2)  # even a 5-token budget
+
+
+def test_paper_off_keeps_the_caption_and_the_mention_and_drops_only_the_nearby_text(
+    fixture_index: PaperIndex,
+) -> None:
+    figure = _fig2_context(fixture_index)
+    off = image_context.plan_image_seed(
+        fixture_index, figure, datamark=DATAMARK, include_nearby=False
+    )
+    assert off.block_ids == (CAP2, FIRST_MENTION_OF_FIG2)
+    region = image_context.image_context(fixture_index, anchor(1, (60.0, 400.0, 280.0, 470.0)))
+    assert region.nearby_ids
+    with_paper = image_context.plan_image_seed(fixture_index, region, datamark=DATAMARK)
+    without = image_context.plan_image_seed(
+        fixture_index, region, datamark=DATAMARK, include_nearby=False
+    )
+    assert set(with_paper.block_ids) == set(region.nearby_ids) and without.block_ids == ()

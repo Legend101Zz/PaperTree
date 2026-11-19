@@ -26,7 +26,9 @@ text blocks on its page instead (up to three, the nearest caption first): the wo
 ``plan_image_seed`` turns that into the run's seed: passages ``[b1…]`` in this order, a selected
 text first when the reader shift-selected a paragraph with the figure (``with_text``), then the
 caption, then the first mention, then the nearby blocks. Each is capped and datamarked like any
-seed passage and its label says what it is, so the model cites the right one.
+seed passage and its label says what it is, so the model cites the right one. The caption and the
+first mention are ALWAYS sent (reserved before anything else is spent, also on a board ask whose
+paper is ``off``); a selected text is trimmed to what they leave, never them.
 
 Pure over a ``PaperIndex`` (no I/O), so every rule has a plain test, one of them on a real parse.
 """
@@ -40,7 +42,7 @@ from dataclasses import dataclass
 from typing import Any, Final
 
 from papertree_prompts import datamark_text
-from papertree_retrieval import PaperIndex
+from papertree_retrieval import DEFAULT_TOKEN_ESTIMATOR, PaperIndex
 
 from . import evidence
 from .image_anchor import BBox, block_id_of, image_box
@@ -311,50 +313,89 @@ def plan_image_seed(
     *,
     datamark: str,
     with_text: evidence.SeedPlan | None = None,
-    include_mention: bool = True,
+    include_nearby: bool = True,
     budget_tokens: int = SEED_TOKENS,
 ) -> evidence.SeedPlan:
     """Build the seed of an image run.
 
-    ``with_text``'s passages (the paragraph the reader selected with the figure) come first, then
-    the caption, the first mention and the nearby blocks, each capped, datamarked and labelled for
-    what it is. The caption always goes; the rest only while the budget (marked tokens, like every
-    seed) allows. ``include_mention`` false is the board's ``paper: off``: the figure and its own
-    caption, no paragraph of the paper.
+    THE CAPTION AND THE FIRST MENTION ARE ALWAYS SENT, as text (#348's 19 Nov comment: the model
+    reads small text in the crop wrong, so these two are what its names, numbers and claims rest
+    on). They are reserved FIRST, each capped (``CAPTION_CHARS``, ``MENTION_CHARS``), and the
+    budget (marked tokens, like every seed) that is left is what the rest may spend, in this order
+    of precedence:
+
+    1. ``with_text``'s passages (the paragraph the reader selected with the figure), which are
+       TRIMMED to what is left (a passage is cut to fit, and dropped only when nothing of it fits),
+       never the caption or the mention. A selected passage that IS the caption or the mention
+       is that reserved passage, in the selection's place (first).
+    2. the nearby blocks of a region in no float (``include_nearby``), each whole or not at all.
+
+    The passages come out in reading-of-the-seed order: the selection, the caption, the mention,
+    the nearby blocks. ``include_nearby`` false is the board's ``paper: off``, which still keeps
+    the caption and the first mention: they describe the image itself (the figure's own words
+    and the sentence that introduces it), which is what a crop alone cannot carry, so ``paper: off``
+    drops only the paper's words that are NEXT to a region, not these two.
     """
     cost = evidence.marked_cost(datamark)
-    passages: list[tuple[str, str, str]] = []
-    total = 0
-    if with_text is not None:
-        passages.extend(with_text.passages)
-        total += with_text.total_tokens
-    taken = {block for block, _label, _text in passages}
-    plan: list[tuple[str, str, int]] = []
-    if context.caption_id is not None:
-        plan.append((context.caption_id, "the figure's caption", CAPTION_CHARS))
-    if include_mention and context.mention_id is not None:
-        plan.append(
-            (context.mention_id, "where the paper first mentions the figure", MENTION_CHARS)
-        )
-    if include_mention:
-        plan.extend((b, "text next to the figure", NEARBY_CHARS) for b in context.nearby_ids)
-    for position, (block_id, what, limit) in enumerate(plan):
+
+    def prepared(block_id: str, what: str, limit: int) -> tuple[str, str, str, int] | None:
         block = index.block(block_id)
-        if block is None or block_id in taken:
-            continue
+        if block is None:
+            return None
         own = (
             context.caption_text
             if block_id == context.caption_id and what.endswith("caption")
             else None
         )
         text = cut(own if own is not None else block.text, limit)
-        spend = cost(text)
-        if position > 0 and total + spend > budget_tokens:
-            continue
         label = f"{evidence.passage_label(index, block_id)} · {what}"
-        passages.append((block_id, label, datamark_text(text, datamark=datamark)))
-        taken.add(block_id)
-        total += spend
+        return block_id, label, datamark_text(text, datamark=datamark), cost(text)
+
+    reserved: list[tuple[str, str, str, int]] = []
+    for block_id, what, limit in (
+        (context.caption_id, "the figure's caption", CAPTION_CHARS),
+        (context.mention_id, "where the paper first mentions the figure", MENTION_CHARS),
+    ):
+        if block_id is not None and (item := prepared(block_id, what, limit)) is not None:
+            reserved.append(item)
+    reserved_ids = {item[0] for item in reserved}
+    left = max(0, budget_tokens - sum(item[3] for item in reserved))
+
+    first: list[tuple[str, str, str, int]] = []
+    placed: set[str] = set()
+    if with_text is not None:
+        for block_id, label, text in with_text.passages:
+            if block_id in reserved_ids:  # the selection names the caption or the mention
+                first.extend(item for item in reserved if item[0] == block_id)
+                placed.add(block_id)
+                continue
+            spend = DEFAULT_TOKEN_ESTIMATOR.estimate(text)
+            if spend > left:  # trim the selection: cut its words until the rest of the budget holds
+                block = index.block(block_id)
+                limit = left * 4
+                raw = block.text if block is not None else ""
+                while limit >= 120 and cost(cut(raw, limit)) > left:
+                    limit = int(limit * 0.8)
+                if block is None or limit < 120:
+                    continue
+                trimmed = cut(raw, limit)
+                text, spend = datamark_text(trimmed, datamark=datamark), cost(trimmed)
+            first.append((block_id, label, text, spend))
+            left -= spend
+    chosen = first + [item for item in reserved if item[0] not in placed]
+
+    if include_nearby:
+        taken = {item[0] for item in chosen}
+        for block_id in context.nearby_ids:
+            if block_id in taken:
+                continue
+            item = prepared(block_id, "text next to the figure", NEARBY_CHARS)
+            if item is not None and item[3] <= left:
+                chosen.append(item)
+                taken.add(block_id)
+                left -= item[3]
+
+    passages = tuple((block_id, label, text) for block_id, label, text, _spend in chosen)
     anchor_block = context.float_id or (passages[0][0] if passages else None)
     section = evidence.section_title(index, anchor_block) if anchor_block is not None else None
     return evidence.SeedPlan(
@@ -362,8 +403,8 @@ def plan_image_seed(
         quote=with_text.quote if with_text is not None else "",
         page_label=f"p. {evidence.page_label(context.page_index)}",
         section=section,
-        passages=tuple(passages),
-        total_tokens=total,
+        passages=passages,
+        total_tokens=sum(spend for _b, _l, _t, spend in chosen),
     )
 
 
