@@ -42,7 +42,7 @@
  * still equals the deltas; and only `get_passage` / `get_section` run (another tool is refused,
  * not counted, with no `status`).
  */
-import type { AssistantMessage, Model } from '@earendil-works/pi-ai';
+import type { AssistantMessage, ImageContent, Model } from '@earendil-works/pi-ai';
 import type {
   AgentSessionEvent,
   ModelRuntime,
@@ -430,6 +430,7 @@ class Run {
     if (this.agentStarts !== 1 || this.request.history !== null) return undefined;
     if (this.request.kind === 'explain' || this.request.kind === 'diagram')
       return 'Reading the selected passage';
+    if (this.request.kind === 'image') return 'Looking at the figure and its caption';
     if (this.request.kind === 'summary') return "Reading the paper's key passages";
     if (this.request.kind === 'topic') return 'Reading the title and abstract';
     return undefined;
@@ -655,7 +656,7 @@ class Run {
       if (stop.aborted) onStop();
       if (this.hostReason === null) {
         this.resetIdle();
-        const prompted = this.paper.prompt(userText(request));
+        const prompted = this.paper.prompt(userText(request), this.pictures());
         // If the session never settles after an abort, the race below returns without it; the
         // late rejection (if any) must not become an unhandled one.
         prompted.catch(() => undefined);
@@ -748,17 +749,31 @@ class Run {
   }
 
   /**
-   * `final_text`: an explain or ask answer has its ```diagram and ```check fences tidied (answer.ts);
-   * every other kind is exactly what streamed.
+   * `final_text`: an explain, ask or image answer has its ```diagram and ```check fences tidied
+   * (answer.ts); every other kind is exactly what streamed.
    */
   private tidied(): string {
     const kind = this.request.kind;
-    if (kind !== 'explain' && kind !== 'ask') return this.finalText;
+    if (kind !== 'explain' && kind !== 'ask' && kind !== 'image') return this.finalText;
     return tidyAnswer(
       this.finalText,
       this.request.check === true,
       this.request.diagram !== 'never',
     );
+  }
+
+  /**
+   * The pictures of this run as the model's input: the request's `images` for an `image` run and
+   * nothing for any other kind (the contract refuses `images` on them). Whether the model may be
+   * shown them is the session's hard guard (`PaperSession.prompt`), checked on every prompt.
+   */
+  private pictures(): ImageContent[] {
+    if (this.request.kind !== 'image') return [];
+    return (this.request.images ?? []).map((image) => ({
+      type: 'image',
+      data: image.data_base64,
+      mimeType: image.media_type,
+    }));
   }
 
   private done(promptError: unknown): DoneData {
