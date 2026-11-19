@@ -194,6 +194,9 @@ function topicRules(request: RunRequest): string {
   ].join('\n');
 }
 
+/** One block of the sheet's example: its words and the handle it cites. */
+const exampleBlock = (text: string): string => `{"text":"${text}","cite":"b2"}`;
+
 /**
  * How the sheet is written (v0.3 #337, V3-AI-NOTES §5): ONE JSON object and no tools. The caps are
  * `glance.ts`'s (the API checks the same ones). The model cites by the digest's handles, which the
@@ -201,7 +204,6 @@ function topicRules(request: RunRequest): string {
  * paper on purpose: its words must not be copied.
  */
 function glanceRules(request: RunRequest): string {
-  const block = (text: string): string => `{"text":"${text}","cite":"b2"}`;
   return [
     'How to write it:',
     '- Write ONE JSON object and nothing else: no prose, no Markdown, no code fence, no line breaks ' +
@@ -235,12 +237,12 @@ function glanceRules(request: RunRequest): string {
     '- No tool is available. Answer from the digest.',
     'An example of the shape, from another paper (never copy its words):',
     '{"gist":"Let each word look at every other word at once, so a translator needs no recurrence.",' +
-      `"problem":${block('Recurrent models read one word at a time, so training cannot run in parallel.')},` +
-      `"idea":${block('Drop recurrence. Let stacked self-attention relate all positions directly.')},` +
-      `"how":${block('An encoder and a decoder of six layers each, built from attention and small feed-forward nets.')},` +
+      `"problem":${exampleBlock('Recurrent models read one word at a time, so training cannot run in parallel.')},` +
+      `"idea":${exampleBlock('Drop recurrence. Let stacked self-attention relate all positions directly.')},` +
+      `"how":${exampleBlock('An encoder and a decoder of six layers each, built from attention and small feed-forward nets.')},` +
       '"results":{"numbers":[{"value":"28.4","measures":"BLEU, English-German"},{"value":"41.8","measures":"BLEU, English-French"}],' +
       '"note":"Trained in 3.5 days on eight GPUs.","cite":"b5"},' +
-      `"limits":${block('Cost grows with the square of the sequence length.')},` +
+      `"limits":${exampleBlock('Cost grows with the square of the sequence length.')},` +
       '"read_first":"§3 and Figure 1, then §4; skip the references on a first read.",' +
       '"words":[{"term":"self-attention","gloss":"each position weighs every other position"},' +
       '{"term":"encoder","gloss":"reads the input into a representation"},' +
