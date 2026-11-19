@@ -37,8 +37,11 @@ from papertree_retrieval.index import PaperIndex
 
 __all__ = ["SEED_BUDGET_TOKENS", "Seed", "SeedPassage", "build_seed"]
 
-#: contracts.md §3.2: "under a budget of <= 3,000 estimated tokens".
-SEED_BUDGET_TOKENS: Final = 3_000
+#: contracts.md §3.2 (dated note 2026-11-20): "under a budget of <= 1,500 estimated tokens".
+#: It was 3,000 while every word carried a datamark, which roughly doubled the estimate, so 3,000
+#: bought about five passages. With boundary marks the same five passages cost ~1,300, and keeping
+#: 3,000 would have spent the saving on six more passages instead of on latency (#339).
+SEED_BUDGET_TOKENS: Final = 1_500
 
 #: How much text before the focus a trimmed selected block keeps, so the model reads the sentence
 #: with its lead-in rather than starting mid-word at the quote.

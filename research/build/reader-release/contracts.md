@@ -683,7 +683,7 @@ Headers: `X-PaperTree-Agent-Secret`, `X-Request-Id`, `Content-Type: application/
 
   *Dated note, 2026-10-15 (W2API item 6):* the summary's `idle_ms` was 20 s. One of the v0.1 panel's eight live summaries (two running at once) ended `timeout` at 20.15 s with no token: MiniMax-M3 was thinking over the digest before its first text. It is now 45 s; the 90 s deadline is unchanged and still bounds the run, so a model that never speaks still ends `timeout`. The API's read timeout follows (`idle_ms + 5 s`). Explain and ask keep 20 s: their first-text latencies in the panel were 5-15 s.
 
-- The seed passages are the selected blocks, expanded by `packages/retrieval`'s structure-aware expansion under a budget of **≤ 3,000 estimated tokens**. The exact selected text goes first. This fixes the baseline answer that opened with the title and authors.
+- The seed passages are the selected blocks, expanded by `packages/retrieval`'s structure-aware expansion under a budget of **≤ 3,000 estimated tokens**. The exact selected text goes first. *Dated note, 2026-11-20 (#339):* the budget is now **≤ 1,500**. The 3,000 figure was measured on per-word datamarked text; with boundary marks the same passages cost about half, and the saving goes to latency rather than to more passages. This fixes the baseline answer that opened with the title and authors.
 
 Response: `200 text/event-stream`, with events from `contracts/agent/run-events.schema.json`:
 
