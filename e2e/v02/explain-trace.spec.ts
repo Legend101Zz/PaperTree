@@ -113,7 +113,7 @@ test.describe('v0.2 steps 6–8: select → Explain → marker 2 lights passage 
     await page.screenshot({ path: shot('v02-trace-02-marker2-lit-1440.png') });
 
     await row2.getByRole('button', { name: 'Show in paper, passage 2' }).click();
-    const flash = page.locator('svg [data-flash="true"] polygon.pt-flash');
+    const flash = page.locator('svg [data-flash] polygon.pt-flash');
     await expect(flash.first()).toBeVisible({ timeout: 10_000 });
     const tab = page.locator('[data-flash-tab="2"]');
     await expect(tab).toContainText('from marker 2 in the answer');

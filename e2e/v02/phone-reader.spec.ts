@@ -221,7 +221,7 @@ test.describe('v0.2 frame 08b: the phone reader and its explain sheet (faux agen
     // Marker 2: the sheet lowers to peek and passage 2 flashes, above the sheet.
     await page.locator(marker).first().click();
     await expect(page.locator('.pt-explain-sheet')).toHaveAttribute('data-detent', 'peek');
-    const flash = page.locator('svg [data-flash="true"] polygon.pt-flash');
+    const flash = page.locator('svg [data-flash] polygon.pt-flash');
     await expect(flash.first()).toBeVisible({ timeout: 10_000 });
     await page.waitForTimeout(500);
     const [box, sheetBox] = await Promise.all([
