@@ -10,6 +10,7 @@ import { NumberedMarker, formatPageLabel } from '@papertree/ui';
 import { Fragment } from 'react';
 
 import { dehyphenate, parseMarkdown } from '@/lib/markdown';
+import { Maths } from '@/lib/math';
 
 import { handlesIn } from '../model/exchange';
 
@@ -73,6 +74,8 @@ function Inlines({
         );
       case 'code':
         return <code key={i}>{node.v}</code>;
+      case 'math':
+        return <Maths key={i} tex={node.tex} display={node.display} />;
       case 'cite': {
         const seen = new Set<number>();
         const markers = node.markers.flatMap((handle) => {
@@ -108,6 +111,8 @@ export function AnswerProse(props: AnswerProseProps): ReactNode {
   const blocks = parseMarkdown(dehyphenate(props.text));
   return blocks.map((block, i) => {
     switch (block.k) {
+      case 'dm':
+        return <Maths key={i} tex={block.tex} display />;
       case 'p':
         return (
           <Fragment key={i}>

@@ -8,6 +8,8 @@
  */
 import { useId, type ReactNode } from 'react';
 
+import { mathToPlain } from '@/lib/markdown';
+
 import { cut, fitLabel } from '../model/fit';
 import { GRID, type PlateLayout, type Route, type Slot } from '../model/layout';
 import { verdictOf } from '../model/plate';
@@ -36,7 +38,7 @@ function Arrow({ route }: { route: Route }): ReactNode {
       {/* A label with no room for three letters is left to the key, never set across a line. */}
       {route.label === null || route.labelRoom < 22 ? null : (
         <text x={route.labelAt[0]} y={route.labelAt[1] + 5} textAnchor="start">
-          {cut(route.label, route.labelRoom, 13)}
+          {cut(mathToPlain(route.label), route.labelRoom, 13)}
         </text>
       )}
     </g>
@@ -92,7 +94,7 @@ function PartBox({ slot, part, n, lit, hatch, onPart }: PartBoxProps): ReactNode
   // Only a cited part stands on the page: the others are drawn lighter, never more solid (S3).
   const caption = CAPTION[verdict];
   const { x, y, w, h } = slot;
-  const label = fitLabel(part.label, w - 20, caption === undefined ? 2 : 1);
+  const label = fitLabel(mathToPlain(part.label), w - 20, caption === undefined ? 2 : 1);
   const two = label.lines.length === 2;
   return (
     <g

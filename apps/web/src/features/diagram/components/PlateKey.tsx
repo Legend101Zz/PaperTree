@@ -11,6 +11,8 @@ import { PageTab, PaperText } from '@papertree/ui';
 import { type ReactNode } from 'react';
 
 import { cleanQuote } from '@/features/explain/model/anchor';
+import { mathToPlain } from '@/lib/markdown';
+import { MathText } from '@/lib/MathText';
 
 import { INFERRED_WORDS, tabOf, verdictOf } from '../model/plate';
 
@@ -32,7 +34,7 @@ export interface PlateKeyProps {
 }
 
 const edgeWords = (letter: string, label: string | null): string =>
-  label === null ? letter : `${letter} (${label})`;
+  label === null ? letter : `${letter} (${mathToPlain(label)})`;
 
 const listed = (words: readonly string[]): string =>
   words.length < 2 ? words.join('') : `${words.slice(0, -1).join(', ')} and ${words.at(-1) ?? ''}`;
@@ -71,7 +73,7 @@ function Evidence({ part }: { part: DiagramPart }): ReactNode {
         <span className="pt-plate-key__caption">{INFERRED_WORDS}</span>
         <span className="pt-sr-only">. The AI&apos;s own line: </span>
         <span className="pt-plate-key__ai" data-voice="ai">
-          {part.text}
+          <MathText text={part.text} />
         </span>
       </>
     );
@@ -142,7 +144,7 @@ function KeyRow({
         <span className="pt-plate-key__body">
           <span className="pt-plate-key__head">
             <span className="pt-plate-key__label" data-voice="ai">
-              {part.label}
+              <MathText text={part.label} />
             </span>
             {n === null ? null : <span className="pt-sr-only">. Passage {n}, </span>}
             {/* Marker and tab wrap as one, so a long label never splits them. */}

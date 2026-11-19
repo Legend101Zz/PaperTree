@@ -3,6 +3,8 @@
  * sheet shows before "Read the whole answer", and which answer's usage and actions the pinned
  * footer carries. The 44 px marker target is `hitOutset` in `@papertree/ui` (the marker draws it).
  */
+import { endsInsideMath } from '@/lib/markdown';
+
 import type { AnswerModel, AnswerParagraph } from './answer';
 
 /** What the sheet shows of one answer. */
@@ -32,9 +34,30 @@ export function clipAnswer(
 ): AnswerClip {
   const whole = { body: model.body, uncited: model.uncited, clipped: false };
   if (expanded || model.body.length + model.uncited.length <= 1) return whole;
-  return model.body.length > 0
-    ? { body: model.body.slice(0, 1), uncited: [], clipped: true }
-    : { body: [], uncited: model.uncited.slice(0, 1), clipped: true };
+  const cited = model.body.length > 0;
+  const paragraphs = cited ? model.body : model.uncited;
+  const shown = firstWhole(paragraphs);
+  // The fold never lands inside an equation: a paragraph that ends in maths still open (a `$$`
+  // display split by a blank line) takes the paragraphs up to the one that closes it.
+  const clipped = shown < paragraphs.length || (cited && model.uncited.length > 0);
+  return cited
+    ? { body: paragraphs.slice(0, shown), uncited: [], clipped }
+    : { body: [], uncited: paragraphs.slice(0, shown), clipped };
+}
+
+/**
+ * How many leading paragraphs make one whole first paragraph (more than one only to close maths).
+ *
+ * @param paragraphs The paragraphs of the body, or of the uncited run.
+ * @returns A count from 1 up.
+ */
+function firstWhole(paragraphs: readonly AnswerParagraph[]): number {
+  let open = '';
+  for (let n = 1; n <= paragraphs.length; n += 1) {
+    open = `${open}${open === '' ? '' : '\n\n'}${paragraphs[n - 1]?.text ?? ''}`;
+    if (!endsInsideMath(open)) return n;
+  }
+  return paragraphs.length;
 }
 
 /**
