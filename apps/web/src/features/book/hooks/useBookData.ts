@@ -31,7 +31,7 @@ export const NAME_DECLINED_PREFIX = 'papertree/book/name-declined/';
  * `partial`), not the library row's looser `has_summary` (#200 review S4).
  *
  * @param paperId - The paper.
- * @param enabled - False until the spread is shown (the pull-out needs none of them).
+ * @param enabled - False until the spread is shown (the flight off the shelf needs none of them).
  * @returns The three queries.
  */
 export function useBookFacts(paperId: string, enabled: boolean) {

@@ -1,7 +1,6 @@
 /*
- * book.css: the pulled-out and opened book (#200, frames 02a and 02; measurements from their
- * mock-ups). Tokens only (`--pt-*` from packages/ui and the library's furniture). The bookplate,
- * the plate and the right page stay paper in both schemes, as DESIGN.md §1 says paper does by
+ * book.css: the book taken off the shelf and opened (#200, frame 02; v0.3 R4 prototype). Tokens
+ * only (`--pt-*` from packages/ui and the library's furniture). The bookplate, the plate and the right page stay paper in both schemes, as DESIGN.md §1 says paper does by
  * lamplight. Motion is WAAPI (`model/motion.ts`); nothing here transitions on its own.
  */
 
@@ -28,7 +27,7 @@
 /* The slot the book left: a shadowed gap in the row (DESIGN.md §1, frame 02a). `!important`
    because the spine's cloth is an inline style. */
 .pt-spine[data-pulled='true'],
-.pt-cover[data-pulled='true'] {
+.pt-flatbook[data-pulled='true'] {
   background: linear-gradient(
     90deg,
     rgb(30 18 8 / 72%),
@@ -42,33 +41,51 @@
 }
 
 .pt-spine[data-pulled='true'] > *,
-.pt-cover[data-pulled='true'] > * {
+.pt-flatbook[data-pulled='true'] > * {
   visibility: hidden;
 }
 
-/* ── stage 1: pulled out (02a) ────────────────────────────────────────────────────────────── */
+/* ── the book on its way out of the row, and back ────────────────────────────────────────── */
 
-.pt-book__pulled {
+.pt-book:focus {
+  outline: none; /* the dialog holds focus only until Read takes it; it is not a control */
+}
+
+.pt-book__stage {
   position: relative;
-  display: flex;
-  flex-direction: column;
-  gap: 40px;
-  align-items: center;
 }
 
-.pt-book__coverbutton {
-  padding: 0;
-  cursor: pointer;
-  background: none;
-  border: 0;
-  border-radius: 2px 5px 5px 2px;
-  transform: perspective(1600px) rotateY(16deg) rotateZ(-1deg);
-  transform-style: preserve-3d;
+/* The cover that flies in from the spine and swings open: the right page's size, hinged at the
+   gutter, drawn only while the book moves. Its back is never seen (the endpaper is the left page). */
+.pt-book__flyer {
+  position: absolute;
+  inset-block: 14px;
+  inset-inline: 50% 14px;
+  pointer-events: none;
+  backface-visibility: hidden;
+  transform-origin: 0 50%;
 }
 
-.pt-book__coverbutton:focus-visible {
-  outline: var(--pt-focus-width) solid var(--pt-focus);
-  outline-offset: 6px;
+.pt-book__flyer .pt-bookcover {
+  inline-size: 100%;
+  block-size: 100%;
+  border-radius: 0 5px 5px 0;
+}
+
+/* The spine's own cloth, lifting out of its slot and turning away (the gap it leaves is the
+   shelf's `data-pulled`). Positioned over the spine by the box the shelf measured. */
+.pt-book__slab {
+  position: fixed;
+  pointer-events: none;
+  background-image: linear-gradient(
+    90deg,
+    rgb(0 0 0 / 30%),
+    rgb(255 255 255 / 6%) 40%,
+    rgb(0 0 0 / 34%)
+  );
+  background-blend-mode: normal;
+  border-radius: 2px 2px 0 0;
+  transform-origin: 100% 50%;
 }
 
 .pt-bookcover {
@@ -186,49 +203,7 @@
   color: var(--pt-paper-label-ink);
 }
 
-.pt-book__slip {
-  display: flex;
-  gap: 16px;
-  align-items: center;
-  inline-size: min(500px, calc(100vw - 32px));
-  padding: 12px 16px;
-  font-size: 15px;
-  background: var(--pt-page);
-  border: 1px solid var(--pt-card-edge, #cfc6b6);
-  border-radius: var(--pt-radius-paper);
-  box-shadow: var(--pt-e2);
-}
-
-.pt-book__sliptitle {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  gap: 2px;
-  margin: 0;
-}
-
-.pt-book__sliptitle b {
-  font-family: var(--pt-font-paper);
-  font-size: 15px;
-}
-
-.pt-book__sliptitle span,
-.pt-book__key {
-  font-size: 14px;
-  color: var(--pt-ink-2);
-}
-
-.pt-book__key {
-  display: inline-flex;
-  gap: 6px;
-  align-items: center;
-  min-block-size: 44px;
-  padding: 0 4px;
-  background: none;
-  border: 0;
-}
-
-/* ── stage 2: the spread (02) ─────────────────────────────────────────────────────────────── */
+/* ── the spread (02) ─────────────────────────────────────────────────────────────── */
 
 .pt-spread {
   position: relative;
@@ -750,7 +725,8 @@
     font-size: 28px;
   }
 
-  .pt-book__slip {
-    flex-wrap: wrap;
+  /* One column: the cover that swings open covers the whole page, not the right half. */
+  .pt-book__flyer {
+    inset-inline: 10px;
   }
 }
