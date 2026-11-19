@@ -133,7 +133,7 @@ test.describe('Journey D: the canvas', () => {
 
     // ── 3. open the canvas from the toast's link: exactly 2 nodes ──
     await page.getByRole('link', { name: 'Show' }).click(); // the passage's toast (#203, #346)
-    await expect(page).toHaveURL(new RegExp(`/paper/${paperId}/board$`));
+    await expect(page).toHaveURL(new RegExp(`/paper/${paperId}/board(\\?card=cn_[\\w-]+)?$`));
     await expect(page.locator('.react-flow__node')).toHaveCount(2);
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(1440);
     await expect(

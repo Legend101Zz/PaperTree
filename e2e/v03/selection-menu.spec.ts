@@ -16,7 +16,7 @@ import { join } from 'node:path';
 import type { Page } from '@playwright/test';
 
 import { expect, test } from '../harness/test';
-import { drag, pointsFor, REPO, reveal, SCROLLER } from '../s4/support';
+import { drag, pointsFor, readingControls, REPO, reveal, SCROLLER } from '../s4/support';
 import { openReader } from '../rfix/support';
 
 const PDF = join(REPO, 'research', 'benchmarks', 'corpus', 'attention-is-all-you-need.pdf');
@@ -156,7 +156,10 @@ test.describe('v0.3 #346 - the selection menu and the selection paint', () => {
       { width: 760, height: 900 },
       'sel-dock',
     );
-    await page.getByLabel('Zoom level').selectOption('fit-width');
+    // 760 px is the phone layout (below 768): the zoom lives in the header's Reading options menu.
+    await readingControls(page, (controls) =>
+      controls.getByLabel('Zoom level').selectOption('fit-width'),
+    );
     await page.waitForTimeout(1500);
     await selectAbstract(page);
     const bar = page.locator(BAR);
