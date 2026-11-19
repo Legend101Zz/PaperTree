@@ -787,25 +787,8 @@ class RunBroker:
 
         handles = db.run_handles(owner, spec.run_id)
         document = self.documents.get(db, owner, spec.user_id, spec.paper_id, spec.generation)
-        try:
-            index = evidence.load_index(
-                self.index_cache, db, owner, spec.user_id, spec.paper_id, spec.generation
-            )
-            texts = {
-                block_id: block.text
-                for block_id in handles.values()
-                if (block := index.block(block_id)) is not None
-            }
-            vocabulary = evidence.vocabulary_of(index)
-        except KeyError:
-            texts, vocabulary = {}, None
         minter = evidence.CitationMinter(
-            run_id=spec.run_id,
-            handles=handles,
-            document=document,
-            texts=texts,
-            new_id=new_id,
-            paper=vocabulary,
+            run_id=spec.run_id, handles=handles, document=document, new_id=new_id
         )
         summary: dict[str, Any] | None = None
         derived_from: list[str] = []
@@ -835,7 +818,6 @@ class RunBroker:
                     {
                         "text": b.text,
                         "citations": [c.wire() for c in b.citations],
-                        "supported": b.supported,
                     }
                     for b in bullets
                 ],
@@ -883,7 +865,6 @@ class RunBroker:
                             generation=spec.generation,
                             block_id=c.block_id,
                             page_index=c.page_index,
-                            supported=c.supported,
                         )
                         for c in citations
                     ],

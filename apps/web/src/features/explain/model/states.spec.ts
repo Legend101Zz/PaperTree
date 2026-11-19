@@ -1,6 +1,6 @@
 /**
- * #204's pure parts: live markers while an answer streams (partial `[b` never shows, a handle the
- * thread knows resolves at once, an unknown one draws nothing), the Stop note and its no-text rule,
+ * #204's pure parts: live sources while an answer streams (partial `[b` never shows, a handle the
+ * thread knows resolves to its page at once, an unknown one gives none), the Stop note and its no-text rule,
  * the daily-cap figures and usage rows, and the folded earlier answer. The thread is the golden
  * Attention thread (frame 04's real stored thread).
  */
@@ -9,7 +9,6 @@ import { describe, expect, it } from 'vitest';
 import { buildExchanges } from './exchange';
 import {
   budgetFigures,
-  foldedCounts,
   foldedPreview,
   formatUsd,
   opensFolded,
@@ -38,7 +37,6 @@ function liveFollowUp(text: string, over: Partial<ThreadMessage> = {}): ThreadMe
       text,
       status: 'streaming',
       citations: [],
-      coverage: null,
       usage: null,
       ...over,
     },
@@ -50,42 +48,37 @@ function live(text: string) {
   return exchanges[2]?.model;
 }
 
-describe('live markers while an answer streams (#204)', () => {
-  it('a handle the thread already resolved draws its passage number and final tab at once', () => {
+describe('live sources while an answer streams (#204, #340)', () => {
+  it('a handle the thread already resolved gives its page at once', () => {
     const model = live('Recurrence is sequential [b6]. And');
     expect(model?.live).toBe(true);
-    expect(model?.handleNumbers.get('b6')).toBe(2);
-    const marker = model?.body[0]?.markers[0];
-    expect(marker).toMatchObject({ n: 2, page: 2, para: 2, notVerified: false });
-    // The verdict is this claim's, not the earlier answer's: unknown until its own citations land.
-    expect(marker?.citation.supported).toBeNull();
-    expect(model?.trace).toEqual([]);
+    const [source] = model?.paragraphs[0]?.sources ?? [];
+    expect(source).toMatchObject({ page: 2 });
+    expect(source?.citation.marker).toBe('b6');
   });
 
   it('a partial handle at the end of a chunk is dropped, never shown raw', () => {
     for (const tail of ['[', '[b', '[b6', '[b6, b', '[b6, b8']) {
       const model = live(`Recurrence is sequential ${tail}`);
-      expect(model?.body[0]?.text).toBe('Recurrence is sequential');
-      expect(model?.body[0]?.markers).toEqual([]);
+      expect(model?.paragraphs[0]?.text).toBe('Recurrence is sequential');
+      expect(model?.paragraphs[0]?.sources).toEqual([]);
     }
   });
 
-  it('a handle nobody resolved yet draws nothing until its citation arrives', () => {
+  it('a handle nobody resolved yet gives no page until its citation arrives', () => {
     const model = live('A new claim [b9].');
-    expect(model?.handleNumbers.has('b9')).toBe(false);
-    expect(model?.body[0]?.markers).toEqual([]);
-    expect(model?.body[0]?.cited).toBe(true); // nothing is classed uncited while it streams
+    expect(model?.live).toBe(true); // so no "General knowledge" is said yet
+    expect(model?.paragraphs[0]?.sources).toEqual([]);
   });
 
-  it("the answer's own citations, once they arrive, keep the same number", () => {
+  it("the answer's own citations, once they arrive, give the same page", () => {
     const own = { ...(GOLDEN.messages[3]?.citations[0] as ThreadMessage['citations'][number]) };
     const { locator: _locator, ...bare } = own; // a live citation carries no locator
     const exchanges = buildExchanges(
       liveFollowUp('Recurrence is sequential [b6].', { citations: [bare], generation: 1 }),
       originOf(GOLDEN.thread),
     );
-    expect(exchanges[2]?.model?.handleNumbers.get('b6')).toBe(2);
-    expect(exchanges[2]?.model?.body[0]?.markers[0]).toMatchObject({ n: 2, page: 2, para: 2 });
+    expect(exchanges[2]?.model?.paragraphs[0]?.sources.map((s) => s.page)).toEqual([2]);
   });
 });
 
@@ -93,23 +86,17 @@ describe('after Stop, before the stored copy lands (#204)', () => {
   const text =
     'Recurrence is sequential [b6].\n\nSo training is slow [b6, b1].\n\nA new claim [b9]. And [b';
 
-  it('the markers shown live stay; a claim citing an unseen handle is held, not shown uncited', () => {
+  it('the pages shown live stay; a claim citing an unseen handle waits, not called general', () => {
     const messages = liveFollowUp(text, { status: 'aborted', stopped: true, awaitingStored: true });
     const model = buildExchanges(messages, originOf(GOLDEN.thread))[2]?.model;
-    // Held as while streaming: nothing classed uncited, no trace or readout to move later.
+    // Held as while streaming: nothing is called "General knowledge" and then changed.
     expect(model?.live).toBe(true);
-    expect(model?.body.map((p) => [p.markers.map((m) => m.n), p.cited])).toEqual([
-      [[2], true],
-      [[2, 1], true],
-      [[], true],
-    ]);
-    expect(model?.uncited).toEqual([]);
-    expect(model?.trace).toEqual([]);
+    expect(model?.paragraphs.map((p) => p.sources.map((s) => s.page))).toEqual([[2], [1, 2], []]);
     // The cut-off run at the end never reaches the screen as text.
-    expect(model?.body.at(-1)?.text).toBe('A new claim [b9]. And');
+    expect(model?.paragraphs.at(-1)?.text).toBe('A new claim [b9]. And');
   });
 
-  it('once the stored copy lands with its citations, the trace stands on what arrived', () => {
+  it('once the stored copy lands with its citations, the pages stand on what arrived', () => {
     const golden = GOLDEN.messages[3]?.citations ?? [];
     const own = ['b6', 'b1'].map((h) => golden.find((c) => c.marker === h)).flatMap((c) => c ?? []);
     const messages = liveFollowUp(text, {
@@ -121,12 +108,7 @@ describe('after Stop, before the stored copy lands (#204)', () => {
     });
     const model = buildExchanges(messages, originOf(GOLDEN.thread))[2]?.model;
     expect(model?.live).toBe(false);
-    expect(model?.body.map((p) => p.markers.map((m) => m.n))).toEqual([[2], [2, 1]]);
-    expect(model?.uncited.map((p) => p.text)).toEqual(['A new claim [b9]. And']);
-    expect(model?.trace.map((r) => [r.n, r.citedCount])).toEqual([
-      [1, 1],
-      [2, 2],
-    ]);
+    expect(model?.paragraphs.map((p) => p.sources.map((s) => s.page))).toEqual([[2], [1, 2], []]);
   });
 });
 
@@ -230,11 +212,7 @@ describe('a folded earlier answer (#204, frame 04c)', () => {
     expect([0, 1, 2, 3].map((i) => opensFolded(i, 4))).toEqual([true, true, false, false]);
   });
 
-  it('shows its counts from data and its first paragraph as plain words', () => {
-    const first = buildExchanges(goldenMessages(), originOf(GOLDEN.thread))[0]?.model;
-    expect(
-      foldedCounts(first?.coverage ?? { passages: 0, citations: 0, uncitedParagraphs: 0 }),
-    ).toBe("4 passages · 11 citations · 1 paragraph uncited (the AI's own reading)");
+  it('shows its first paragraph as plain words', () => {
     expect(foldedPreview([{ text: 'The **Transformer** drops recurrence [b1, b8].' }])).toBe(
       'The Transformer drops recurrence.',
     );

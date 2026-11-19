@@ -63,7 +63,7 @@ try:
         anchor = capture_citation(doc, c["block_id"], citation_id=cid, at=at)
         cites.append(CitationIn(citation_id=cid, ordinal=c["ordinal"], marker=c["marker"],
                                 anchor=dict(anchor), generation=int(gen), block_id=c["block_id"],
-                                page_index=c["page_index"], supported=c["supported"]))
+                                page_index=c["page_index"]))
     db.update_message(owner, mid, content=stored["content"])
     db.put_citations(owner, mid, cites)
 finally:

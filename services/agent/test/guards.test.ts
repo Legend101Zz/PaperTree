@@ -802,3 +802,53 @@ describe('logs (§8)', () => {
     for (const line of agent.rawLogs) assert.equal((JSON.parse(line) as Json)['service'], 'agent');
   });
 });
+
+const answerWith = (check: string): string =>
+  [
+    '## TL;DR\nIt adds the input back.',
+    '## How it works\nThe block outputs $y = F(x) + x$ [b1].',
+    '```diagram',
+    '{"t":"plate","title":"Block"}',
+    '{"t":"part","label":"Input x","text":"goes in","kind":"input","after":[],"cite":null}',
+    '{"t":"part","label":"Broken","kind":',
+    '{"t":"part","label":"Sum","text":"added back","kind":"output","after":["A"],"cite":null}',
+    '```',
+    check,
+  ].join('\n');
+
+describe('the answer fences in final_text (v0.3, #339)', () => {
+  const CHECK =
+    '```check\nprompt: If $F(x) = 0$ the output is ___.\naccept: x | input\nright: Right.\nhint: Try it.\n```';
+
+  test('a diagram fence is validated line by line, and the check is kept only when asked for', async () => {
+    const text = answerWith(CHECK);
+    const result = await postRun(
+      agent.url,
+      explain([{ text: [text] }], (body) => {
+        body['check'] = true;
+      }),
+    );
+    const d = doneOf(result.events);
+    assert.equal(d['status'], 'complete');
+    assert.match(d['final_text'], /"label":"Input x"/);
+    assert.doesNotMatch(d['final_text'], /Broken/, 'the unreadable line is dropped');
+    assert.match(d['final_text'], /"label":"Sum".*"after":\["A"\]/, 'letters are re-counted');
+    assert.match(d['final_text'], /```check\nprompt: /);
+    assert.deepEqual(d['markers'], ['b1']);
+  });
+
+  test('without check: true a check fence the model wrote is removed', async () => {
+    const result = await postRun(agent.url, explain([{ text: [answerWith(CHECK)] }]));
+    const d = doneOf(result.events);
+    assert.doesNotMatch(d['final_text'], /```check/);
+    assert.match(d['final_text'], /```diagram/);
+  });
+
+  test('an answer that starts with its heading is the answer even when it cites nothing', async () => {
+    const result = await postRun(
+      agent.url,
+      explain([{ toolCalls: [call(1)] }, { text: ['## TL;DR\n', 'Plain words.'] }]),
+    );
+    assert.equal(doneOf(result.events)['final_text'], '## TL;DR\nPlain words.');
+  });
+});

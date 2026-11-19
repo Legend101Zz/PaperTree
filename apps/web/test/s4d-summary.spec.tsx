@@ -1,8 +1,8 @@
 /**
  * #204 (frame 04d) through the real panel: the cached summary of "Attention Is All You Need" (the
  * real stored one, `fixtures/attention-summary.json`) opens as an exchange: your call slip, the AI's
- * bullets with numbered markers and "not verified" tabs, the footer's facts from data, the readout
- * and the trace in the paper's words. `fetch` is the only stub.
+ * bullets each with one quiet source line, and the footer's facts from data (#340, #341: no
+ * readout, no passage list, no verdicts). `fetch` is the only stub.
  */
 import axe from 'axe-core';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
@@ -10,6 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import raw from './fixtures/attention-summary.json';
 import { GOLDEN } from './fixtures/attention-thread';
+import { sourceLines } from './answer-render';
 import { focusAnchor, Harness, stubDesktop } from './s6-harness';
 import { installFetch, jsonResponse, PAPER } from './s6-support';
 
@@ -39,8 +40,8 @@ async function openSummary(): Promise<HTMLElement> {
   return document.querySelector('[data-summary-exchange]') as HTMLElement;
 }
 
-describe('the summary shares the open thread’s passage numbers (review 2.3)', () => {
-  it('golden thread open → Summarize: the Abstract is passage 1, the first new passage is 5', async () => {
+describe('the summary is its own: an open thread changes nothing (#340)', () => {
+  it('golden thread open → Summarize: each bullet lists its own pages', async () => {
     installFetch({
       [`GET /papers/${PAPER}/threads`]: () => jsonResponse(200, [GOLDEN.thread]),
       [`GET /papers/${PAPER}/threads/${GOLDEN.thread.thread_id}`]: () => jsonResponse(200, GOLDEN),
@@ -52,12 +53,12 @@ describe('the summary shares the open thread’s passage numbers (review 2.3)', 
     await waitFor(() => expect(screen.getAllByText(/central proposal/).length).toBeGreaterThan(0));
     fireEvent.click(screen.getByRole('button', { name: 'Summarize paper' }));
     await waitFor(() => expect(document.querySelectorAll('[data-summary-bullet]')).toHaveLength(8));
-    const labels = Array.from(
-      document.querySelectorAll('[data-summary-bullet] [data-citation-id] button'),
-      (m) => m.getAttribute('aria-label'),
-    );
-    // The thread numbered b1 (the Abstract) 1 and its passages up to 4; the summary's new ones follow.
-    expect(labels.slice(0, 3)).toEqual(['Passage 1, p. 1', 'Passage 1, p. 1', 'Passage 5, p. 2']);
+    const exchange = document.querySelector('[data-summary-exchange]') as HTMLElement;
+    expect(sourceLines(exchange).slice(0, 3)).toEqual([
+      'From the paper: p. 1',
+      'From the paper: p. 1',
+      'From the paper: p. 2',
+    ]);
   });
 });
 
@@ -86,7 +87,7 @@ describe('Retry after a failed "Summarise again" (review 2.2)', () => {
 });
 
 describe('the summary as an exchange (04d)', () => {
-  it('your slip, the AI’s bullets, the paper’s words: three voices apart', async () => {
+  it('your slip, the AI’s bullets: the voices apart, and no passage list', async () => {
     const exchange = await openSummary();
     const slip = within(exchange).getByRole('group', { name: 'Your question' });
     expect(slip.querySelector('[data-voice="you"]')?.textContent).toBe(
@@ -96,63 +97,50 @@ describe('the summary as an exchange (04d)', () => {
     expect(slip.querySelector('time')?.getAttribute('datetime')).toBe(raw.summary.created_at);
     const ai = exchange.querySelector('[data-voice="ai"]') as HTMLElement;
     expect(ai.querySelectorAll('[data-summary-bullet]')).toHaveLength(8);
-    expect(ai.querySelector('.pt-ai-slip__source')?.textContent).toBe('M3 · from the paper');
-    const paper = exchange.querySelectorAll('.pt-trace-list [data-voice="paper"]');
-    expect(paper).toHaveLength(7);
-    expect(ai.contains(paper[0] as Node)).toBe(false);
+    expect(ai.querySelector('.pt-ai-slip__source')?.textContent).toBe('M3');
+    expect(exchange.querySelector('.pt-trace-list')).toBeNull();
     expect(document.querySelector('.pt-explain__title')?.textContent).toBe('Summary cached');
   });
 
-  it('numbered markers with "not verified" where the check failed, and the flash says which', async () => {
+  it('one quiet source line per bullet, a page click flashes it, and nothing audits the AI', async () => {
     const exchange = await openSummary();
-    const markers = Array.from(
-      exchange.querySelectorAll('[data-summary-bullet] [data-citation-id] button'),
-    );
-    expect(markers).toHaveLength(11);
-    expect(markers.map((m) => m.getAttribute('aria-label'))).toEqual([
-      'Passage 1, p. 1',
-      'Passage 1, p. 1',
-      'Passage 2, p. 2',
-      'Passage 3, p. 3, not verified',
-      'Passage 4, p. 7, not verified',
-      'Passage 1, p. 1',
-      'Passage 5, p. 8',
-      'Passage 1, p. 1, not verified',
-      'Passage 6, p. 10, not verified',
-      'Passage 7, p. 10',
-      'Passage 6, p. 10',
+    expect(sourceLines(exchange)).toEqual([
+      'From the paper: p. 1',
+      'From the paper: p. 1',
+      'From the paper: p. 2',
+      'From the paper: p. 3',
+      'From the paper: p. 7',
+      'From the paper: p. 1 · p. 8',
+      'From the paper: p. 1 · p. 10',
+      'From the paper: p. 10',
     ]);
-    const unsupported = Array.from(
-      exchange.querySelectorAll('[data-summary-bullet][data-supported="false"]'),
-    );
-    expect(unsupported).toHaveLength(3);
-    for (const bullet of unsupported) {
-      expect(bullet.querySelector('.pt-nv-caption')?.textContent).toBe('not verified');
+    for (const gone of [
+      '.pt-chip',
+      '.pt-marker',
+      '.pt-tab',
+      '.pt-nv-caption',
+      '[data-supported]',
+    ]) {
+      expect(exchange.querySelector(gone), gone).toBeNull();
     }
-    fireEvent.click(markers[3] as Element);
-    expect(focusAnchor.mock.calls[0]?.[1]).toEqual({
-      flash: true,
-      from: { n: 3, page: 3, para: null, notVerified: true },
-    });
+    fireEvent.click(
+      within(exchange).getAllByRole('button', { name: 'Show p. 7 in the paper' })[0]!,
+    );
+    expect(focusAnchor).toHaveBeenCalledTimes(1);
+    expect(focusAnchor.mock.calls[0]?.[1]).toEqual({ flash: true });
     const text = exchange.textContent ?? '';
     expect(text).not.toMatch(/\[b\d+\]|\bblk_|\bmsg_/);
-    expect(text.replace(/not verified/g, '')).not.toMatch(/verified|fact-checked|accurate/i);
+    expect(text).not.toMatch(
+      /Stands on|verified|grounded|fact-checked|accurate|own reading|could not be linked/i,
+    );
   });
 
-  it('the footer’s facts, the readout and the trace come from data; no dead buttons', async () => {
+  it('the footer’s facts come from data; no dead buttons', async () => {
     const exchange = await openSummary();
     expect(exchange.querySelector('[data-summary-footer]')?.textContent).toBe(
       'Cached 15 Oct · no new tokens used · made with M3',
     );
-    expect(exchange.querySelector('[data-summary-readout]')?.textContent).toBe(
-      '¶Stands on 7 passages on 6 pages · 8 bullets · 11 citations · 3 bullets not verified',
-    );
-    const rows = Array.from(
-      exchange.querySelectorAll('.pt-trace-row__where'),
-      (n) => n.textContent,
-    );
-    expect(rows[0]).toBe('Abstract · cited 4× · 1 not verified');
-    expect(rows[3]).toBe('5.1 Training Data and Batching · cited once');
+    expect(exchange.querySelector('.pt-coverage, [data-summary-readout]')).toBeNull();
     expect(within(exchange).getByRole('button', { name: 'Summarise again' })).toBeTruthy();
     // The APIs take a message, not a summary (#258): no button that cannot work.
     expect(within(exchange).queryByRole('button', { name: /Dive in|Send to board/ })).toBeNull();

@@ -6,10 +6,11 @@
  * (`features/explain/components/SummaryExchange`, #204). A new run shows its progress label and Stop.
  */
 import { AiText } from '@papertree/ui';
-import type { ReactNode } from 'react';
 
 import { FailureNote, StatusLine } from '@/features/explain/components/AnswerStates';
-import type { SummaryView as SummaryState } from './useExplainActions';
+
+import type { ReactNode } from 'react';
+import type { SummaryView as SummaryState } from '@/features/explain/model/state';
 
 export interface SummaryViewProps {
   readonly state: SummaryState;

@@ -104,6 +104,14 @@
         { "type": "null" }
       ]
     },
+    "level": {
+      "description": "v0.3 (#339): the reader's level an explain or ask answer is written for: new = new to this, familiar = knows the basics, expert. Optional; absent reads `familiar`. The API sends it on every run; only explain and ask runs use it.",
+      "enum": ["new", "familiar", "expert"]
+    },
+    "check": {
+      "description": "v0.3 (#339): the answer ends with one ```check fence (a fill-in-the-blank). The API decides (contracts.md §2.5: only a `new` answer, once per thread); the agent never decides. Optional; absent reads false. Without it the agent also strips a check fence the model wrote.",
+      "type": "boolean"
+    },
     "limits": {
       "type": "object",
       "required": [

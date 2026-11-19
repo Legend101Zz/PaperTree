@@ -3,7 +3,7 @@
 /**
  * useDiveIn — the explain panel's half of Dive in (S5e, #210, frame 11). One press creates the page
  * through S5a's Dive-in route under a page id DERIVED from the answer (`diveInPageId`), so a second
- * press, or another tab, gets the page already there; the exchange's slips and trace cards lift for
+ * press, or another tab, gets the page already there; the exchange's slips lift for
  * `--pt-dur-quick` meanwhile; then their screen boxes go into a one-shot hand-off and the route
  * changes. The page (`useDiveArrival`) takes the boxes and slides in carrying the cards. Page ids
  * are global keys on the server (S5a's `create_notebook_page` looks the id up per owner, then
@@ -47,12 +47,12 @@ export function readMotion(): DiveMotion {
 
 /**
  * The cards of an exchange that travel, measured where they are on screen now: the call slip, the
- * AI slip, and each numbered passage (a trace row in the panel, a quote card on the page).
+ * AI slip, and each numbered passage (a quote card on the notebook page; the panel has none).
  *
  * @param root - The panel's exchange, or the page.
  * @param passages - The selector of a numbered passage under `root`.
  * @param attrs - The `data-*` attributes that may hold its number, the first present wins (a quote
- *   card's `data-passage`, a trace row's `data-n` on the phone's stack).
+ *   card's `data-passage`).
  * @returns Each card's key, element and box.
  */
 export function cardsIn(
@@ -139,7 +139,9 @@ export function useDiveIn(paperId: string | null): DiveIn {
         exchange?.removeAttribute('data-dive');
         throw error;
       }
-      const cards = exchange === null ? [] : cardsIn(exchange, '.pt-trace-row[data-n]', ['data-n']);
+      // The panel draws no numbered passages any more (#340, #341), so only the two slips travel;
+      // the notebook page's quote cards are placed where they are.
+      const cards = exchange === null ? [] : cardsIn(exchange, '[data-passage]', ['data-passage']);
       diveHandoff.put({
         pageId,
         cards: cards.map(({ key, box }) => ({ key, box })),

@@ -19,7 +19,7 @@ import {
 } from '../api/threads';
 import { opensOnNewest, sortThreads, threadPosition } from '../model/threads';
 
-import type { ExplainController } from '@/components/explain/useExplainActions';
+import type { ExplainController } from '@/features/explain/model/controller';
 import type { Thread } from '@/lib/api/types';
 
 /** Why the panel could not show its thread: the thread is gone, or the read failed. */

@@ -1,8 +1,8 @@
 /**
  * s7b-plate — the engraved plate in the explain panel (#217), driven by RECORDED SSE frames of the
  * faux diagram runs (`fixtures/diagram-plate.ts`) through the real controller, panel and SSE
- * parser: a stored plate reads back, a Redraw builds part by part with its slots fixed, Stop freezes it, a tap flashes the
- * cited passage, an inferred or not-verified part says so in words, and a refused plate is said.
+ * parser: a stored plate reads back, a Redraw builds part by part with its slots fixed, Stop freezes it, a tap
+ * flashes the passage of a part, a part with no passage says so, and a refused plate is said.
  */
 import axe from 'axe-core';
 import { act, cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
@@ -68,7 +68,7 @@ describe('a Redraw builds as the parts stream in', () => {
       expect(box('A', drawing)).toBe(aY);
     }
     expect(within(drawing).getByRole('status').textContent).toContain('Drawing the diagram');
-    expect(drawing.querySelector('[data-plate-readout]')?.textContent).toMatch(/^3 parts so far/);
+    expect(drawing.querySelector('[data-plate-readout]')?.textContent).toBe('3 parts so far');
 
     // Stop: the run is cancelled, the three parts stay, nothing is arriving any more.
     fireEvent.click(within(drawing).getByRole('button', { name: 'Stop' }));
@@ -76,6 +76,9 @@ describe('a Redraw builds as the parts stream in', () => {
     expect(calls.some((c) => c.path === `/runs/${BAD_RUN}/cancel`)).toBe(true);
     expect(keyRows(drawing).map((r) => r.dataset.letter)).toEqual(['A', 'B', 'C']);
     expect(drawing.querySelector('[data-ghost]')).toBeNull();
+    expect(drawing.querySelector('[data-plate-readout]')?.textContent).toBe(
+      '3 parts · drawn by AI from p. 4',
+    );
     expect(within(drawing).queryByRole('button', { name: 'Stop' })).toBeNull();
     expect(box('A', drawing)).toBe(aY);
   });
@@ -98,63 +101,55 @@ describe('a finished plate', () => {
       within(panel).getByRole('group', { name: /^Plate 1, Scaled dot-product attention/ }),
     ).toBeTruthy();
     expect(panel.querySelector('[data-plate-readout]')?.textContent).toBe(
-      '6 parts · 5 cited · drawn by AI from p. 4',
+      '6 parts · drawn by AI from p. 4',
     );
     expect(panel.querySelector('[data-usage-line]')?.textContent).toMatch(/\(estimate\)$/);
-    expect(keyRows().map((r) => r.dataset.verdict)).toEqual([
-      'cited',
-      'cited',
-      'cited',
-      'cited',
-      'cited',
-      'inferred',
+    // No verdict on any part: a quiet page where the part came from a passage, nothing else.
+    expect(
+      keyRows().map((r) => r.querySelector('.pt-plate-key__source')?.textContent ?? null),
+    ).toEqual([
+      'From the paper: p. 4',
+      'From the paper: p. 4',
+      'From the paper: p. 4',
+      'From the paper: p. 4',
+      'From the paper: p. 4',
+      null,
     ]);
+    expect(panel.textContent).not.toMatch(/not verified|inferred|\d+ cited|grounded/i);
+    expect(panel.querySelector('[data-verdict], .pt-plate__mark, .pt-plate__caption')).toBeNull();
   });
 
   it('flashes a part’s passage from its key row and from the drawing', async () => {
     const panel = await finished();
-    fireEvent.click(
-      within(panel).getByRole('button', { name: /^Part C: Scale ÷ √dk\s*\. Passage 1, p\. 4 ¶1/ }),
-    );
+    fireEvent.click(within(panel).getByRole('button', { name: /^Part C: Scale ÷ √dk\s*\./ }));
     expect(focusAnchor).toHaveBeenCalledTimes(1);
     const [anchor, opts] = focusAnchor.mock.calls[0] as [{ id: string }, unknown];
     expect(anchor.id).toMatch(/^cit_/);
-    expect(opts).toEqual({
-      flash: true,
-      from: {
-        n: 1,
-        page: 4,
-        para: 1,
-        notVerified: false,
-        part: { letter: 'C', label: 'Scale ÷ √dk' },
-      },
-    });
-    // A tap on box E in the picture: E stands on ¶2, passage 2.
+    // No margin tab, so nothing says which part it came from.
+    expect(opts).toEqual({ flash: true });
+    // A tap on box E in the picture does what its key row does.
     fireEvent.click(panel.querySelector('[data-part="E"]') as Element);
-    expect(focusAnchor.mock.calls[1]?.[1]).toMatchObject({ from: { n: 2, para: 2 } });
+    expect(focusAnchor).toHaveBeenCalledTimes(2);
     expect(panel.querySelector('[data-part="E"]')?.getAttribute('data-lit')).toBe('true');
   });
 
-  it('says an inferred part in words, dashed, and flashes nothing for it', async () => {
+  it('a part with no passage has no source line and flashes nothing, and says so when tapped', async () => {
     const panel = await finished();
     const row = panel.querySelector('[data-letter="F"]') as HTMLElement;
-    expect(row.textContent).toContain('Inferred, no passage');
-    expect(row.querySelector('[data-voice="paper"]')).toBeNull();
-    expect(panel.querySelector('[data-part="F"]')?.getAttribute('data-verdict')).toBe('inferred');
-    expect(panel.querySelector('[data-part="F"] .pt-plate__caption')?.textContent).toBe(
-      'inferred, no passage',
-    );
+    expect(row.querySelector('.pt-plate-key__source')).toBeNull();
+    expect(row.textContent).toContain('each query');
     fireEvent.click(within(row).getByRole('button'));
     expect(focusAnchor).not.toHaveBeenCalled();
     expect(panel.querySelector('[data-plate-said]')?.textContent).toBe(
-      'Part F is inferred: no passage says it, so there is nothing to show in the paper.',
+      'Part F has no passage in the paper to show.',
     );
   });
 
   it('keeps the voices apart and has no axe violations (layout rules aside)', async () => {
     const panel = await finished();
-    // The quotes the paper holds are the paper's; the labels and the picture are the AI's.
-    expect(panel.querySelectorAll('.pt-plate-key [data-voice="paper"]')).toHaveLength(5);
+    // Every line of the key is the AI's; the page under it is the interface's own quiet line.
+    expect(panel.querySelectorAll('.pt-plate-key [data-voice="paper"]')).toHaveLength(0);
+    expect(panel.querySelectorAll('.pt-plate-key__ai')).toHaveLength(6);
     expect(panel.querySelector('.pt-plate__figure')?.getAttribute('data-voice')).toBe('ai');
     expect(panel.querySelector('svg.pt-plate__drawing')?.getAttribute('aria-hidden')).toBe('true');
     const results = await axe.run(panel, {
@@ -288,7 +283,7 @@ describe('Redraw: refused, waiting, and the offer remembered (review S6, S7, N7)
 });
 
 describe('what the run left out, and a plate refused', () => {
-  it('says a quote the paper does not hold is not verified, and lists what was dropped', async () => {
+  it('a part whose quote the paper does not hold has no page, and what was dropped is listed', async () => {
     routes();
     const panel = await mountRedrawing();
     const second = exchange(panel, 1);
@@ -296,12 +291,11 @@ describe('what the run left out, and a plate refused', () => {
       expect(second.querySelector('[data-plate-phase="complete"]')).not.toBeNull(),
     );
     const c = second.querySelector('[data-letter="C"]') as HTMLElement;
-    expect(c.dataset.verdict).toBe('not-verified');
-    expect(c.textContent).toContain('not verified · not found in the paper');
-    // The model's quote is not the paper's words, so it is not in the paper's voice.
+    expect(c.querySelector('.pt-plate-key__source')).toBeNull();
+    expect(c.textContent).not.toMatch(/not verified|not found in the paper/);
     expect(c.querySelector('[data-voice="paper"]')).toBeNull();
     expect(second.querySelector('[data-plate-readout]')?.textContent).toBe(
-      '3 parts · 2 cited · 1 not verified · drawn by AI from p. 4',
+      '3 parts · drawn by AI from p. 4',
     );
     expect(second.querySelector('[data-plate-notes]')?.textContent).toContain(
       'Skipped a line of the plate that could not be read',

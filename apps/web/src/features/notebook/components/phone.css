@@ -49,61 +49,6 @@
   color: var(--pt-primary);
 }
 
-.pt-nb-stack .pt-trace-list {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-/* Each passage an index card, one 44 px button: marker, tab, "where · cited n×" and the chevron
-   on its first line, two lines of the paper's words under them (08c). */
-.pt-nb-stack .pt-trace-row {
-  border: 0;
-}
-
-.pt-nb-stack .pt-trace-row__touch {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  grid-template-areas:
-    'marker head chevron'
-    'quote quote quote';
-  row-gap: 12px;
-  column-gap: 10px;
-  padding: 12px 14px 14px;
-  background: var(--pt-call-slip);
-  border-radius: var(--pt-radius-paper);
-  box-shadow:
-    var(--pt-e1),
-    inset 0 0 0 1px var(--pt-card-edge);
-}
-
-.pt-nb-stack .pt-trace-row__touch .pt-trace-row__body {
-  display: contents;
-}
-
-.pt-nb-stack .pt-trace-row__touch .pt-marker {
-  grid-area: marker;
-}
-
-.pt-nb-stack .pt-trace-row__touch .pt-trace-row__head {
-  display: flex;
-  grid-area: head;
-  align-items: center;
-  gap: 10px;
-  min-inline-size: 0;
-}
-
-.pt-nb-stack .pt-trace-row__touch .pt-trace-row__quote {
-  grid-area: quote;
-}
-
-.pt-nb-stack .pt-trace-row__touch .pt-trace-row__chevron {
-  grid-area: chevron;
-}
-
 .pt-nb-stack__mine {
   display: flex;
   flex-wrap: wrap;

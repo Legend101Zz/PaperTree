@@ -240,35 +240,39 @@ test.describe('S8: the prototype flow, 14 steps, at 1440 and 390, both schemes (
           SENTENCE[0],
         );
         await expect(exchange.locator('[data-voice="ai"]').first()).toBeVisible();
-        await expect(exchange.locator('.pt-coverage')).toContainText('Stands on 2 passages');
+        if (phone) {
+          // A tutor answer has four sections: the sheet opens on the TL;DR, and the one source line,
+          // at the end of "In the paper", waits behind "Read the whole answer" (#205, #339).
+          await expect(exchange.locator('.pt-source')).toHaveCount(0);
+          await exchange.getByRole('button', { name: 'Read the whole answer' }).tap();
+        }
+        // One quiet source line, at the end of "In the paper"; nothing that audits the AI (#340, #341).
+        await expect(exchange.locator('.pt-source').first()).toContainText('From the paper: p.');
+        await expect(exchange.locator('.pt-coverage, .pt-trace-list, .pt-marker')).toHaveCount(0);
         // The usage line ends "(estimate)": in the pinned footer on a phone (08b).
         await expect(
           phone ? panel.locator('[data-pinned-footer]') : exchange.locator('[data-usage-line]'),
         ).toContainText('(estimate)');
       });
 
-      await step('marker 2 lights its passage', async () => {
-        const marker = exchange.locator('[data-passage="2"] button').first();
-        const quote = await exchange
-          .locator('.pt-trace-row[data-n="2"] .pt-trace-row__quote')
-          .first()
-          .innerText();
+      await step('a page of the source line flashes its passage', async () => {
+        const link = exchange.locator('.pt-source button').first();
+        // The passage's own first words, as the peek shows them.
+        const quote = (
+          (await exchange.locator('.pt-source__peek-text').first().textContent()) ?? ''
+        ).replace(/[“”…]/g, '');
         if (phone) {
-          await marker.tap();
+          await link.tap();
           await expect(page.locator('.pt-explain-sheet')).toHaveAttribute('data-detent', 'peek');
         } else {
-          await marker.hover();
-          await expect(exchange.locator('.pt-trace-row[data-n="2"]')).toHaveAttribute(
-            'data-lit',
-            'true',
-          );
-          await marker.click();
+          await link.hover();
+          await expect(exchange.locator('.pt-source [role="tooltip"]').first()).toBeVisible();
+          await link.click();
         }
         const flash = page.locator('svg [data-flash="true"] polygon.pt-flash');
         await expect(flash.first()).toBeVisible({ timeout: 10_000 });
-        await expect(page.locator('[data-flash-tab="2"]')).toContainText(
-          'from marker 2 in the answer',
-        );
+        // No floating margin tab: the flash stands on its own.
+        await expect(page.locator('[data-flash-tab], .pt-flash-tab')).toHaveCount(0);
         // In view, above the sheet on a phone, once the scroll and the sheet's lowering are over.
         await expect
           .poll(async () => {
@@ -279,7 +283,7 @@ test.describe('S8: the prototype flow, 14 steps, at 1440 and 390, both schemes (
             return box !== null && box.y >= 0 && box.y + box.height <= floor;
           })
           .toBe(true);
-        // WHERE it flashed: the words under the ring are passage 2's own.
+        // WHERE it flashed: the words under the ring are the linked passage's own.
         expect(letters(await flashedWords(page))).toContain(letters(quote).slice(0, 24));
       });
 
@@ -312,8 +316,14 @@ test.describe('S8: the prototype flow, 14 steps, at 1440 and 390, both schemes (
         await expect(page.locator('[data-voice="you"]').first()).toBeVisible();
         await expect(page.locator('[data-voice="ai"]').first()).toBeVisible();
         if (phone) {
-          // The phone stack (08c): the trace as rows; it says what it leaves to bigger screens.
-          await expect(page.locator('.pt-nb-stack .pt-trace-row')).toHaveCount(2);
+          // The phone stack (08c): the answer opens on its TL;DR; "Read the whole answer" brings the
+          // source line (the one under "In the paper"). It says what it leaves to bigger screens.
+          await page
+            .locator('.pt-nb-stack')
+            .getByRole('button', { name: 'Read the whole answer' })
+            .tap();
+          await expect(page.locator('.pt-nb-stack .pt-source').first()).toBeVisible();
+          await expect(page.locator('.pt-nb-stack .pt-trace-row')).toHaveCount(0);
           const tools = page.getByRole('toolbar', { name: 'Notebook tools' });
           await expect(tools.getByRole('button')).toHaveText([
             'Text',
@@ -325,8 +335,10 @@ test.describe('S8: the prototype flow, 14 steps, at 1440 and 390, both schemes (
             page.getByText('Lasso, shapes and templates: on a tablet or computer'),
           ).toBeVisible();
         } else {
-          await expect(page.locator('.pt-nb-quote')).toHaveCount(2);
-          await expect(page.locator('.pt-nb-quote[data-passage="2"]')).toHaveCount(1);
+          // The tutor answer rests on one passage of the paper (one handle, under "In the paper"),
+          // so Dive in brings one quote card.
+          await expect(page.locator('.pt-nb-quote')).toHaveCount(1);
+          await expect(page.locator('.pt-nb-quote[data-passage="1"]')).toHaveCount(1);
           await expect(page.locator('.pt-nb-quote [data-voice="paper"]').first()).toBeVisible();
         }
       });
@@ -377,7 +389,7 @@ test.describe('S8: the prototype flow, 14 steps, at 1440 and 390, both schemes (
         // The notebook page as one card, the plate drawn small, the passage in the paper's voice.
         await expect(card(`cn_${pageId.slice(3)}`)).toHaveClass(/react-flow__node-notebook/);
         await expect(card(plateCard).locator('[data-plate-mini="6"]')).toBeVisible();
-        await expect(card(plateCard)).toContainText('6 parts · 5 cited');
+        await expect(card(plateCard)).toContainText('6 parts');
         await expect(card(passageCard).locator('blockquote[data-voice="paper"]')).toContainText(
           SENTENCE[0],
         );

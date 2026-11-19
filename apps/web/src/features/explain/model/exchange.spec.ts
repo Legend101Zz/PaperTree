@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
-import { answerParagraphs, buildExchanges, formatAskTime, type Exchange } from './exchange';
+import { buildExchanges, formatAskTime, type Exchange } from './exchange';
 import { fromStored, type ThreadMessage } from './messages';
 import { originOf } from './threads';
 import { GOLDEN, goldenMessages } from '../../../../test/fixtures/attention-thread';
 import DIAGRAM from '../../../../test/fixtures/diagram-thread.json';
 
 import type { ThreadDetail } from '../api/threads';
-import type { Anchor } from '@papertree/anchoring';
 import type { Citation } from '@/lib/api/types';
+import type { Anchor } from '@papertree/anchoring';
 
 const origin = originOf(GOLDEN.thread);
 
@@ -16,10 +16,9 @@ function build(messages: readonly ThreadMessage[] = goldenMessages()): Exchange<
   return buildExchanges(messages, origin);
 }
 
-function tabs(exchange: Exchange | undefined): string[] {
-  return (exchange?.model?.trace ?? []).map(
-    (row) => `p. ${String(row.page)}${row.para === null ? '' : ` ¶${String(row.para)}`}`,
-  );
+/** Each paragraph's pages, as "From the paper: p. 1 · p. 2" would list them. */
+function pages(exchange: Exchange | undefined): number[][] {
+  return (exchange?.model?.paragraphs ?? []).map((p) => p.sources.map((s) => s.page));
 }
 
 describe('the golden thread as exchanges (frame 04)', () => {
@@ -42,82 +41,42 @@ describe('the golden thread as exchanges (frame 04)', () => {
     expect(second?.quote).toBeNull();
   });
 
-  it('traces 4 passages: tabs, sections, cited counts and the paper’s words', () => {
-    const trace = first?.model?.trace ?? [];
-    expect(trace.map((r) => r.n)).toEqual([1, 2, 3, 4]);
-    expect(tabs(first)).toEqual(['p. 1 ¶1', 'p. 2 ¶2', 'p. 2 ¶3', 'p. 2 ¶4']);
-    expect(trace.map((r) => r.where)).toEqual([
-      'Abstract',
-      'Introduction',
-      'Introduction',
-      'Introduction',
-    ]);
-    expect(trace.map((r) => r.citedCount)).toEqual([5, 1, 2, 3]);
-    expect(trace.every((r) => r.status === 'cited')).toBe(true);
-    // De-hyphenated and on one line: "transduc-\ntion" reads "transduction".
-    expect(trace[0]?.quote).toMatch(/^The dominant sequence transduction models are based on/);
-    expect(trace[2]?.quote).toContain('sequence modeling and transduction models');
+  it('gathers each paragraph’s handles into its pages, once each, in page order', () => {
+    // Paragraph 5 is the AI's own words: no handle, no source.
+    expect(pages(first)).toEqual([[1], [1, 2], [2], [1, 2], []]);
+    expect(first?.model?.paragraphs.map((p) => p.index)).toEqual([0, 1, 2, 3, 4]);
+    expect(first?.model?.paragraphs[4]?.text).toMatch(/^This is my reading, not the paper's claim/);
   });
 
-  it('reads 4 passages · 11 citations · 1 paragraph uncited, the 5th paragraph the AI’s own', () => {
-    const model = first?.model;
-    expect(model?.coverage).toEqual({ passages: 4, citations: 11, uncitedParagraphs: 1 });
-    expect(model?.body.map((p) => p.markers.map((m) => m.n))).toEqual([
-      [1],
-      [1, 2, 3],
-      [4],
-      [1, 4],
-    ]);
-    expect(model?.uncited.map((p) => p.index)).toEqual([4]);
-    expect(model?.uncited[0]?.text).toMatch(/^This is my reading, not the paper's claim/);
+  it('gives each page the passage’s own words, de-hyphenated, for the peek', () => {
+    const [p1] = first?.model?.paragraphs ?? [];
+    expect(p1?.sources[0]?.passage).toMatch(
+      /^The dominant sequence transduction models are based on/,
+    );
+    expect(p1?.sources[0]?.citation.marker).toBe('b1');
   });
 
-  it('keeps the thread’s numbers in the follow-up: its first marker is 2, p. 2 ¶2', () => {
-    const model = second?.model;
-    expect(model?.body[0]?.markers.map((m) => [m.n, m.page, m.para])).toEqual([[2, 2, 2]]);
-    expect(model?.body[4]?.markers.map((m) => m.n)).toEqual([1, 4]);
-    expect(model?.trace.map((r) => [r.n, r.citedCount])).toEqual([
-      [1, 2],
-      [2, 5],
-      [4, 2],
-    ]);
-    expect(model?.coverage).toEqual({ passages: 3, citations: 9, uncitedParagraphs: 0 });
-    expect(model?.uncited).toEqual([]);
+  it('reads the follow-up the same way', () => {
+    expect(pages(second)).toEqual([[2], [2], [1, 2], [2], [1, 2]]);
   });
 });
 
 describe('exchange building beyond the stored copy', () => {
-  it('recomputes the coverage the server sends, paragraph for paragraph', () => {
-    const live = goldenMessages().map((m) => ({ ...m, coverage: null }));
-    const [first, second] = build(live);
-    expect(first?.model?.coverage).toEqual({ passages: 4, citations: 11, uncitedParagraphs: 1 });
-    expect(first?.model?.uncited.map((p) => p.index)).toEqual([4]);
-    expect(second?.model?.coverage).toEqual({ passages: 3, citations: 9, uncitedParagraphs: 0 });
-  });
-
-  it('marks a passage "not verified" when any of its citations was not matched', () => {
-    const messages = goldenMessages().map((m) => ({
-      ...m,
-      citations: m.citations.map((c) => (c.marker === 'b7' ? { ...c, supported: false } : c)),
-    }));
-    const row = build(messages)[0]?.model?.trace.find((r) => r.n === 3);
-    expect(row?.status).toBe('not-verified');
-    expect(build(messages)[0]?.model?.markers.get(3)?.notVerified).toBe(true);
-  });
-
-  it('while streaming: no uncited block, no half-typed handle', () => {
+  it('while streaming: no half-typed handle and no "General knowledge" yet', () => {
     const answer = goldenMessages()[1] as ThreadMessage;
     const streaming = {
       ...answer,
       status: 'streaming' as const,
       text: 'Partly [b1]. Then [b',
       citations: [],
-      coverage: null,
     };
-    const model = build([goldenMessages()[0] as ThreadMessage, streaming])[0]?.model;
-    expect(model?.uncited).toEqual([]);
-    expect(model?.coverage.uncitedParagraphs).toBe(0);
-    expect(model?.body[0]?.text).toBe('Partly [b1]. Then');
+    const [ask1, first, ask2] = goldenMessages() as [ThreadMessage, ThreadMessage, ThreadMessage];
+    const model = build([ask1, first, ask2, streaming])[1]?.model;
+    expect(model?.live).toBe(true);
+    expect(model?.paragraphs[0]?.text).toBe('Partly [b1]. Then');
+    // The thread already resolved b1 (the first answer), so its page shows at once, from the
+    // first answer's citation of it.
+    expect(model?.paragraphs[0]?.sources.map((s) => s.page)).toEqual([1]);
   });
 
   it('names a live answer whose ask is not loaded yet by the question it answers', () => {
@@ -128,111 +87,65 @@ describe('exchange building beyond the stored copy', () => {
     expect(only?.quote?.para).toBe(1);
   });
 
-  it('an answer with no citation at all is all the AI’s own reading', () => {
+  it('an answer with no handle at all has no source on any paragraph', () => {
     const answer = {
       ...(goldenMessages()[1] as ThreadMessage),
       text: 'The paper does not say.\n\nNor does it hint.',
       citations: [],
-      coverage: null,
     };
     const model = build([answer])[0]?.model;
-    expect(model?.body).toEqual([]);
-    expect(model?.uncited.map((p) => p.index)).toEqual([0, 1]);
-    expect(model?.coverage).toEqual({ passages: 0, citations: 0, uncitedParagraphs: 2 });
+    expect(model?.live).toBe(false);
+    expect(model?.paragraphs.map((p) => [p.index, p.sources.length])).toEqual([
+      [0, 0],
+      [1, 0],
+    ]);
   });
 
-  it('splits paragraphs like the server: blank lines, headings dropped', () => {
-    expect(answerParagraphs('# Title\n\nOne [b1].\n  \nTwo\nstill two.\n\n## Next\n\n')).toEqual([
-      'One [b1].',
-      'Two\nstill two.',
-    ]);
+  it('splits paragraphs on blank lines and drops an unknown heading line', () => {
+    const model = build([
+      {
+        ...(goldenMessages()[1] as ThreadMessage),
+        text: '# Title\n\nOne [b1].\n  \nTwo\nstill two.\n\n## Next\n\n',
+      },
+    ])[0]?.model;
+    expect(model?.paragraphs.map((p) => p.text)).toEqual(['One [b1].', 'Two\nstill two.']);
   });
 });
 
-/** A citation as the live SSE `citations` event sends it: no locator. */
-function unlocated<T extends { citations: readonly Citation[] }>(m: T): T {
-  return { ...m, citations: m.citations.map(({ locator: _l, ...rest }) => rest) };
-}
-
-describe('review fixes (#202 review 1.1, 1.3, 1.6, 1.8)', () => {
+describe('sources (#340)', () => {
   const answer = goldenMessages()[1] as ThreadMessage;
-  const b1 = answer.citations.find((c) => c.marker === 'b1') as Citation;
+  const cite = (marker: string): Citation =>
+    answer.citations.find((c) => c.marker === marker) as Citation;
 
-  it('a claim whose only handle resolves to nothing is the AI’s own reading, and is counted', () => {
-    // The server counts [b9] as "a marker", so its coverage calls paragraph 1 cited; the client
-    // does not: nothing on screen would mark that claim (DESIGN §4.6).
+  it('a paragraph citing b3 (p. 3) and b7 (p. 1) lists p. 1 then p. 3, each once', () => {
+    const at = (c: Citation, pageIndex: number, marker: string): Citation => {
+      const { locator: _l, ...rest } = c;
+      return { ...rest, marker, citation_id: `cit_${marker}`, page_index: pageIndex };
+    };
     const model = build([
       {
         ...answer,
-        text: 'Cited claim [b1].\n\nInvented claim [b9].',
-        citations: [b1],
-        coverage: {
-          passages: 1,
-          citations: 1,
-          unresolved_markers: 1,
-          paragraphs: 2,
-          uncited_paragraphs: [],
-          not_verified: 0,
-        },
+        text: 'Claim [b3]. Another [b7]. Again [b3].',
+        citations: [at(cite('b1'), 2, 'b3'), at(cite('b1'), 0, 'b7')],
       },
     ])[0]?.model;
-    expect(model?.body.map((p) => [p.index, p.cited])).toEqual([[0, true]]);
-    expect(model?.uncited.map((p) => p.index)).toEqual([1]);
-    expect(model?.coverage).toEqual({ passages: 1, citations: 1, uncitedParagraphs: 1 });
-    expect(model?.unresolvedMarkers).toBe(1);
-    expect(model?.handleNumbers.has('b9')).toBe(false);
+    expect(model?.paragraphs[0]?.sources.map((s) => s.page)).toEqual([1, 3]);
   });
 
-  it('an unresolved claim between cited ones stays in place, flagged uncited', () => {
+  it('a handle that resolves to nothing is not a source', () => {
     const model = build([
-      { ...answer, text: 'A [b1].\n\nB [b9].\n\nC [b1].', citations: [b1], coverage: null },
+      { ...answer, text: 'Cited [b1].\n\nInvented [b9].', citations: [cite('b1')] },
     ])[0]?.model;
-    expect(model?.body.map((p) => p.cited)).toEqual([true, false, true]);
-    expect(model?.unresolvedMarkers).toBe(1);
-    expect(model?.coverage.uncitedParagraphs).toBe(1);
+    expect(model?.paragraphs.map((p) => p.sources.length)).toEqual([1, 0]);
   });
 
-  it('a follow-up’s live citations borrow the tabs the thread already placed: no swap', () => {
-    const [first, ask2, second] = goldenMessages().slice(1) as ThreadMessage[];
-    const live = { ...unlocated(second as ThreadMessage), coverage: null };
-    const model = buildExchanges([first as ThreadMessage, ask2 as ThreadMessage, live], null)[1]
-      ?.model;
-    expect(model?.live).toBe(false);
-    expect(model?.trace.map((r) => [r.n, r.page, r.para, r.where])).toEqual([
-      [1, 1, 1, 'Abstract'],
-      [2, 2, 2, 'Introduction'],
-      [4, 2, 4, 'Introduction'],
-    ]);
-  });
-
-  it('a settled live answer shows its markers at once, with the page alone where nothing placed it', () => {
-    // Nothing is held (#252): a marker shown at `done` is never hidden again.
-    const fresh = { ...unlocated(answer), coverage: null };
-    const shown = buildExchanges([fresh], null)[0]?.model;
-    expect(shown?.live).toBe(false);
-    expect(shown?.handleNumbers.size).toBe(4);
-    expect(shown?.trace.map((r) => [r.page, r.para])).toEqual([
-      [1, null],
-      [2, null],
-      [2, null],
-      [2, null],
-    ]);
-  });
-
-  it('two handles on one block are one passage even without a locator (the server’s key)', () => {
-    const twice = {
-      ...answer,
-      text: 'A [b1]. B [b2].',
-      citations: [
-        { ...unlocated(answer).citations[0]!, marker: 'b1', citation_id: 'c1' },
-        { ...unlocated(answer).citations[0]!, marker: 'b2', citation_id: 'c2', ordinal: 1 },
-      ],
-      coverage: null,
-      generation: 1,
-    };
-    const model = build([twice])[0]?.model;
-    expect(model?.trace.map((r) => r.n)).toEqual([1]);
-    expect(model?.coverage.passages).toBe(1);
+  it('a settled live answer lists its pages at once, from the citation alone (no locator)', () => {
+    const { locator: _l, ...bare } = cite('b6');
+    const model = buildExchanges(
+      [{ ...answer, text: 'A [b6].', citations: [bare] as Citation[] }],
+      null,
+    )[0]?.model;
+    expect(model?.paragraphs[0]?.sources.map((s) => s.page)).toEqual([2]);
   });
 
   it('a selection whose Anchor names no page gets no tab, never a guessed "p. 1"', () => {
@@ -256,5 +169,57 @@ describe('a diagram thread (#217)', () => {
     });
     const [first] = buildExchanges(messages, originOf(detail.thread));
     expect(first?.quote).toMatchObject({ page: 4, para: 1 });
+  });
+});
+
+describe('answers at other levels (v0.3)', () => {
+  const [ask, answer] = goldenMessages() as [ThreadMessage, ThreadMessage];
+  const root = { ...answer, level: 'familiar' as const, messageId: 'msg_root' };
+  const sibling = (level: 'new' | 'expert', key: string, over: Partial<ThreadMessage> = {}) => ({
+    ...root,
+    key,
+    messageId: `msg_${key}`,
+    level,
+    siblingGroup: 'msg_root',
+    text: `Answer at ${level}.`,
+    ...over,
+  });
+
+  it('a re-levelled answer joins the exchange of the answer it re-levels, never a new one', () => {
+    const exchanges = build([ask, root, sibling('expert', 'e'), sibling('new', 'n')]);
+    expect(exchanges).toHaveLength(1);
+    expect(exchanges[0]?.answer).toBe(root);
+    expect(exchanges[0]?.variants.map((v) => v.level)).toEqual(['familiar', 'expert', 'new']);
+    expect(exchanges[0]?.variants[1]?.model?.paragraphs[0]?.text).toBe('Answer at expert.');
+  });
+
+  it('an answer with no level is Familiar', () => {
+    const exchanges = build([ask, { ...answer, level: null }]);
+    expect(exchanges[0]?.variants.map((v) => v.level)).toEqual(['familiar']);
+  });
+
+  it('keeps one answer per level: a retried sibling replaces the attempt it retried', () => {
+    const failed = sibling('expert', 'e1', { status: 'error', text: '' });
+    const retried = sibling('expert', 'e2');
+    const exchanges = build([ask, root, failed, retried]);
+    const expert = exchanges[0]?.variants.filter((v) => v.level === 'expert');
+    expect(expert).toHaveLength(1);
+    expect(expert?.[0]?.answer.key).toBe('e2');
+  });
+
+  it('a follow-up after a level switch is its own exchange, and the siblings stay on the first', () => {
+    const [, , ask2, answer2] = goldenMessages() as ThreadMessage[] as [
+      ThreadMessage,
+      ThreadMessage,
+      ThreadMessage,
+      ThreadMessage,
+    ];
+    const exchanges = build([ask, root, sibling('expert', 'e'), ask2, answer2]);
+    expect(exchanges.map((e) => e.variants.length)).toEqual([2, 1]);
+  });
+
+  it('a sibling whose root is not in the thread stays an exchange of its own', () => {
+    const orphan = sibling('expert', 'o', { siblingGroup: 'msg_gone' });
+    expect(build([ask, root, orphan])).toHaveLength(2);
   });
 });

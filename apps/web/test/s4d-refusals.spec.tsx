@@ -126,7 +126,6 @@ describe('a refusal says only what is true (review 1.1, 1.2)', () => {
       status: 'partial',
       error: { code: 'agent_unavailable', retryable: true, message: 'x' },
       citations: [],
-      coverage: undefined,
     };
     const { calls } = open({
       [READ]: () => {

@@ -1,13 +1,19 @@
 /**
- * v0.2 prototype steps 6–8 (frame 12, #202) on the FAUX agent: select a sentence on p. 1 of
- * "Attention Is All You Need" → Explain → the exchange (call slip, AI slip with numbered markers,
- * coverage, trace) → hovering marker 2 lights trace row 2 → Show in paper scrolls to passage 2 and
- * flashes it, with the margin tab "from marker 2 in the answer" beside it; the faint outline stays
- * until the next action.
+ * v0.2 prototype steps 6–8 (frame 12, #202, #340) on the FAUX agent: select a sentence on p. 1 of
+ * "Attention Is All You Need" → Explain → the exchange (call slip, AI slip, one quiet source line
+ * "From the paper: p. …" under the paragraph; no chip, marker, readout or margin flag) → hovering a
+ * page peeks the passage → clicking it scrolls to the passage and flashes it, with no margin tab;
+ * the faint outline stays until the next action.
+ *
+ * v0.3 tutor answer (#339, #349): the answer has its section labels and a lead, typeset maths, the
+ * inline figure and the foot (model); the level switch asks once per level and a level seen before
+ * comes back with no request; New to this brings Check yourself, marked in the browser.
  *
  * The faux model quotes the first two seed passages the API planned for the selection, so the
- * answer has exactly the markers 1 and 2: this proves the wiring (numbering, lighting, the flash),
- * not answer quality. The PDF is the committed corpus's; the spec SKIPS, loudly, without it.
+ * paragraph draws on those pages: this proves the wiring (the source line, the peek, the flash),
+ * not answer quality. The faux agent answers in the v0.3 shape (`## TL;DR` … `## In the paper`, one
+ * `$…$`, one `[bN]`, a ```diagram fence in explain, and a ```check fence when the request says
+ * `check: true`). The PDF is the committed corpus's; the spec SKIPS, loudly, without it.
  */
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
@@ -26,7 +32,7 @@ import {
 
 const ATTENTION = join(REPO, 'research', 'benchmarks', 'corpus', 'attention-is-all-you-need.pdf');
 
-test.describe('v0.2 steps 6–8: select → Explain → marker 2 lights passage 2 (faux agent)', () => {
+test.describe('v0.2 steps 6–8: select → Explain → the source line flashes the passage (faux agent)', () => {
   test.skip(
     !existsSync(ATTENTION),
     'SKIPPED: the corpus PDF attention-is-all-you-need.pdf is absent. Run research/benchmarks/fetch_corpus.sh.',
@@ -93,38 +99,50 @@ test.describe('v0.2 steps 6–8: select → Explain → marker 2 lights passage 
       timeout: 120_000,
     });
     await expect(exchange.locator('[data-voice="ai"]')).toContainText('The selected passage says');
-    await expect(exchange.locator('.pt-coverage')).toContainText('Stands on 2 passages');
+    // The tutor shape: small lower-case labels, the TL;DR as the lead, maths typeset, the figure
+    // drawn inline, and the foot naming the model. Familiar is the default level, so no check yet.
+    await expect(exchange.locator('.pt-ai-slip h3.pt-ai-label')).toContainText([
+      'tl;dr',
+      'in plain words',
+      'how it works',
+      'in the paper',
+    ]);
+    await expect(exchange.locator('.pt-ai-lead')).toBeVisible();
+    await expect(exchange.locator('.pt-ai-slip .katex').first()).toBeVisible();
+    await expect(exchange.locator('[data-diagram-inline]')).toBeVisible();
+    await expect(exchange.locator('.pt-answer-foot')).toContainText(/\S/);
+    await expect(exchange.getByRole('button', { name: 'Familiar' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    await expect(exchange.locator('.pt-check')).toHaveCount(0);
+    // One quiet source line under the paragraph, and nothing that audits the AI.
+    const source = exchange.locator('.pt-source[data-source="paper"]').first();
+    await expect(source).toContainText('From the paper: p.');
+    await expect(exchange.locator('.pt-coverage, .pt-trace-list, .pt-marker')).toHaveCount(0);
     await expect(exchange.locator('[data-usage-line]')).toContainText('(estimate)');
     const text = (await panel.innerText()).replace(/\s+/g, ' ');
     expect(text).not.toMatch(/\[b\d+\]|\bmsg_|\bthr_|\brun_|\bblk_|\{"/);
-    expect(text).not.toMatch(/\bverified\b(?<!not verified)|fact-checked|\baccurate\b/i);
+    expect(text).not.toMatch(/\bverified\b|fact-checked|\baccurate\b|Stands on|grounded/i);
     expect(await panel.locator('.pt-chip').count()).toBe(0);
     await page.screenshot({ path: shot('v02-trace-01-exchange-1440.png') });
 
-    // ── step 8: marker 2 lights passage 2, and Show in paper flashes it ──
-    const marker2 = exchange.locator('[data-passage="2"] button').first();
-    const row2 = exchange.locator('.pt-trace-row[data-n="2"]');
-    await marker2.hover();
-    await expect(row2).toHaveAttribute('data-lit', 'true');
-    await expect(exchange.locator('.pt-trace-row[data-n="1"]')).not.toHaveAttribute(
-      'data-lit',
-      'true',
-    );
-    await page.screenshot({ path: shot('v02-trace-02-marker2-lit-1440.png') });
+    // ── step 8: hovering a page peeks the passage, and clicking it flashes it ──
+    const page1 = source.getByRole('button').first();
+    await page1.hover();
+    await expect(source.locator('[role="tooltip"]').first()).toBeVisible();
+    await page.screenshot({ path: shot('v02-trace-02-peek-1440.png') });
 
-    await row2.getByRole('button', { name: 'Show in paper, passage 2' }).click();
+    await page1.click();
     const flash = page.locator('svg [data-flash="true"] polygon.pt-flash');
     await expect(flash.first()).toBeVisible({ timeout: 10_000 });
-    const tab = page.locator('[data-flash-tab="2"]');
-    await expect(tab).toContainText('from marker 2 in the answer');
-    // After the 240 ms scroll the flashed passage is on screen, its tab level with it in the margin.
+    // No floating margin tab: the passage flashes on its own.
+    await expect(page.locator('[data-flash-tab], .pt-flash-tab')).toHaveCount(0);
+    // After the 240 ms scroll the flashed passage is on screen.
     await page.waitForTimeout(500);
-    const [box, tabBox] = await Promise.all([flash.first().boundingBox(), tab.boundingBox()]);
+    const box = await flash.first().boundingBox();
     expect((box?.y ?? -1) >= 0 && (box?.y ?? 1e9) < 900).toBe(true);
     expect(box).not.toBeNull();
-    expect(tabBox).not.toBeNull();
-    expect((tabBox?.x ?? 0) + (tabBox?.width ?? 0)).toBeLessThanOrEqual((box?.x ?? 0) + 1);
-    expect(Math.abs((tabBox?.y ?? 0) - (box?.y ?? 0))).toBeLessThan(40);
     await page.screenshot({ path: shot('v02-trace-03-flash-1440.png') });
 
     // After in 180 + hold 900 + out 600 (from the end of the scroll) the ring and wash are over,
@@ -136,10 +154,39 @@ test.describe('v0.2 steps 6–8: select → Explain → marker 2 lights passage 
     const rest = await linger.first().evaluate((el) => getComputedStyle(el).strokeOpacity);
     // 0.6: the outline keeps 3:1 on the page (WCAG 1.4.11, #205); 0.35 was 1.8:1.
     expect(Number(rest)).toBeCloseTo(0.6, 2);
-    await expect(tab).toBeVisible();
     await page.mouse.click(5, 450);
     await expect(page.locator('svg [data-flash]')).toHaveCount(0);
-    await expect(tab).toHaveCount(0);
+
+    // ── the level switch: one request per level, a level seen before comes back for free ──
+    const releveled: string[] = [];
+    page.on('request', (request) => {
+      if (request.method() === 'POST' && /\/threads\/[^/]+\/messages$/.test(request.url())) {
+        releveled.push(request.postData() ?? '');
+      }
+    });
+    await exchange.getByRole('button', { name: 'New to this' }).click();
+    await expect(exchange.getByRole('button', { name: 'New to this' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    await expect(exchange.locator('[data-message-status="complete"]')).toBeVisible({
+      timeout: 120_000,
+    });
+    expect(releveled).toHaveLength(1);
+    expect(JSON.parse(releveled[0] ?? '{}')).toMatchObject({ level: 'new' });
+    expect(JSON.parse(releveled[0] ?? '{}')).toHaveProperty('relevel_of');
+    // At New to this the API asks for one Check yourself: marked here, no request.
+    const check = exchange.locator('.pt-check');
+    await expect(check).toBeVisible();
+    await check.getByRole('button', { name: 'Show me' }).click();
+    await expect(check.getByLabel('Fill the blank')).not.toHaveValue('');
+    await page.screenshot({ path: shot('v02-trace-04-level-new-check-1440.png') });
+    await exchange.getByRole('button', { name: 'Familiar' }).click();
+    await expect(exchange.locator('[data-voice="ai"]')).toContainText('The selected passage says');
+    await exchange.getByRole('button', { name: 'New to this' }).click();
+    // The blank was kept across the switch, and nothing was asked again.
+    await expect(check.getByLabel('Fill the blank')).not.toHaveValue('');
+    expect(releveled).toHaveLength(1);
     await context.close();
   });
 });

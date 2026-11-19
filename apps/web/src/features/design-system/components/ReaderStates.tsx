@@ -1,7 +1,7 @@
 /**
- * The reader-side components in their states: CallSlip, NumberedMarker and PageTab (cited, lit,
- * not verified), AiSlip with a margin cell and an uncited block, TraceList with a lit row,
- * CoverageReadout, ReadingNowRow, LabelHolder and SproutMark. Sample words are quotes from
+ * The reader-side components in their states: CallSlip, NumberedMarker and PageTab (default, lit,
+ * touch), AiSlip with the quiet source line under each paragraph (SourceLine: pages, and General
+ * knowledge), ReadingNowRow, LabelHolder and SproutMark. Sample words are quotes from
  * "Attention Is All You Need" (CONTENT.md) or obvious placeholders.
  */
 'use client';
@@ -10,42 +10,19 @@ import {
   AiParagraph,
   AiSlip,
   CallSlip,
-  CoverageReadout,
   LabelHolder,
   NumberedMarker,
   PageTab,
   ReadingNowRow,
+  SourceLine,
   SproutMark,
-  TraceList,
   type SproutSize,
-  type TraceRowData,
 } from '@papertree/ui';
 import { ArrowRight } from 'lucide-react';
-import { useState, type ReactNode } from 'react';
+
+import type { ReactNode } from 'react';
 
 const SPROUTS: readonly SproutSize[] = [16, 20, 24, 48];
-const ROWS: readonly TraceRowData[] = [
-  {
-    n: 1,
-    page: 1,
-    para: 1,
-    where: 'Abstract',
-    citedCount: 5,
-    status: 'cited',
-    quote:
-      'The dominant sequence transduction models are based on complex recurrent or convolutional neural networks.',
-  },
-  {
-    n: 2,
-    page: 2,
-    para: 2,
-    where: 'Introduction',
-    citedCount: 1,
-    status: 'cited',
-    quote:
-      'Recurrent models typically factor computation along the symbol positions of the input and output sequences. Aligning the positions to steps in computation time, they generate a sequence…',
-  },
-];
 
 function noop(): void {}
 
@@ -57,7 +34,6 @@ const INERT = { inert: '' } as unknown as { readonly inert: boolean };
 
 /** The reader-side half of the Components section. */
 export function ReaderStates(): ReactNode {
-  const [lit, setLit] = useState<number | null>(2);
   return (
     <>
       <div className="ds-row">
@@ -83,48 +59,37 @@ export function ReaderStates(): ReactNode {
             <NumberedMarker n={2} label="p. 2 ¶2" lit onFlash={noop} />
             <PageTab page={2} para={2} lit />
           </Cell2>
-          <Cell2 caption="not verified · dashed tab" inert>
-            <NumberedMarker n={6} label="p. 10" notVerified onFlash={noop} />
-            <PageTab page={10} status="not-verified" />
-          </Cell2>
           <Cell2 caption="touch · 44 px target" inert>
             <NumberedMarker n={3} label="p. 4 ¶1" size="touch" onFlash={noop} />
           </Cell2>
         </div>
       </div>
       <div className="ds-row">
-        <h3 className="ds-label">AI slip with margin cells and an uncited block</h3>
+        <h3 className="ds-label">AI slip with a quiet source line under each paragraph</h3>
         <AiSlip
           model="placeholder model"
-          source="from the paper"
-          headingLevel={3}
-          uncited={
-            <p>Placeholder text: a paragraph of the model’s own reading, with no citation.</p>
-          }
           footer={<span className="ds-caption">4,776 tokens · ≈ $0.0027 (estimate)</span>}
         >
           <AiParagraph
-            aside={
-              <>
-                <NumberedMarker n={1} label="p. 1 ¶1" onFlash={noop} />
-                <PageTab page={1} para={1} />
-              </>
+            source={
+              <SourceLine
+                sources={[
+                  {
+                    page: 1,
+                    passage: 'We propose a new simple network architecture, the Transformer.',
+                    onShow: noop,
+                  },
+                  { page: 4, passage: 'Scaled Dot-Product Attention', onShow: noop },
+                ]}
+              />
             }
           >
             Placeholder text: the passage states the paper’s central proposal.
           </AiParagraph>
-          <AiParagraph>
-            Placeholder text: a paragraph with no margin cell keeps the grid.
+          <AiParagraph source={<SourceLine sources={[]} />}>
+            Placeholder text: a paragraph from general knowledge says so in the same quiet line.
           </AiParagraph>
         </AiSlip>
-      </div>
-      <div className="ds-row">
-        <h3 className="ds-label">Trace list · lit row (hover or focus lights one)</h3>
-        <TraceList rows={ROWS} lit={lit} onLight={setLit} onShowInPaper={noop} />
-      </div>
-      <div className="ds-row">
-        <h3 className="ds-label">Coverage readout</h3>
-        <CoverageReadout passages={4} citations={11} uncitedParagraphs={1} />
       </div>
       <div className="ds-row">
         <h3 className="ds-label">Reading now</h3>
