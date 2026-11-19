@@ -91,3 +91,75 @@ describe('the reader’s quoted selection is datamarked (owner decision 2026-10-
     assert.ok(followup.history!.entries.length >= 2, 'the thread’s earlier turn travels with it');
   });
 });
+
+describe('the explain and ask prompts (v0.3, #339)', () => {
+  const base = (kind: 'explain' | 'ask', patch: Partial<RunRequest> = {}): string =>
+    systemPrompt({ ...request(kind === 'explain' ? 'explain' : 'followup'), ...patch, kind });
+
+  test('say the four sections, typeset maths, and that the paper is not a fence', () => {
+    const prompt = base('explain');
+    for (const heading of ['## TL;DR', '## In plain words', '## How it works', '## In the paper']) {
+      assert.ok(prompt.includes(heading), heading);
+    }
+    assert.match(prompt, /\$\$…\$\$/);
+    assert.match(prompt, /not a fence/);
+    assert.match(prompt, /ONLY where a sentence rests on the paper/);
+  });
+
+  test('carry the level guidance, and an expert gets the trade-off section', () => {
+    assert.match(base('explain', { level: 'new' }), /new to this.*180 to 260 words/s);
+    assert.match(base('explain', { level: 'familiar' }), /knows the basics.*120 to 200 words/s);
+    assert.match(base('explain'), /knows the basics/, 'no level reads familiar');
+    const expert = base('explain', { level: 'expert' });
+    assert.match(expert, /an expert.*100 to 180 words/s);
+    assert.match(expert, /^## The trade-off$/m);
+    assert.doesNotMatch(expert, /^## In plain words$/m);
+    assert.doesNotMatch(base('explain', { level: 'new' }), /^## The trade-off$/m);
+  });
+
+  test('ask the check fence only when the request says check: true', () => {
+    assert.doesNotMatch(base('explain'), /accept:/);
+    assert.match(base('explain'), /Do not write a ```check fence/);
+    assert.doesNotMatch(base('explain', { check: false }), /accept:/);
+    const asked = base('ask', { check: true });
+    assert.match(asked, /^accept: /m);
+    assert.match(asked, /exactly one fence/);
+    assert.doesNotMatch(asked, /Do not write a ```check fence/);
+  });
+
+  test('describe the diagram fence in the diagram run’s own line format, cite null, 8 parts', () => {
+    const prompt = base('ask');
+    assert.match(prompt, /```diagram/);
+    assert.match(prompt, /"t":"plate"/);
+    assert.match(prompt, /at most 8/);
+    assert.match(prompt, /"cite":null/);
+    assert.match(prompt, /never with its letter/);
+  });
+
+  test('an ask or follow-up answers from the seed and thread first, and keeps the tools', () => {
+    for (const kind of ['explain', 'ask'] as const) {
+      const prompt = base(kind);
+      assert.match(prompt, /from the passages below and from the conversation so far FIRST/);
+      assert.match(prompt, /only when the question needs a part of the paper that is not in them/);
+      for (const tool of ['get_outline', 'get_section', 'get_passage', 'search_passages']) {
+        assert.ok(prompt.includes(tool), tool);
+      }
+    }
+  });
+
+  test('stay short: the old rule list is gone', () => {
+    assert.ok(base('explain', { check: true }).length < 7500);
+    assert.doesNotMatch(base('explain'), /Cite every claim/);
+    assert.doesNotMatch(base('explain'), /not a source/);
+  });
+
+  test('the diagram run’s example no longer labels a part with a bare letter', () => {
+    const prompt = systemPrompt({
+      ...request('explain'),
+      kind: 'diagram',
+      prompt_version: 'diagram-v1',
+    });
+    assert.doesNotMatch(prompt, /"label":"x"/);
+    assert.match(prompt, /never with its letter/);
+  });
+});

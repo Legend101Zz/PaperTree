@@ -65,6 +65,7 @@ import {
   SDK_LABEL,
   TOOL_NAMES,
 } from './contract.ts';
+import { tidyAnswer } from './answer.ts';
 import { DIAGRAM_TOOLS, holdsDiagramLine, PlateReader } from './diagram.ts';
 import { parseTopicAnswer, parseTopicInput } from './topic.ts';
 import type { FauxBrain, FauxModel } from './faux.ts';
@@ -124,6 +125,9 @@ const RETRY_LABEL = 'The model service is busy; trying again';
 /** What a tool call answers once the answer has started (see "Text" above). */
 export const TOOLS_CLOSED_TEXT =
   'The answer is already being shown to the reader, so no tool can be used now. Finish the answer from what you have.';
+/** An explain or ask answer opens with its first heading (prompts.ts): proof a held message is the answer. */
+const ANSWER_OPENING = /^\s*## TL;DR/m;
+
 const BUDGET_LABEL = 'Tool budget exhausted';
 /** What the model is told when the tool budget is spent and it is given its one final turn. */
 export const BUDGET_TURN_TEXT =
@@ -353,7 +357,8 @@ class Run {
 
   /** Whether a held message's text proves it is the answer (see "Text" above). */
   private provesAnswer(text: string): boolean {
-    return this.plate === null ? hasMarker(text) : holdsDiagramLine(text);
+    if (this.plate !== null) return holdsDiagramLine(text);
+    return hasMarker(text) || ANSWER_OPENING.test(text);
   }
 
   private commit(state: MessageState): void {
@@ -742,11 +747,21 @@ class Run {
     });
   }
 
+  /**
+   * `final_text`: an explain or ask answer has its ```diagram and ```check fences tidied (answer.ts);
+   * every other kind is exactly what streamed.
+   */
+  private tidied(): string {
+    const kind = this.request.kind;
+    if (kind !== 'explain' && kind !== 'ask') return this.finalText;
+    return tidyAnswer(this.finalText, this.request.check === true);
+  }
+
   private done(promptError: unknown): DoneData {
     const lastEntry = this.assistant.at(-1);
     const last = lastEntry?.message;
     const lastStop = lastEntry?.stop;
-    const text = this.finalText;
+    const text = this.tidied();
     let status: RunStatus;
     let error: RunError | null = null;
     if (this.hostReason !== null) {

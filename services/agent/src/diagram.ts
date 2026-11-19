@@ -286,3 +286,49 @@ export class PlateReader {
     this.emit({ name: 'link', data: { source, target, label: line.label ?? null } });
   }
 }
+
+/**
+ * An answer's inline ```diagram fence, validated with the same reader a diagram run uses
+ * (v0.3, #339): every line that does not read is dropped, the rest is written back in one
+ * canonical shape. The letters are RE-COUNTED over what was kept (the reader's placed letters), so a
+ * dropped part line never shifts the arrows of the lines after it. A `link` line is kept when both
+ * of its parts were. At most 12 parts. The `end` line is not kept (the closing fence ends the
+ * figure).
+ *
+ * @param body - The lines between the fences.
+ * @returns The cleaned lines, or null when no part is left (the fence is then removed).
+ */
+export function cleanDiagramFence(body: string): string | null {
+  const out: string[] = [];
+  let parts = 0;
+  const reader = new PlateReader((event) => {
+    if (event.name === 'plate') out.push(JSON.stringify({ t: 'plate', title: event.data.title }));
+    else if (event.name === 'part') {
+      const part = event.data;
+      parts++;
+      out.push(
+        JSON.stringify({
+          t: 'part',
+          label: part.label,
+          text: part.text,
+          kind: part.kind,
+          after: part.after,
+          ...(part.edge.some((e) => e !== null) ? { edge: part.edge } : {}),
+          cite: part.cite,
+        }),
+      );
+    } else if (event.name === 'link') {
+      out.push(
+        JSON.stringify({
+          t: 'link',
+          from: event.data.source,
+          to: event.data.target,
+          ...(event.data.label === null ? {} : { label: event.data.label }),
+        }),
+      );
+    }
+  });
+  reader.push(body);
+  reader.flush();
+  return parts === 0 ? null : out.join('\n');
+}
