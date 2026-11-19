@@ -33,6 +33,7 @@ Pure over a ``PaperIndex`` (no I/O), so every rule has a plain test, one of them
 
 from __future__ import annotations
 
+import math
 import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
@@ -115,7 +116,7 @@ def _gap(a: BBox, b: Sequence[float]) -> float:
     """The distance between two boxes (0 when they touch or overlap)."""
     dx = max(0.0, max(a[0], b[0]) - min(a[2], b[2]))
     dy = max(0.0, max(a[1], b[1]) - min(a[3], b[3]))
-    return (dx * dx + dy * dy) ** 0.5
+    return math.hypot(dx, dy)
 
 
 def float_of(index: PaperIndex, page: int, box: BBox, block_id: str | None) -> str | None:

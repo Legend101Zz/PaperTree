@@ -25,6 +25,12 @@ THE RULES THIS ROUTE ENFORCES (spec §1; the store enforces the same on every wr
   never rewritten.
 * rule 7: Keep as note makes no agent call.
 * rule 8: ``check`` is always false; the quick asks are fixed questions.
+* an IMAGE ROOT (v0.3 #348: an ``excerpt`` whose anchor is a ``figure`` or ``figure_region``): the
+  tree is about a picture, so EVERY ask down the path (the root's, an answer's, a branch's) runs as
+  an ``image`` run: the root's crop is rendered and sent with the new question, with the figure's
+  caption (and, unless ``uses.paper`` is ``off``, the paragraph that first mentions it) as the seed;
+  the ancestors' turns are the history as usual and carry no bytes. ``uses.paper`` ``whole`` allows
+  the tools, any other value none.
 
 Errors, in order, all before a row is written: 404 (not this owner's board or card), 503
 ``not_configured``, 409 ``not_parsed``, 422, 409 ``busy`` (the answer being asked about is still
@@ -50,8 +56,8 @@ from papertree_db.canvas import check_span
 from papertree_prompts import mint_datamark
 
 from .. import agent_client as runs
-from .. import board_path, evidence
-from ..agent_client import RunBroker, RunSpec, sse
+from .. import board_path, evidence, image_run
+from ..agent_client import RunBroker, RunKind, RunSpec, sse
 from ..deps import (
     AgentClientDep,
     Caller,
@@ -62,6 +68,7 @@ from ..deps import (
     SettingsDep,
 )
 from ..errors import ApiError
+from ..image_anchor import is_image_anchor
 from ..schemas import (
     AgentHistory,
     AgentPaper,
@@ -251,7 +258,22 @@ async def ask_on_board(
         threads.check_anchor(anchor, paper_id, str(paper["source_hash"]))
     datamark = mint_datamark()
     seed_plan: evidence.SeedPlan | None = None
-    if anchor is not None:
+    run_kind: RunKind = "ask"
+    prepared: image_run.ImageRun | None = None
+    if anchor is not None and is_image_anchor(anchor):
+        run_kind = "image"
+        prepared = await image_run.prepare_image_run(
+            settings,
+            index,
+            anchor,
+            paper_id=paper_id,
+            generation=generation,
+            datamark=datamark,
+            question=question,
+            include_mention=uses.paper != "off",
+        )
+        seed_plan = prepared.seed
+    elif anchor is not None:
         if uses.paper == "page":
             seed_plan = evidence.plan_page_seed(index, anchor, datamark=datamark)
         elif uses.paper == "whole":
@@ -265,7 +287,7 @@ async def ask_on_board(
     agent_question = board_path.compose_question(
         question, span.quote if span is not None else None, attached
     )
-    limits = runs.LIMITS["ask"]
+    limits = runs.LIMITS[run_kind]
     if uses.paper != "whole":
         limits = limits.model_copy(update={"max_tool_calls": 0})
 
@@ -273,6 +295,8 @@ async def ask_on_board(
     message_id, run_id = new_id("msg"), new_id("run")
     token, token_sha256 = runs.mint_run_token()
     quote_for_title = seed_plan.quote if seed_plan is not None and seed_plan.quote else question
+    if prepared is not None:
+        quote_for_title = prepared.title
     old_message = redo.source_message_id if redo is not None else None
     old_uses = dict(redo.uses) if redo is not None and redo.uses is not None else None
 
@@ -307,7 +331,7 @@ async def ask_on_board(
             level=uses.level,
         )
         threads.create_run_row(
-            db, owner, request, paper_id, generation, "ask", thread_id, message_id, run_id,
+            db, owner, request, paper_id, generation, run_kind, thread_id, message_id, run_id,
             token_sha256, datamark,
         )  # fmt: skip
         handles = (
@@ -348,8 +372,8 @@ async def ask_on_board(
     run_body = AgentRunRequest(
         run_id=run_id,
         request_id=threads.request_id_of(request) or new_id("req"),
-        kind="ask",
-        prompt_version=runs.PROMPT_VERSIONS["ask"],
+        kind=run_kind,
+        prompt_version=runs.PROMPT_VERSIONS[run_kind],
         tool=threads.tool_access(settings, run_id, token),
         datamark=datamark,
         paper=AgentPaper(
@@ -364,6 +388,7 @@ async def ask_on_board(
         level=uses.level,
         check=False,  # the board never carries a Check-yourself block (rule 8)
         diagram=uses.diagram,
+        **threads.run_extras(prepared),
     )
     fresh = db.node_answers(owner, (stored,))
     preface = sse("node", node_wire(stored, None, fresh.get(stored.node_id)))
@@ -372,7 +397,7 @@ async def ask_on_board(
             user_id=call.user_id,
             paper_id=paper_id,
             generation=generation,
-            kind="ask",
+            kind=run_kind,
             run_id=run_id,
             thread_id=thread_id,
             user_message_id=user_message_id,

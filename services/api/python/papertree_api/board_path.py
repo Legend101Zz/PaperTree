@@ -32,6 +32,7 @@ from papertree_db import NodeAnswer, NodeRow
 from papertree_prompts import datamark_text
 
 from . import evidence
+from .image_anchor import is_image_anchor
 
 #: Turns this close to the new question (the parent and its parent) are sent in full.
 FULL_TURNS: Final = 2
@@ -92,6 +93,8 @@ def tldr(text: str) -> str:
 
 def _quote_of(node: NodeRow) -> str:
     anchor = node.source_anchor
+    if is_image_anchor(anchor):
+        return ""  # an image card has no words: the crop rides on every ask (image_run)
     quote = evidence.anchor_quote(anchor) if anchor is not None else ""
     return quote or node.body
 
