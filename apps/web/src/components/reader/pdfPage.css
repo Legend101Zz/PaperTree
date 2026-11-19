@@ -1,0 +1,71 @@
+/*
+ * The PDF page in Light, Sepia and Dark (#345). The tokens are `--pt-pdf-*` in `@papertree/ui`
+ * styles.css, set per `<html data-pt-page>`; this file is how the canvas takes them. The choice of
+ * CSS filter over pdf.js's `pageColors` is argued in `PageMats.tsx`.
+ *
+ * The canvas is never re-rendered for a page colour: these rules paint what is already drawn, so
+ * a switch is live. Nothing here eases a colour: a cross-fade would leave the page half-converted
+ * for a moment (the filter and the blend are not animated together), and a transition racing a
+ * scheme change is what made axe read mid-fade colours (#200).
+ */
+
+/* The page is its own group, so a blend below never reaches the desk behind it. */
+.pt-reader .papertree-page {
+  isolation: isolate;
+}
+
+/* Light and Sepia: the wrapper adds no box. Light draws the canvas as it is. */
+.pt-reader .papertree-page__ink {
+  display: contents;
+}
+
+/* Sepia: multiply turns the canvas's white into the sheet's own cream while black type stays black. */
+:root[data-pt-page='sepia'] .pt-reader .papertree-page__canvas {
+  mix-blend-mode: multiply;
+}
+
+/*
+ * Dark, in three steps. (1) The canvas is inverted and hue-rotated by 180 degrees: lightness flips,
+ * hue stays, so coloured type and rules stay recognisable. That is black ground and near-white
+ * type. (2) Inside the wrapper, which is an isolated group painted `--pt-pdf-ink`, the canvas
+ * multiplies: black stays black, white becomes the ink colour. (3) The group is screened onto the
+ * page: black becomes `--pt-pdf-page`, the ink colour stays. So type is `--pt-pdf-ink` and the
+ * ground is `--pt-pdf-page`, to within a level, with no colour in this file.
+ */
+:root[data-pt-page='dark'] .pt-reader .papertree-page__ink {
+  position: absolute;
+  inset: 0;
+  display: block;
+  isolation: isolate;
+  background: var(--pt-pdf-ink);
+  mix-blend-mode: screen;
+}
+
+:root[data-pt-page='dark'] .pt-reader .papertree-page__canvas {
+  filter: invert(1) hue-rotate(180deg);
+  mix-blend-mode: multiply;
+}
+
+/* The mats: figures drawn back in their own colours. Above the canvas, under the text layer. */
+.pt-reader .papertree-mats {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.pt-reader .papertree-mat {
+  position: absolute;
+  box-sizing: content-box;
+  /* the box is the figure; the mat is `--pt-pdf-mat-pad` of mat colour round it */
+  padding: var(--pt-pdf-mat-pad);
+  margin: calc(-1 * var(--pt-pdf-mat-pad));
+  background: var(--pt-pdf-mat);
+  border: 1px solid var(--pt-pdf-mat-edge);
+  border-radius: 2px;
+}
+
+.pt-reader .papertree-mat canvas {
+  display: block;
+  inline-size: 100%;
+  block-size: 100%;
+}

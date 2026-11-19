@@ -62,6 +62,7 @@ import {
 import { unionOfLineRects, type BBox, type PageFrame, type Polygon } from '@papertree/document-ir';
 
 import { ITEM_INDEX_ATTR } from './PdfPage';
+import { snapSelectionToWords } from './wordSnap';
 
 /** Stamped by `stampTextLayer` on the items it places in an IR block. */
 export const BLOCK_ID_ATTR = 'data-block-id';
@@ -820,6 +821,17 @@ export function useSelectionCapture(
     // because a drag frequently ends outside the page element.
     const onPointerUp = (): void => {
       held = false;
+      // The drag is over: whole words at both ends, before the selection is read (P4 step 5).
+      const container = rootRef.current;
+      const picked = window.getSelection();
+      const first = picked !== null && picked.rangeCount > 0 ? picked.getRangeAt(0) : null;
+      if (
+        container !== null &&
+        first !== null &&
+        container.contains(first.commonAncestorContainer)
+      ) {
+        snapSelectionToWords(picked);
+      }
       schedule(0);
     };
     const onBlur = (): void => {

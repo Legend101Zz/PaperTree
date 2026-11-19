@@ -22,7 +22,12 @@ import { createContext, createElement, useContext, type ReactNode } from 'react'
 import type { Anchor } from '@papertree/anchoring';
 
 export type SendToCanvasInput =
-  | { kind: 'excerpt'; anchor: Anchor }
+  /**
+   * `toast`: what to say when it lands. Default: "Passage added to your board" with Open board.
+   * `added`: "Added" with Show, which opens the board on that card (selection menu, Just send).
+   * `none`: nothing, because the board is about to open (selection menu, Board beside).
+   */
+  | { kind: 'excerpt'; anchor: Anchor; toast?: 'added' | 'none' }
   | { kind: 'explanation'; messageId: string }
   /** A diagram answer's plate (#217): the card keeps the message id and draws the stored parts. */
   | { kind: 'diagram'; messageId: string; title: string };
@@ -34,11 +39,6 @@ export type ReaderActions = {
    * own question. Optional: a reader without it draws no Ask button (never an inert one).
    */
   askAbout?(input: { anchor: Anchor; quote: string }): void;
-  /**
-   * The selection toolbar's "Explain with a diagram" (#217): a diagram thread on the passage.
-   * Optional like `askAbout`: a reader without it draws no such button.
-   */
-  explainWithDiagram?(input: { anchor: Anchor; quote: string }): void;
   sendToCanvas(input: SendToCanvasInput): Promise<void>;
   /**
    * Resolve the anchor, scroll its passage into view if it is not, and flash it. `bottomInset` is

@@ -72,14 +72,17 @@ test.describe('S4 toolbar hit test', () => {
     await drag(page, points.from, points.to);
     await expect(page.getByRole('toolbar', { name: 'Selection actions' })).toBeVisible();
 
-    // #203: the v0.2 items (Explain runs now, Ask waits for a question, "Board" wording).
+    // #346: the menu's items (Explain, Ask…, Send to board, Note, the five colours).
     for (const name of [
-      'Explain this passage',
-      'Ask about this passage',
-      'Highlight',
-      'Highlight in amber',
+      'Explain',
+      'Ask…',
       'Send to board',
-      'Copy',
+      'Note',
+      'Highlight in amber',
+      'Highlight in green',
+      'Highlight in blue',
+      'Highlight in pink',
+      'Highlight in purple',
     ]) {
       const { hit } = await hitTest(page, name);
       console.log(`[e2e s4] elementFromPoint at the "${name}" button centre: ${hit}`);
@@ -91,7 +94,7 @@ test.describe('S4 toolbar hit test', () => {
       path: shotPath('t01-toolbar-hit-test-1440.png', testInfo.outputPath('shots')),
     });
 
-    const { x, y } = await hitTest(page, 'Highlight');
+    const { x, y } = await hitTest(page, 'Highlight in amber');
     const posted = page.waitForResponse(
       (r) => r.url().endsWith(`/papers/${paperId}/highlights`) && r.request().method() === 'POST',
     );

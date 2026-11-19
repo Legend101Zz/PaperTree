@@ -10,7 +10,7 @@ import { useCallback } from 'react';
 
 import { threadsApi, type CreateThreadBody } from '@/lib/api/threads';
 
-import { DIAGRAM_QUESTION, isStreaming, newestPlate, REDRAW_QUESTION } from '../model/turns';
+import { isStreaming, newestPlate, REDRAW_QUESTION } from '../model/turns';
 
 import type { ExplainRequest } from '../model/state';
 import type { ThreadTurns } from './useThreadTurns';
@@ -20,8 +20,6 @@ import type { ExplainRefs, RunStream } from './useRunStream';
 export interface OpenActions {
   /** Start an `explain` thread on the selected passage. */
   readonly openExplain: (input: ExplainRequest) => void;
-  /** Start a `diagram` thread on the selected passage (#217). */
-  readonly openDiagram: (input: ExplainRequest) => void;
   /** Redraw a plate: a new plate under a new ask in the same thread (`redraw_of`). */
   readonly redraw: (key: string) => void;
   /** Open the panel on a passage with nothing sent: the reader's own question starts the thread. */
@@ -56,26 +54,6 @@ export function useOpenActions(
       void sendCreate(epoch, input, undefined, false);
     },
     [halt, sendCreate, dispatch, stateRef, epochRef],
-  );
-
-  const openDiagram = useCallback(
-    (input: ExplainRequest): void => {
-      halt(false);
-      const epoch = (epochRef.current += 1);
-      dispatch({ type: 'open', epoch, request: input, view: 'thread', diagram: true });
-      stateRef.current = {
-        ...stateRef.current,
-        epoch,
-        messages: [],
-        threadId: null,
-        diagram: true,
-      };
-      if (paperId === null) return;
-      const body: CreateThreadBody = { kind: 'diagram', anchor: input.anchor };
-      const open = (signal: AbortSignal) => threadsApi.create(paperId, body, signal);
-      void startTurn(epoch, DIAGRAM_QUESTION, false, open, undefined, {});
-    },
-    [halt, paperId, startTurn, dispatch, stateRef, epochRef],
   );
 
   const redraw = useCallback(
@@ -116,5 +94,5 @@ export function useOpenActions(
     [halt, dispatch, stateRef, epochRef],
   );
 
-  return { openExplain, openDiagram, redraw, askAbout };
+  return { openExplain, redraw, askAbout };
 }

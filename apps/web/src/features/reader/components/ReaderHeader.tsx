@@ -4,7 +4,7 @@
  * The reader's header (frame 04's top bar, #203): Library, Contents, the paper's title in Caslon with
  * "p. 2 of 15", the Source · Guided · Split switch, zoom, Board and the Explain toggle. Below 768 px
  * (frame 08b, #205) it is one row: back, the title, "p. 2", Explain and a menu holding the rest. It
- * holds no state: the workspace owns the mode, zoom, page and panels, and this bar reports presses.
+ * holds no state of the reading itself: the workspace owns the mode, zoom, page and panels, and this bar reports presses.
  */
 import { ToolbarButton } from '@papertree/ui';
 import { AlignLeft, ArrowLeft, Workflow } from 'lucide-react';
@@ -12,11 +12,13 @@ import { useRef, type ReactNode, type RefObject } from 'react';
 
 import { ModeSwitch, type ReadingMode } from '@/components/reader/ModeSwitch';
 import { ZoomControl, type ZoomMode } from '@/components/reader/ZoomControl';
+import { usePage, type PageState } from '@/features/settings';
 
 import { useMenuContentsFocus } from '../hooks/useMenuContentsFocus';
 import { usePhone } from '../hooks/usePhone';
 import { PageCounter } from './PageCounter';
 import { ReaderMenu } from './ReaderMenu';
+import { ReadingSettings } from './ReadingSettings';
 
 /** The Explain toggle's state; absent for a sample paper, which has no server to ask. */
 export interface ExplainToggle {
@@ -143,7 +145,15 @@ function ExplainButton({
 }
 
 /** The phone row (frame 08b): back, the title, "p. 2", Explain and the menu with the rest. */
-function PhoneHeader({ props, title }: { props: ReaderHeaderProps; title: ReactNode }) {
+function PhoneHeader({
+  props,
+  title,
+  page,
+}: {
+  props: ReaderHeaderProps;
+  title: ReactNode;
+  page: PageState;
+}) {
   const menuButton = useRef<HTMLButtonElement>(null);
   const fromMenu = useMenuContentsFocus(props.navigatorOpen, menuButton);
   return (
@@ -164,6 +174,7 @@ function PhoneHeader({ props, title }: { props: ReaderHeaderProps; title: ReactN
               }}
             />
             <ReadingControls props={props} onLeave={close} />
+            <ReadingSettings page={page} inline />
           </>
         )}
       </ReaderMenu>
@@ -192,12 +203,15 @@ function BackLink(): ReactNode {
  */
 export function ReaderHeader(props: ReaderHeaderProps): ReactNode {
   const phone = usePhone();
+  // Mounted here, not in the menu: the phone's menu unmounts when closed, and the page colour must
+  // be kept applied (and follow the room) whether or not anyone has Aa open.
+  const page = usePage();
   const title = (
     <h1 className="pt-reader__title" title={props.title}>
       {props.title}
     </h1>
   );
-  if (phone) return <PhoneHeader props={props} title={title} />;
+  if (phone) return <PhoneHeader props={props} title={title} page={page} />;
   return (
     <header className="pt-reader__bar">
       <BackLink />
@@ -207,6 +221,7 @@ export function ReaderHeader(props: ReaderHeaderProps): ReactNode {
       <PageCounter mode={props.mode} page={props.page} pageCount={props.pageCount} />
       <div className="pt-reader__controls">
         <ReadingControls props={props} />
+        <ReadingSettings page={page} />
         <ExplainButton explain={props.explain} />
       </div>
     </header>

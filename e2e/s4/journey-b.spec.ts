@@ -140,7 +140,7 @@ test.describe('S4 Journey B — highlight, reload, zoom, modes, orphan, 390 px',
       expect(selection.text.replace(/\s+/g, ' ').trim().length).toBeGreaterThan(0);
       await expect(page.getByRole('toolbar', { name: 'Selection actions' })).toBeVisible();
       await page.screenshot({ path: shot(`b02-select-${label}-1440.png`) });
-      const hit = await hitTest(page, 'Highlight');
+      const hit = await hitTest(page, 'Highlight in amber');
       expect(hit.hit, 'the element at the Highlight button centre must be the button').toBe(
         'button',
       );
@@ -524,9 +524,14 @@ test.describe('S4 Journey B — highlight, reload, zoom, modes, orphan, 390 px',
     // measured with it open.
     const layout = await readingControls(mobile, () =>
       mobile.evaluate(() => {
+        // Every radio in the menu must fit (the reading mode, and since #345 the Aa page and room
+        // switches too); only the reading mode's own radios are counted as the three modes.
         const radios = Array.from(document.querySelectorAll('[role="radio"]')).map(
           (r) => r.getBoundingClientRect().right,
         );
+        const modeRadios = document.querySelectorAll(
+          '[role="radiogroup"][aria-label="Reading mode"] [role="radio"]',
+        ).length;
         const pageEl = document.querySelector('.papertree-page');
         return {
           scrollWidth: document.documentElement.scrollWidth,
@@ -536,13 +541,15 @@ test.describe('S4 Journey B — highlight, reload, zoom, modes, orphan, 390 px',
           zoomLabel:
             (document.querySelector('#papertree-zoom-select') as HTMLSelectElement | null)
               ?.selectedOptions[0]?.textContent ?? '',
-          radioCount: radios.length,
+          radioCount: modeRadios,
+          allRadios: radios.length,
         };
       }),
     );
     note(`390 px: ${JSON.stringify(layout)}`);
     expect(layout.scrollWidth).toBeLessThanOrEqual(390);
     expect(layout.radioCount, 'the three modes are measured, not an empty list').toBe(3);
+    expect(layout.allRadios, 'the Aa page and room radios are in the menu too').toBeGreaterThan(3);
     expect(layout.radioRight).toBeLessThanOrEqual(390);
     expect(layout.pageWidth).toBeLessThanOrEqual(390);
     expect(layout.zoomLabel).toBe('Fit width');
@@ -552,7 +559,7 @@ test.describe('S4 Journey B — highlight, reload, zoom, modes, orphan, 390 px',
     const mPoints = await pointsFor(mobile, 'YOLO is refreshingly', 'see Figure');
     await drag(mobile, mPoints.from, mPoints.to);
     await expect(mobile.getByRole('toolbar', { name: 'Selection actions' })).toBeVisible();
-    const mHit = await hitTest(mobile, 'Highlight');
+    const mHit = await hitTest(mobile, 'Highlight in amber');
     expect(mHit.hit).toBe('button');
     await mobile.screenshot({ path: shot('b14-select-390.png') });
     await readingControls(mobile, (controls) =>
