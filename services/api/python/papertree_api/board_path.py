@@ -123,7 +123,8 @@ def build_path(
 
     The root is the top of the ``parent_id`` chain: a passage (its anchor seeds the run), or a v0.2
     answer card with no parent (its thread's own anchor does, and it is the first turn). ``path``
-    false keeps only the root's words: no ancestor turns.
+    false keeps the root's words and the card asked from (its question and answer): no turns
+    between them.
     """
     chain: list[str] = []
     seen: set[str] = set()
@@ -151,7 +152,8 @@ def build_path(
         question = node.question or got.asked or DEFAULT_FIRST_QUESTION
         answered.append((node_id, question, got.final_text))
     if not path:
-        answered = []
+        # Only the card asked from (its Q and A); the root passage rides on the first turn.
+        answered = [turn for turn in answered if turn[0] == chain[-1]]
     turns = tuple(
         Turn(node_id, question, answer, full=position >= len(answered) - FULL_TURNS)
         for position, (node_id, question, answer) in enumerate(answered)

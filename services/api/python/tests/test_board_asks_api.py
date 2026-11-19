@@ -417,6 +417,40 @@ def test_the_agent_gets_the_path_not_the_siblings_and_the_depth_rule(tmp_path: P
         assert request["limits"]["max_tool_calls"] == 8  # `whole`: tools on
 
 
+def test_path_off_sends_the_passage_and_the_card_asked_from_and_nothing_between(
+    tmp_path: Path,
+) -> None:
+    """The UI says "the passage and the card asked from": with `path: false` the agent still gets
+    the root passage and the card asked from (its question and answer), not the cards between."""
+    with ai_harness(tmp_path, _script()) as h:
+        b = _setup(h)
+        _, a1 = b.ask(b.root, question="Question one?")
+        _, a2 = b.ask(a1["node_id"], question="Question two?")
+        _, a3 = b.ask(a2["node_id"], question="Question three?")
+        h.fake.requests.clear()
+        b.ask(a3["node_id"], question="Question four?", uses={"path": False})
+        request = h.fake.requests[0]
+        assert h.fake.contract_errors == []
+        entries = request["history"]["entries"]
+        users = [
+            e["message"]["content"][0]["text"] for e in entries if e["message"]["role"] == "user"
+        ]
+        assert [u.split("\n")[0] for u in users] == ["Question three?"]
+        assert "<untrusted_document" in users[0]  # the root passage
+        assert request["seed"]["quote"]  # and the seed still names it
+        assert "Question one?" not in str(entries) and "Question two?" not in str(entries)
+        answers = [
+            e["message"]["content"][0]["text"]
+            for e in entries
+            if e["message"]["role"] == "assistant"
+        ]
+        assert len(answers) == 1 and "## In the paper" in answers[0]  # the card asked from, in full
+        # Asking straight from the passage with the path off sends no turns, as before.
+        h.fake.requests.clear()
+        b.ask(b.root, question="From the top?", uses={"path": False})
+        assert h.fake.requests[0]["history"] is None
+
+
 def _span(b: Board, node_id: str, quote: str) -> dict[str, Any]:
     text = b.nodes()[node_id]["final_text"]
     start = text.index(quote)
