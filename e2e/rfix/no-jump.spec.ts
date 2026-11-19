@@ -59,7 +59,7 @@ test.describe('RFIX R2 — no jump when a highlight is created', () => {
         { x: first.left + 0.5, y: (first.top + first.bottom) / 2 },
         { x: last.right + 30, y: (last.top + last.bottom) / 2 },
       );
-      const button = page.getByRole('button', { name: 'Highlight', exact: true });
+      const button = page.getByRole('button', { name: 'Highlight in amber', exact: true });
       await expect(button).toBeVisible();
 
       const sample = async (): Promise<{ scroll: number; paragraphTop: number }> =>

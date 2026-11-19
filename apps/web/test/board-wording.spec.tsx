@@ -96,7 +96,6 @@ describe('“board”, never “canvas”, around the board (#214)', () => {
       <SelectionToolbar
         placement={{ kind: 'sheet' }}
         onHighlight={() => undefined}
-        onCopy={() => undefined}
         onExplain={() => undefined}
         onAsk={() => undefined}
         onSendToBoard={() => undefined}

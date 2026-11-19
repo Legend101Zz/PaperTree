@@ -1,38 +1,28 @@
 /**
- * v0.2 S7b (#217, frames 07a–07c) on the FAUX agent: select §3.2.1's first paragraph on p. 4 of
- * "Attention Is All You Need" → Explain with a diagram → the six parts of `[faux:diagram]` arrive on
- * the plate → tap part B → its passage flashes in the paper with "from part B" beside it → Send to
- * board → the board shows the diagram card with the plate drawn small and its counts.
+ * v0.2 S7b (#217, frames 07b–07c) on the FAUX agent: a diagram thread STORED by v0.2 still renders
+ * in the explain panel. The reader no longer starts a diagram (diagrams live inside answers,
+ * #339), so the thread is made through the API (`[faux:diagram]`, as `drawPlate` does) and the
+ * reader is opened on it (`?thread=`, the link a dived notebook page's Back to the paper uses) →
+ * the six parts of the plate stand in the panel with their counts → tap part B → its passage
+ * flashes in the paper with "from part B" beside it → Send to board → the board shows the diagram
+ * card with the plate drawn small and its counts.
  *
- * The toolbar sends the server's default ask; this walk adds the faux scenario's tag to that one
- * request (`page.route`), so the faux model draws the frames' plate instead of its generic one.
  * Everything else is the real stack. The PDF is the committed corpus's; the spec SKIPS, loudly,
  * without it.
  */
 import { existsSync } from 'node:fs';
-import { join } from 'node:path';
 
 import { expect, test } from '../harness/test';
-import {
-  drag,
-  pointsFor,
-  register,
-  REPO,
-  reveal,
-  shotPath,
-  upload,
-  waitParsed,
-} from '../s4/support';
+import { register, shotPath, upload, userId, waitParsed } from '../s4/support';
+import { ATTENTION, drawPlate, mintAnchor } from './flow-support';
 
-const ATTENTION = join(REPO, 'research', 'benchmarks', 'corpus', 'attention-is-all-you-need.pdf');
-
-test.describe('v0.2 S7b: Explain with a diagram → the plate → tap a part → Send to board', () => {
+test.describe('v0.2 S7b: a stored plate in the explain panel → tap a part → Send to board', () => {
   test.skip(
     !existsSync(ATTENTION),
     'SKIPPED: the corpus PDF attention-is-all-you-need.pdf is absent. Run research/benchmarks/fetch_corpus.sh.',
   );
 
-  test('the plate builds, a part flashes its passage, and lands on the board', async ({
+  test('the stored plate reads back, a part flashes its passage, and lands on the board', async ({
     browser,
     stack,
   }, info) => {
@@ -46,6 +36,13 @@ test.describe('v0.2 S7b: Explain with a diagram → the plate → tap a part →
     );
     const paperId = await upload(stack.apiUrl, token, ATTENTION);
     await waitParsed(stack.apiUrl, token, paperId);
+    const user = await userId(stack.apiUrl, token);
+    const plate = await drawPlate(
+      stack.apiUrl,
+      token,
+      paperId,
+      mintAnchor(stack.dataRoot, user, paperId, 'We call our particular attention'),
+    );
 
     const context = await browser.newContext({
       viewport: { width: 1440, height: 900 },
@@ -59,14 +56,7 @@ test.describe('v0.2 S7b: Explain with a diagram → the plate → tap a part →
       }
     }, token);
     const page = await context.newPage();
-    await page.route(`**/papers/${paperId}/threads`, async (route) => {
-      const request = route.request();
-      const body = JSON.parse(request.postData() ?? '{}') as { kind?: string; question?: string };
-      if (request.method() !== 'POST' || body.kind !== 'diagram') return route.continue();
-      body.question = '[faux:diagram] Explain with a diagram.';
-      return route.continue({ postData: JSON.stringify(body) });
-    });
-    await page.goto(`/paper/${paperId}/read`);
+    await page.goto(`/paper/${paperId}/read?thread=${plate.threadId}`);
     await expect
       .poll(() => page.locator('.papertree-text-layer span[data-cp-start]').count(), {
         timeout: 180_000,
@@ -74,18 +64,10 @@ test.describe('v0.2 S7b: Explain with a diagram → the plate → tap a part →
       .toBeGreaterThan(50);
     expect(await page.evaluate(() => document.visibilityState)).toBe('visible');
 
-    // ── select §3.2.1 ¶1 and ask for a diagram (07a) ──
-    await reveal(page, 'We call our particular attention');
-    const points = await pointsFor(page, 'We call our particular attention', 'weights on the');
-    await drag(page, points.from, points.to);
-    const toolbar = page.getByRole('toolbar', { name: 'Selection actions' });
-    await toolbar.getByRole('button', { name: 'Explain with a diagram' }).click();
+    // ── the six parts stand on the plate, read back from the stored thread ──
     const panel = page.getByRole('complementary', { name: 'Explain' });
-    await expect(panel).toBeVisible();
-
-    // ── the six parts arrive on the plate (07b → 07c) ──
-    const plate = panel.locator('[data-plate-phase="complete"]');
-    await expect(plate).toBeVisible({ timeout: 120_000 });
+    await expect(panel).toBeVisible({ timeout: 30_000 });
+    await expect(panel.locator('[data-plate-phase="complete"]')).toBeVisible({ timeout: 60_000 });
     await expect(panel.locator('.pt-plate-key [data-letter]')).toHaveCount(6);
     await expect(panel.locator('[data-plate-readout]')).toHaveText(
       '6 parts · drawn by AI from p. 4',
@@ -97,7 +79,7 @@ test.describe('v0.2 S7b: Explain with a diagram → the plate → tap a part →
     const text = (await panel.innerText()).replace(/\s+/g, ' ');
     expect(text).not.toMatch(/\bmsg_|\bthr_|\brun_|\bblk_|\{"/);
     expect(text).not.toMatch(/\bverified\b|fact-checked|\baccurate\b|\bgrounded\b|Stands on/i);
-    await page.screenshot({ path: shot('v02-plate-01-done-1440.png') });
+    await page.screenshot({ path: shot('v02-plate-01-stored-1440.png') });
 
     // ── tap part B: its passage flashes (no margin tab) ──
     await panel.getByRole('button', { name: /^Part B:/ }).click();
@@ -133,7 +115,10 @@ test.describe('v0.2 S7b: Explain with a diagram → the plate → tap a part →
     await page.goto(`/paper/${paperId}/board`);
     const card = page.locator('[data-plate-mini="6"]');
     await expect(card).toBeVisible({ timeout: 60_000 });
-    await expect(page.getByText('6 parts · 5 cited')).toBeVisible();
+    // The card counts its parts and claims nothing about how well they are backed (no verdicts).
+    const node = page.locator('.react-flow__node-diagram');
+    await expect(node).toContainText('6 parts');
+    await expect(node).not.toContainText(/cited|verified|supported/i);
     await expect(page.getByText('Scaled dot-product attention').first()).toBeVisible();
     await page.screenshot({ path: shot('v02-plate-03-board-1440.png') });
     await context.close();

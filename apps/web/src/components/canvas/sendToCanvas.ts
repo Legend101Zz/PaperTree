@@ -147,6 +147,12 @@ export async function sendToCanvas(
         source_message_id: input.messageId,
       });
     }
+    if (input.kind === 'excerpt' && input.toast === 'none') return;
+    if (input.kind === 'excerpt' && input.toast === 'added' && added !== undefined) {
+      // A quiet send (the menu's "Just send"): "Added" and a Show link that opens the board on the card.
+      showCanvasToast({ message: 'Added', href: boardHref(paperId, added), linkLabel: 'Show' });
+      return;
+    }
     showCanvasToast({
       message: ADDED[input.kind],
       href: boardHref(paperId, added),
