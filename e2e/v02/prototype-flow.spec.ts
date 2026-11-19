@@ -245,7 +245,7 @@ test.describe('S8: the prototype flow, 14 steps, at 1440 and 390, both schemes (
         );
         const explain = page
           .getByRole('toolbar', { name: 'Selection actions' })
-          .getByRole('button', { name: 'Explain this passage' });
+          .getByRole('button', { name: 'Explain', exact: true });
         await (phone ? explain.tap() : explain.click());
         selection = ((await sent).postDataJSON() as { anchor: { doc: { paperId: string } } })
           .anchor;

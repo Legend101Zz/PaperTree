@@ -7,8 +7,6 @@ import { EMPTY_PLATE } from '@/features/diagram';
 import type { ThreadMessage } from '@/features/explain/model/messages';
 
 export const DEFAULT_EXPLAIN_QUESTION = 'Explain this passage.';
-/** The server's default ask of a diagram thread (`schemas.DIAGRAM_QUESTION`). */
-export const DIAGRAM_QUESTION = 'Explain with a diagram.';
 /** A Redraw's ask: it names the exchange it opens in the thread menu (#217). */
 export const REDRAW_QUESTION = 'Redraw the diagram.';
 

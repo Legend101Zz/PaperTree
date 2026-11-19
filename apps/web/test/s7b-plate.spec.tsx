@@ -1,8 +1,8 @@
 /**
  * s7b-plate — the engraved plate in the explain panel (#217), driven by RECORDED SSE frames of the
  * faux diagram runs (`fixtures/diagram-plate.ts`) through the real controller, panel and SSE
- * parser: the plate builds part by part with its slots fixed, Stop freezes it, a tap flashes the
- * passage of a part, a part with no passage says so, and a refused plate is said.
+ * parser: a stored plate reads back, a Redraw builds part by part with its slots fixed, Stop freezes it, a tap
+ * flashes the passage of a part, a part with no passage says so, and a refused plate is said.
  */
 import axe from 'axe-core';
 import { act, cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
@@ -10,17 +10,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { plateFrames } from './fixtures/diagram-plate';
 import { stubDesktop } from './s6-harness';
-import { installFetch, jsonResponse, sseResponse, type SseHandle } from './s6-support';
+import { jsonResponse, sseResponse, type SseHandle } from './s6-support';
 import {
+  BAD_RUN,
   BAD_THREAD,
   box,
+  exchange,
   focusAnchor,
   keyRows,
   mount,
+  mountRedrawing,
   PAPER,
   routes,
-  RUN,
-  stoppedAtThree,
   THREAD,
 } from './s7b-support';
 
@@ -34,66 +35,58 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe('the plate builds as the parts stream in', () => {
+describe('a Redraw builds as the parts stream in', () => {
   it('thinks on an empty plate, places each part where it stays, then Stop freezes it', async () => {
-    const frames = plateFrames('diagram-plate');
+    const frames = plateFrames('diagram-plate-bad').map((f) => f.replaceAll(BAD_THREAD, THREAD));
     let handle: SseHandle | undefined;
-    const { calls } = routes(
-      (signal) =>
-        sseResponse(frames.slice(0, 3), { hold: true, signal, onHandle: (h) => (handle = h) }),
-      stoppedAtThree(),
+    const { calls } = routes((signal) =>
+      sseResponse(frames.slice(0, 3), { hold: true, signal, onHandle: (h) => (handle = h) }),
     );
-    mount();
+    const panel = await mountRedrawing();
 
-    // 07a: the ask, the empty plate, Thinking, Stop; the composer is gone (a plate is redrawn).
-    const panel = await screen.findByRole('complementary', { name: 'Explain' });
-    expect(await within(panel).findByText('Explain with a diagram.')).toBeTruthy();
-    expect(within(panel).getByRole('status').textContent).toContain('Thinking');
-    expect(panel.querySelector('[data-plate-empty]')?.textContent).toContain('Plate 1');
+    // The ask, the empty plate, Thinking, Stop: Plate 2 under its own ask, Plate 1 as it was.
+    expect(await within(panel).findByText('Redraw the diagram.')).toBeTruthy();
+    const drawing = exchange(panel, 1);
+    expect(within(drawing).getByRole('status').textContent).toContain('Thinking');
+    expect(drawing.querySelector('[data-plate-empty]')?.textContent).toContain('Plate 2');
+    expect(within(drawing).getByRole('button', { name: 'Stop' })).toBeTruthy();
     expect(within(panel).queryByLabelText('Ask a question about this paper')).toBeNull();
-    expect(calls[0]?.body).toMatchObject({ kind: 'diagram', anchor: { id: 'anchor-sel' } });
+    expect(
+      calls.find((c) => c.path === `/papers/${PAPER}/threads/${THREAD}/messages`)?.body,
+    ).toEqual({ question: 'Redraw the diagram.', redraw_of: 'msg_01M536X6ADDW22T669B1QXQM1E' });
+    expect(keyRows(exchange(panel, 0))).toHaveLength(6);
 
-    // 07b: three parts, one at a time; A never moves, the next letter is "arriving…".
+    // Three parts, one at a time; A never moves.
     const parts = frames.filter((f) => f.startsWith('event: part'));
     await act(async () => handle?.push(frames[3] as string)); // plate
     await act(async () => handle?.push(parts[0] as string));
-    await waitFor(() => expect(keyRows()).toHaveLength(1));
-    const aY = box('A');
+    await waitFor(() => expect(keyRows(drawing)).toHaveLength(1));
+    const aY = box('A', drawing);
     for (const [i, frame] of parts.slice(1, 3).entries()) {
       await act(async () => handle?.push(frame));
-      await waitFor(() => expect(keyRows()).toHaveLength(i + 2));
-      expect(box('A')).toBe(aY);
+      await waitFor(() => expect(keyRows(drawing)).toHaveLength(i + 2));
+      expect(box('A', drawing)).toBe(aY);
     }
-    expect(within(panel).getByRole('status').textContent).toContain('Drawing the diagram');
-    expect(document.querySelector('[data-plate-readout]')?.textContent).toBe('3 parts so far');
-    expect(document.querySelector('[data-ghost="D"]')).not.toBeNull();
+    expect(within(drawing).getByRole('status').textContent).toContain('Drawing the diagram');
+    expect(drawing.querySelector('[data-plate-readout]')?.textContent).toBe('3 parts so far');
 
     // Stop: the run is cancelled, the three parts stay, nothing is arriving any more.
-    fireEvent.click(within(panel).getByRole('button', { name: 'Stop' }));
-    await waitFor(() => expect(document.querySelector('[data-stopped]')).not.toBeNull());
-    expect(calls.some((c) => c.path === `/runs/${RUN}/cancel`)).toBe(true);
-    expect(keyRows().map((r) => r.dataset.letter)).toEqual(['A', 'B', 'C']);
-    expect(document.querySelector('[data-ghost]')).toBeNull();
-    expect(document.querySelector('[data-plate-readout]')?.textContent).toBe(
+    fireEvent.click(within(drawing).getByRole('button', { name: 'Stop' }));
+    await waitFor(() => expect(drawing.querySelector('[data-stopped]')).not.toBeNull());
+    expect(calls.some((c) => c.path === `/runs/${BAD_RUN}/cancel`)).toBe(true);
+    expect(keyRows(drawing).map((r) => r.dataset.letter)).toEqual(['A', 'B', 'C']);
+    expect(drawing.querySelector('[data-ghost]')).toBeNull();
+    expect(drawing.querySelector('[data-plate-readout]')?.textContent).toBe(
       '3 parts · drawn by AI from p. 4',
     );
-    expect(within(panel).queryByRole('button', { name: 'Stop' })).toBeNull();
-    // The stored copy read after the Stop replaces the live one without moving a part.
-    await waitFor(() =>
-      expect(
-        calls.filter((c) => c.path === `/papers/${PAPER}/threads/${THREAD}`).length,
-      ).toBeGreaterThan(0),
-    );
-    await new Promise((settle) => setTimeout(settle, 50));
-    expect(keyRows().map((r) => r.dataset.letter)).toEqual(['A', 'B', 'C']);
-    expect(box('A')).toBe(aY);
-    expect(document.querySelector('[data-stopped]')).not.toBeNull();
+    expect(within(drawing).queryByRole('button', { name: 'Stop' })).toBeNull();
+    expect(box('A', drawing)).toBe(aY);
   });
 });
 
 describe('a finished plate', () => {
   async function finished(): Promise<HTMLElement> {
-    routes((signal) => sseResponse(plateFrames('diagram-plate'), { signal }));
+    routes();
     mount();
     const panel = await screen.findByRole('complementary', { name: 'Explain' });
     await waitFor(() =>
@@ -168,7 +161,7 @@ describe('a finished plate', () => {
 
 describe('what a settled plate offers', () => {
   it('Send to board puts a diagram card holding the plate on the board, once', async () => {
-    const { calls } = routes((signal) => sseResponse(plateFrames('diagram-plate'), { signal }));
+    const { calls } = routes();
     mount();
     const panel = await screen.findByRole('complementary', { name: 'Explain' });
     fireEvent.click(await within(panel).findByRole('button', { name: 'Send to board' }));
@@ -188,13 +181,8 @@ describe('what a settled plate offers', () => {
   });
 
   it('Redraw adds Plate 2 under its own ask, with redraw_of the first', async () => {
-    const { calls } = routes((signal) => sseResponse(plateFrames('diagram-plate'), { signal }));
-    mount();
-    const panel = await screen.findByRole('complementary', { name: 'Explain' });
-    await waitFor(() =>
-      expect(panel.querySelector('[data-plate-phase="complete"]')).not.toBeNull(),
-    );
-    fireEvent.click(within(panel).getByRole('button', { name: 'Redraw' }));
+    const { calls } = routes();
+    const panel = await mountRedrawing();
     await waitFor(() =>
       expect(within(panel).getByRole('group', { name: /^Plate 2,/ })).toBeTruthy(),
     );
@@ -209,7 +197,7 @@ describe('what a settled plate offers', () => {
   });
 
   it('offers the crafted figure as information only, with Not now and no job button', async () => {
-    routes((signal) => sseResponse(plateFrames('diagram-plate'), { signal }));
+    routes();
     mount();
     const offer = await screen.findByRole('note', { name: 'A crafted figure, not available yet' });
     expect(offer.textContent).toContain('It is not available yet');
@@ -231,22 +219,12 @@ describe('Redraw: refused, waiting, and the offer remembered (review S6, S7, N7)
 
   it('Retry after a refused Redraw sends that Redraw again, never a new thread', async () => {
     let n = 0;
-    const { calls } = routes(
-      (signal) => sseResponse(plateFrames('diagram-plate'), { signal }),
-      undefined,
-      {
-        [FOLLOW]: (_call, signal) =>
-          (n += 1) === 1
-            ? jsonResponse(409, { detail: 'busy', code: 'busy', retryable: true })
-            : sseResponse(redrawFrames(), { signal }),
-      },
+    const { calls } = routes((signal) =>
+      (n += 1) === 1
+        ? jsonResponse(409, { detail: 'busy', code: 'busy', retryable: true })
+        : sseResponse(redrawFrames(), { signal }),
     );
-    mount();
-    const panel = await screen.findByRole('complementary', { name: 'Explain' });
-    await waitFor(() =>
-      expect(panel.querySelector('[data-plate-phase="complete"]')).not.toBeNull(),
-    );
-    fireEvent.click(within(panel).getByRole('button', { name: 'Redraw' }));
+    const panel = await mountRedrawing();
     const refused = await within(panel).findByRole('alert');
     expect(refused.getAttribute('data-error-code')).toBe('busy');
     expect(panel.querySelector('.pt-exchange__not-sent')?.textContent).toBe('not sent');
@@ -261,26 +239,16 @@ describe('Redraw: refused, waiting, and the offer remembered (review S6, S7, N7)
     ]);
     expect(
       calls.filter((c) => c.method === 'POST' && c.path === `/papers/${PAPER}/threads`),
-    ).toHaveLength(1);
+    ).toHaveLength(0);
     // One "Redraw the diagram." ask: the Retry went in place, it did not add another.
     expect(within(panel).getAllByText('Redraw the diagram.')).toHaveLength(1);
   });
 
   it('while Plate 2 draws, Plate 1’s Redraw is disabled and says why, and does nothing', async () => {
-    const { calls } = routes(
-      (signal) => sseResponse(plateFrames('diagram-plate'), { signal }),
-      undefined,
-      {
-        [FOLLOW]: (_call, signal) =>
-          sseResponse(redrawFrames().slice(0, 2), { hold: true, signal }),
-      },
+    const { calls } = routes((signal) =>
+      sseResponse(redrawFrames().slice(0, 2), { hold: true, signal }),
     );
-    mount();
-    const panel = await screen.findByRole('complementary', { name: 'Explain' });
-    await waitFor(() =>
-      expect(panel.querySelector('[data-plate-phase="complete"]')).not.toBeNull(),
-    );
-    fireEvent.click(within(panel).getByRole('button', { name: 'Redraw' }));
+    const panel = await mountRedrawing();
     await waitFor(() =>
       expect(panel.querySelector('[data-plate-phase="thinking"]')).not.toBeNull(),
     );
@@ -296,14 +264,14 @@ describe('Redraw: refused, waiting, and the offer remembered (review S6, S7, N7)
 
   it('remembers Not now for the plate: reopened, the offer stays away', async () => {
     window.localStorage.removeItem(`papertree/crafted-offer/${PLATE_1}`);
-    routes((signal) => sseResponse(plateFrames('diagram-plate'), { signal }));
+    routes();
     mount();
     const offer = await screen.findByRole('note', { name: 'A crafted figure, not available yet' });
     expect(offer.textContent).toContain('may come later');
     fireEvent.click(within(offer).getByRole('button', { name: 'Not now' }));
     expect(window.localStorage.getItem(`papertree/crafted-offer/${PLATE_1}`)).toBe('not-now');
     cleanup();
-    routes((signal) => sseResponse(plateFrames('diagram-plate'), { signal }));
+    routes();
     mount();
     const panel = await screen.findByRole('complementary', { name: 'Explain' });
     await waitFor(() =>
@@ -316,51 +284,54 @@ describe('Redraw: refused, waiting, and the offer remembered (review S6, S7, N7)
 
 describe('what the run left out, and a plate refused', () => {
   it('a part whose quote the paper does not hold has no page, and what was dropped is listed', async () => {
-    routes((signal) => sseResponse(plateFrames('diagram-plate-bad'), { signal }));
-    mount();
-    const panel = await screen.findByRole('complementary', { name: 'Explain' });
+    routes();
+    const panel = await mountRedrawing();
+    const second = exchange(panel, 1);
     await waitFor(() =>
-      expect(panel.querySelector('[data-plate-phase="complete"]')).not.toBeNull(),
+      expect(second.querySelector('[data-plate-phase="complete"]')).not.toBeNull(),
     );
-    const c = panel.querySelector('[data-letter="C"]') as HTMLElement;
+    const c = second.querySelector('[data-letter="C"]') as HTMLElement;
     expect(c.querySelector('.pt-plate-key__source')).toBeNull();
     expect(c.textContent).not.toMatch(/not verified|not found in the paper/);
     expect(c.querySelector('[data-voice="paper"]')).toBeNull();
-    expect(panel.querySelector('[data-plate-readout]')?.textContent).toBe(
+    expect(second.querySelector('[data-plate-readout]')?.textContent).toBe(
       '3 parts · drawn by AI from p. 4',
     );
-    expect(panel.querySelector('[data-plate-notes]')?.textContent).toContain(
+    expect(second.querySelector('[data-plate-notes]')?.textContent).toContain(
       'Skipped a line of the plate that could not be read',
     );
   });
 
-  it('a plate refused by the daily cap shows the cap card, never an empty plate', async () => {
-    installFetch({
-      [`POST /papers/${PAPER}/threads`]: () =>
+  it('a Redraw refused by the daily cap shows the cap card, never an empty plate', async () => {
+    routes(
+      () =>
         jsonResponse(429, {
           detail: 'Daily budget used.',
           code: 'budget_exhausted',
           retryable: false,
         }),
-      'GET /usage': () =>
-        jsonResponse(200, {
-          runs: 9,
-          input_tokens: 0,
-          output_tokens: 0,
-          cost_usd_est: 0.97,
-          budget_usd: 1,
-          since: 'x',
-          by_kind: {},
-        }),
-    });
-    mount();
+      undefined,
+      {
+        'GET /usage': () =>
+          jsonResponse(200, {
+            runs: 9,
+            input_tokens: 0,
+            output_tokens: 0,
+            cost_usd_est: 0.97,
+            budget_usd: 1,
+            since: 'x',
+            by_kind: {},
+          }),
+      },
+    );
+    const panel = await mountRedrawing();
     // S4d's cap card: what was not sent, true here, and the figures.
-    const alert = await screen.findByRole('alert');
+    const alert = await within(panel).findByRole('alert');
     expect(alert.getAttribute('data-error-code')).toBe('budget_exhausted');
     expect(alert.textContent).toContain('Nothing was sent to the AI.');
     await waitFor(() =>
       expect(alert.textContent).toContain('≈ $0.97 of $1.00 used in the last 24 hours (estimate).'),
     );
-    expect(document.querySelector('.pt-plate')).toBeNull();
+    expect(exchange(panel, 1).querySelector('.pt-plate')).toBeNull();
   });
 });

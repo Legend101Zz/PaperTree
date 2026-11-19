@@ -44,7 +44,7 @@ export function useExplainActions(options: { readonly paperId: string | null }):
   const { halt } = run;
   const turns = useThreadTurns(paperId, refs, run);
   const { ask, relevel, retry } = turns;
-  const { openExplain, openDiagram, redraw, askAbout } = useOpenActions(paperId, refs, run, turns);
+  const { openExplain, redraw, askAbout } = useOpenActions(paperId, refs, run, turns);
   const { summarize, stopSummary, abortSummary } = useSummaryActions(paperId, refs);
 
   const openPanel = useCallback((): void => {
@@ -129,7 +129,6 @@ export function useExplainActions(options: { readonly paperId: string | null }):
       state,
       request: state.open ? state.request : null,
       openExplain,
-      openDiagram,
       redraw,
       askAbout,
       openPanel,
@@ -150,7 +149,6 @@ export function useExplainActions(options: { readonly paperId: string | null }):
       paperId,
       state,
       openExplain,
-      openDiagram,
       redraw,
       askAbout,
       openPanel,

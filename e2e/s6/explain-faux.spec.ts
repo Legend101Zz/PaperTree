@@ -95,7 +95,7 @@ test.describe('S6 Journey C (faux agent) — explain, follow-up, chip, summary, 
     const toolbar = page.getByRole('toolbar', { name: 'Selection actions' });
     await expect(toolbar).toBeVisible();
     // #203: Explain runs the answer now (v0.1's Ask); the toolbar's Ask waits for a question.
-    const ask = toolbar.getByRole('button', { name: 'Explain this passage' });
+    const ask = toolbar.getByRole('button', { name: 'Explain', exact: true });
     const box = await ask.boundingBox();
     expect(box).not.toBeNull();
     await page.screenshot({ path: shot('c01-selection-1440.png') });

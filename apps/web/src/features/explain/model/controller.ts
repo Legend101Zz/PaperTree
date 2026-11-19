@@ -13,8 +13,6 @@ export interface ExplainController {
   /** What the panel is open on; `null` when it was opened without a selection (or is closed). */
   readonly request: ExplainRequest | null;
   readonly openExplain: (input: ExplainRequest) => void;
-  /** The selection toolbar's "Explain with a diagram" (#217): a new diagram thread on the passage. */
-  readonly openDiagram: (input: ExplainRequest) => void;
   /**
    * Redraw a plate (#217): a new plate under a new ask in the same thread (`redraw_of`). On a plate
    * that never arrived (refused or failed before it was written) it asks for that plate again.

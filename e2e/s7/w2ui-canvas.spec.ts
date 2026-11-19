@@ -93,11 +93,13 @@ test('the same passage twice is one card and a toast says so', async ({
     const points = await pointsFor(page, 'Deeper neural networks', 'substantially deeper');
     await drag(page, points.from, points.to);
     expect((await selectionRects(page)).text).toContain('Deeper neural networks');
-    await page.getByRole('button', { name: 'Send to board' }).click(); // #203's wording
+    await page.getByRole('button', { name: 'Send to board', exact: true }).click(); // #203's wording
+    // #346: two choices; Just send stays on the paper and toasts "Added" with Show.
+    await page.getByRole('button', { name: /^Just send/ }).click();
   };
   await send();
   const toast = page.getByTestId('canvas-toast');
-  await expect(toast).toContainText('Passage added to your board'); // #203: the toolbar's wording
+  await expect(toast).toContainText('Added'); // #346: Just send says Added, with Show
   await expect
     .poll(async () => (await getBoard(stack.apiUrl, token, paperId)).nodes.length)
     .toBe(1);

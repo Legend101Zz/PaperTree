@@ -38,16 +38,16 @@ import {
 import { useHighlightClick, useSelectionToolbar } from '@/features/reader';
 import { MAX_ANCHORS_PER_HIGHLIGHT } from '@/lib/api/highlights';
 
-import { useReaderActions } from './actions';
 import { type DocumentHandle, type DocumentRef } from './documentHandle';
+import { figureRegions } from './figureRegions';
 import { FLASH_SCROLL_MS, prefersReducedMotion } from './flash';
 import { HighlightOverlay, type FlashPaint, type PaintItem } from './HighlightOverlay';
 import { usePdfDocument } from './PdfDocumentProvider';
 import { displayQuote } from './quote';
 import type { TextLayerInfo } from './PdfPage';
-import { holdScroll } from './scrollHold';
 import { stampTextLayer } from './stampTextLayer';
 import { tooLongSentence, type ReaderHighlight } from './useHighlights';
+import { useSelectionActions, type NoteAt } from './useSelectionActions';
 import {
   useSelectionCapture,
   type PageTextSource,
@@ -60,6 +60,8 @@ import {
   type VirtualPageListHandle,
 } from './VirtualPageList';
 
+import type { BBox } from '@papertree/document-ir';
+
 import type { HighlightColor } from '@/lib/api/types';
 
 export interface SourcePaneProps {
@@ -70,9 +72,15 @@ export interface SourcePaneProps {
   readonly highlights: readonly ReaderHighlight[];
   /**
    * Highlight was pressed on a selection: persist these anchors (one highlight, N anchors), in the
-   * wash pressed, or the last one used when Highlight itself was.
+   * colour pressed.
    */
   readonly onCreateHighlight: (capture: SelectionCapture, color?: HighlightColor) => void;
+  /**
+   * The menu's Note: a highlight with its card open on the note field. Drawn only when given.
+   */
+  readonly onCreateNote?: (capture: SelectionCapture, at: NoteAt | null) => void;
+  /** The menu's Board beside: open the board (TODO(#344): beside the paper, with the split view). */
+  readonly onOpenBoard?: () => void;
   /** Why Highlight is unavailable right now, or null. */
   readonly highlightUnavailableReason: string | null;
   /** A painted highlight was clicked (or Enter was pressed on it). */
@@ -156,7 +164,6 @@ export function paintItemsOf(
 
 export function SourcePane(props: SourcePaneProps) {
   const { doc, onCreateHighlight, onSelectionChange, onActivateHighlight } = props;
-  const actions = useReaderActions();
   const pdf = usePdfDocument();
   const listRef = useRef<VirtualPageListHandle | null>(null);
   // State, not a ref: the hook must re-bind when the scroller mounts.
@@ -220,6 +227,14 @@ export function SourcePane(props: SourcePaneProps) {
   );
 
   const { items } = useMemo(() => paintItemsOf(doc, props.highlights), [doc, props.highlights]);
+  // The figure boxes per page, for the dark and sepia page's mats. Built once per document: a new
+  // array on every render would redraw every mat each time.
+  const figuresByPage = useMemo(() => {
+    const byPage = new Map<number, readonly BBox[]>();
+    for (const [pageIndex, blocks] of doc?.byPage ?? [])
+      byPage.set(pageIndex, figureRegions(blocks));
+    return byPage;
+  }, [doc]);
 
   // One highlight holds at most 64 anchors (contracts.md §2.4): a longer selection says so in the
   // bar, before anything is sent — the reviewer's 3-page drag was a raw 422 (s4-review.md F2).
@@ -228,74 +243,35 @@ export function SourcePane(props: SourcePaneProps) {
     props.highlightUnavailableReason ??
     (targetCount > MAX_ANCHORS_PER_HIGHLIGHT ? tooLongSentence(targetCount) : undefined);
 
-  // Escape drops the selection and, with it, the toolbar (RFIX).
-  const hasSelection = selection !== null;
+  const selectionActions = useSelectionActions({
+    selection,
+    capture,
+    clear,
+    root,
+    onCreateHighlight,
+    ...(props.onCreateNote === undefined ? {} : { onCreateNote: props.onCreateNote }),
+    ...(props.onOpenBoard === undefined ? {} : { onOpenBoard: props.onOpenBoard }),
+    ...(props.onNotice === undefined ? {} : { onNotice: props.onNotice }),
+    highlightDisabledReason: unavailable,
+  });
+
+  // A settled selection is painted by the overlay as one band per line (#346), on at most two pages
+  // (what the capture measures); the native highlight goes transparent meanwhile. Anything else keeps
+  // the native wash, which is the fallback where custom paint cannot run.
+  const livePaint =
+    selection !== null &&
+    selection.endPageIndex - selection.pageIndex <= 1 &&
+    (selection.irQuads.length > 0 || selection.endQuads.length > 0);
   useEffect(() => {
-    if (!hasSelection) return undefined;
-    const onKey = (event: KeyboardEvent): void => {
-      if (event.key === 'Escape' && !event.defaultPrevented) clear();
-    };
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
-  }, [hasSelection, clear]);
-
-  // A toolbar action must not move the page (RFIX2 R2): the hold puts back any scroll the reader
-  // did not ask for in the moments after it.
-  const onHighlight = useCallback(
-    (color?: HighlightColor) => {
-      const captured = capture('text');
-      if (captured === null) return;
-      holdScroll(root);
-      onCreateHighlight(captured, color);
-      clear();
-    },
-    [capture, clear, onCreateHighlight, root],
-  );
-
-  // Explain runs now; Ask opens the panel on the passage for the reader's own question. No scroll
-  // hold for either: the explain panel opens beside the paper and the page list repositions it.
-  const onExplain = useCallback(() => {
-    const captured = capture('text');
-    if (captured === null) return;
-    actions.openExplain({ anchor: captured.anchor, quote: captured.selection.text });
-    clear();
-  }, [actions, capture, clear]);
-
-  const askAbout = actions.askAbout;
-  const onAsk = useCallback(() => {
-    const captured = capture('text');
-    if (captured === null) return;
-    askAbout?.({ anchor: captured.anchor, quote: captured.selection.text });
-    clear();
-  }, [askAbout, capture, clear]);
-
-  // #217: drawn only when the reader wires it, like Ask (never an inert button).
-  const explainWithDiagram = actions.explainWithDiagram;
-  const onExplainWithDiagram = useCallback(() => {
-    const captured = capture('text');
-    if (captured === null) return;
-    explainWithDiagram?.({ anchor: captured.anchor, quote: captured.selection.text });
-    clear();
-  }, [explainWithDiagram, capture, clear]);
-
-  const onNotice = props.onNotice;
-  const onSendToBoard = useCallback(() => {
-    const captured = capture('text');
-    if (captured === null) return;
-    holdScroll(root);
-    clear();
-    actions.sendToCanvas({ kind: 'excerpt', anchor: captured.anchor }).catch(() => {
-      onNotice?.("Couldn't send this passage to the board. Try again.");
-    });
-  }, [actions, capture, clear, onNotice, root]);
-
-  const onCopy = useCallback(() => {
-    const text = selection?.text ?? '';
-    if (text === '') return;
-    holdScroll(root);
-    void navigator.clipboard?.writeText(text).catch(() => undefined);
-    clear();
-  }, [selection, clear, root]);
+    if (root === null || !livePaint) return undefined;
+    root.setAttribute('data-pt-selpaint', '');
+    return () => root.removeAttribute('data-pt-selpaint');
+  }, [root, livePaint]);
+  const selectionOn = (pageIndex: number): readonly BBox[] | null => {
+    if (!livePaint || selection === null) return null;
+    if (pageIndex === selection.endPageIndex) return selection.endQuads;
+    return pageIndex === selection.pageIndex ? selection.irQuads : null;
+  };
 
   const documentHandle = useMemo<DocumentHandle>(
     () => ({
@@ -337,15 +313,7 @@ export function SourcePane(props: SourcePaneProps) {
     doc,
     narrow: props.narrow,
     sheetOpen: props.sheetOpen === true,
-    actions: {
-      onHighlight,
-      onExplain,
-      ...(askAbout === undefined ? {} : { onAsk }),
-      ...(explainWithDiagram === undefined ? {} : { onExplainWithDiagram }),
-      onSendToBoard,
-      onCopy,
-      ...(unavailable === undefined ? {} : { highlightDisabledReason: unavailable }),
-    },
+    actions: selectionActions,
   });
 
   if (pdf.error !== null && pdf.error !== undefined) {
@@ -407,6 +375,7 @@ export function SourcePane(props: SourcePaneProps) {
         zoom={props.zoom}
         className="h-full"
         onTextLayer={onTextLayer}
+        figureRegionsOf={(pageIndex) => figuresByPage.get(pageIndex)}
         onViewportResize={props.onViewportResize}
         initialPosition={props.initialPosition}
         onPositionChange={props.onPositionChange}
@@ -420,6 +389,7 @@ export function SourcePane(props: SourcePaneProps) {
             items={items}
             activeHighlightId={props.activeHighlightId}
             flash={props.flash}
+            selection={selectionOn(pageIndex)}
             onActivate={(highlightId) => onActivateHighlight(highlightId, null)}
           />
         )}

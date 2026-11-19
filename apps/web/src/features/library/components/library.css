@@ -630,10 +630,6 @@
   justify-content: flex-end;
 }
 
-.pt-hmenu {
-  position: relative;
-}
-
 .pt-hmenu__button {
   display: inline-flex;
   inline-size: 40px;
@@ -662,22 +658,6 @@
 .pt-hints__gotit:focus-visible {
   outline: var(--pt-focus-width) solid var(--pt-focus);
   outline-offset: var(--pt-focus-offset);
-}
-
-.pt-hmenu__panel {
-  position: absolute;
-  top: calc(100% + 8px);
-  right: 0;
-  z-index: 20;
-  display: flex;
-  min-inline-size: 240px;
-  flex-direction: column;
-  gap: 12px;
-  padding: 16px;
-  background: var(--pt-e2-fill);
-  border: 1px solid var(--pt-rule);
-  border-radius: var(--pt-radius-menu);
-  box-shadow: var(--pt-e2), var(--pt-e2-edge);
 }
 
 .pt-hmenu__email {

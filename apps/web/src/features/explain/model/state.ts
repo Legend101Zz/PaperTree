@@ -105,7 +105,6 @@ export type ExplainAction =
       epoch: number;
       request: ExplainRequest | null;
       view: PanelView;
-      diagram?: boolean;
     }
   | { type: 'close' }
   | { type: 'level'; level: AnswerLevel }
@@ -150,7 +149,7 @@ export function explainReducer(state: ExplainState, action: ExplainAction): Expl
         threadId: null,
         messages: [],
         fresh: false,
-        diagram: action.diagram === true,
+        diagram: false,
         level: DEFAULT_LEVEL,
       };
     case 'fresh':
