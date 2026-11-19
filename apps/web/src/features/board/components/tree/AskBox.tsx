@@ -21,6 +21,7 @@ import {
   whatTheAiWillRead,
 } from '../../model/askPayload';
 import { DRAFT_ID } from '../../model/display';
+import { spanWords } from '../../model/spans';
 import { branchFor } from '../../model/tree';
 import { useBranch } from '../BranchContext';
 import { UsesPicker } from './UsesPicker';
@@ -136,7 +137,7 @@ export function AskBox(): ReactNode {
       </p>
       {draft.span === null ? null : (
         <p className="pt-ask__on">
-          on <q className="pt-ask__quote">{draft.span.quote}</q>
+          on <q className="pt-ask__quote">{spanWords(draft.span.quote)}</q>
         </p>
       )}
       <label className="pt-ask__row">

@@ -6,6 +6,11 @@
  * module turns one into the other and back without a DOM: it reads the source as plain text (marks
  * and handles dropped, with a map back to the source) and finds the n-th occurrence of the words.
  *
+ * The stored span is `{start, end, quote}` with `quote` EXACTLY `source.slice(start, end)`, markup
+ * and all: that is what the server checks (a span over `**bold**`, a `[b1]` handle, `$maths$` or a
+ * paragraph break is stored as the source spells it). The words a reader sees are derived from it
+ * with `spanWords`, for display only (the ask box, the outline, the note a Keep makes).
+ *
  * A selection that crosses a formula or a figure has words the source does not spell the same way;
  * `locateQuote` then answers null and the board says so, rather than storing a span that points at
  * the wrong text.
@@ -103,6 +108,17 @@ export function normaliseWords(text: string): string {
 }
 
 /**
+ * The words a reader sees in a stored span's `quote` (the source slice): marks, handles and maths
+ * left out, runs of whitespace one space. Display only; never send it as a `quote`.
+ *
+ * @param quote A stored span's quote, Markdown source.
+ * @returns The same words as the card shows them.
+ */
+export function spanWords(quote: string): string {
+  return normaliseWords(plainOf(quote).plain);
+}
+
+/**
  * How many times `words` starts in `text` before `before`. Overlapping runs count ("aa" in "aaa").
  *
  * @param text The text searched.
@@ -140,8 +156,10 @@ export function nthIndexOf(text: string, words: string, nth: number): number {
 export interface LocatedSpan {
   readonly start: number;
   readonly end: number;
-  /** The words as the card shows them (what the server stores as `quote`). */
+  /** `source.slice(start, end)`, exactly: what the server stores and checks as `quote`. */
   readonly quote: string;
+  /** The words as the card shows them (display only). */
+  readonly words: string;
   /** Which occurrence of the words this is: the key a later draw of the underline uses. */
   readonly nth: number;
 }
@@ -164,7 +182,8 @@ export function locateQuote(source: string, selected: string, nth: number): Loca
   const first = map[at];
   const last = map[at + quote.length - 1];
   if (first === undefined || last === undefined) return null;
-  return { start: first, end: last + 1, quote, nth };
+  const end = last + 1;
+  return { start: first, end, quote: source.slice(first, end), words: quote, nth };
 }
 
 /**
@@ -177,7 +196,7 @@ export function locateQuote(source: string, selected: string, nth: number): Loca
  */
 export function spanNth(source: string, span: { start: number; quote: string }): number {
   const { plain, map } = plainOf(source);
-  const quote = normaliseWords(span.quote);
+  const quote = spanWords(span.quote);
   let nth = 0;
   let at = plain.indexOf(quote);
   while (at !== -1) {

@@ -9,6 +9,7 @@
  */
 
 import { firstLine, firstSentence } from './answerText';
+import { spanWords } from './spans';
 import {
   branchFor,
   pathTo,
@@ -279,7 +280,12 @@ export function whatTheAiWillRead<N extends AskReadNode>(
     items.push({ kind: 'answer', id: node.node_id, title: asked, note });
   });
   if (ask.span != null) {
-    items.push({ kind: 'words', id: null, title: `the words “${ask.span.quote}”`, note: '' });
+    items.push({
+      kind: 'words',
+      id: null,
+      title: `the words “${spanWords(ask.span.quote)}”`,
+      note: '',
+    });
   }
   for (const id of uses.extra_node_ids) {
     const extra = tree.byId.get(id);

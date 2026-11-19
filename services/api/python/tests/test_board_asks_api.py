@@ -252,6 +252,50 @@ def test_a_span_must_be_the_words_at_its_offsets_of_the_parents_answer(tmp_path:
         assert_envelope(noted, 422, "validation_failed")
 
 
+_MARKED = (
+    "## TL;DR\nEnergy is **conserved** in a closed system [b1].\n\n"
+    "## How it works\nWith $F(x)=0$ the block outputs the input back."
+)
+
+
+def test_a_span_over_bold_a_handle_maths_and_a_paragraph_break_is_the_source_slice(
+    tmp_path: Path,
+) -> None:
+    """#343 review: the quote is `source[start:end]` exactly, markup included, so a selection that
+    crosses `**bold**`, a `[bN]` handle, `$maths$` or a paragraph break is accepted; the words the
+    reader saw (whitespace collapsed, marks dropped) are refused as a quote, and the agent is told
+    the words the reader saw, not the markup."""
+    script = Script("followup-ok", call_tools=False, final_text=lambda _c: _MARKED)
+    with ai_harness(tmp_path, script) as h:
+        b = _setup(h)
+        _, answer = b.ask(b.root, question="First?")
+        node_id = answer["node_id"]
+        text = b.nodes()[node_id]["final_text"]
+        assert text == _MARKED
+        slices = {
+            "is **conserved** in": "is conserved in",
+            "system [b1].\n\n## How": "system. How",
+            "With $F(x)=0$ the block": "With the block",
+            "closed system [b1]": "closed system",
+        }
+        for quote, words in slices.items():
+            start = text.index(quote)
+            span = {"start": start, "end": start + len(quote), "quote": quote}
+            h.fake.requests.clear()
+            assert b.ask_raw(node_id, question="Why?", span=span).status_code == 200, quote
+            asked = h.fake.requests[-1]["question"]
+            assert f'"{words}"' in asked and "**" not in asked and "[b1]" not in asked, asked
+            noted = h.client.post(
+                f"/boards/{b.board_id}/nodes/{node_id}/notes",
+                json={"span": span, "text": words},
+                headers=auth(b.token),
+            )
+            assert noted.status_code == 201, quote
+            # The rendered words (the old web contract) are not the source at those offsets.
+            rendered = {**span, "quote": words}
+            assert b.ask_raw(node_id, question="Why?", span=rendered).status_code == 422, quote
+
+
 def test_the_span_offsets_count_utf16_code_units(tmp_path: Path) -> None:
     def astral(context: RunContext) -> str:
         return "## TL;DR\nA \U0001d4e7 mark and a word.\n"

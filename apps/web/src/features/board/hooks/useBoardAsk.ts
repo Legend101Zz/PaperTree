@@ -22,6 +22,7 @@ import { ApiError, type CanvasNode, type Citation, type ParentSpan } from '@/lib
 import { buildAskBody, isValidQuestion, type QuickAsk } from '../model/askPayload';
 import { toFlowNode } from '../model/flow';
 import { tidyResets } from '../model/layout';
+import { spanWords } from '../model/spans';
 import { branchCounts, countsPhrase, type BoardTree } from '../model/tree';
 import { sentence } from './controllerShared';
 
@@ -288,7 +289,10 @@ export function useBoardAsk(
       if (boardId === undefined) return;
       control.openMenu(null);
       try {
-        const note = await boardsApi.keepNote(boardId, parentId, { span, text: span.quote });
+        const note = await boardsApi.keepNote(boardId, parentId, {
+          span,
+          text: spanWords(span.quote),
+        });
         if (!aliveRef.current) return;
         adopt(note);
         branched(note);
