@@ -257,7 +257,6 @@ export function useBranchBoard(
       stage,
     }),
     [
-      ask.sending,
       view.tree,
       view.layout,
       view.draft,
