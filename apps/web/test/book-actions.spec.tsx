@@ -293,6 +293,50 @@ describe('Rename', () => {
     expect(screen.getByRole('dialog')).toBe(dialog);
   });
 
+  it('after Enter saves, focus is on the ⋯ button at once (not when the list is re-read), and Esc puts the book back', async () => {
+    // The PATCH answers, but the re-read of the library is slow (a loaded server, CI): the title
+    // already follows from the answer, so the field must not wait for the re-read to close, or an
+    // Esc in that window is taken as "cancel the rename" and the book stays open (e2e book.spec).
+    api.rename.mockImplementation((id: string, title: string) =>
+      Promise.resolve(row({ paper_id: id, title })),
+    );
+    await renderLibrary();
+    const dialog = await open();
+    const field = await startRename(dialog);
+    let finishRead: (rows: LibraryPaper[]) => void = () => undefined;
+    api.list.mockReturnValue(
+      new Promise<LibraryPaper[]>((resolve) => {
+        finishRead = resolve;
+      }),
+    );
+    fireEvent.change(field, { target: { value: 'My Attention' } });
+    fireEvent.keyDown(field, { key: 'Enter' });
+    await waitFor(() =>
+      expect(within(dialog).queryByRole('textbox', { name: 'Title' })).toBeNull(),
+    );
+    expect(within(dialog).getByRole('heading', { name: 'My Attention' })).toBeTruthy();
+    expect(document.activeElement).toBe(moreButton(dialog));
+    fireEvent.keyDown(document.activeElement as HTMLElement, { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    await act(async () => {
+      finishRead([row({ title: 'My Attention' }), SECOND]);
+      await Promise.resolve();
+    });
+  });
+
+  it('Esc cancels the rename, focus returns to the ⋯ button, and the second Esc puts the book back', async () => {
+    await renderLibrary();
+    const dialog = await open();
+    const field = await startRename(dialog);
+    fireEvent.keyDown(field, { key: 'Escape' });
+    expect(within(dialog).queryByRole('textbox', { name: 'Title' })).toBeNull();
+    expect(document.activeElement).toBe(moreButton(dialog));
+    expect(screen.getByRole('dialog')).toBe(dialog);
+    fireEvent.keyDown(document.activeElement as HTMLElement, { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(document.activeElement).toBe(spine(ID));
+  });
+
   it('refuses a blank title in a sentence and keeps the field open', async () => {
     await renderLibrary();
     const dialog = await open();
