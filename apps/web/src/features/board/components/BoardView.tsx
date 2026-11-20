@@ -12,12 +12,20 @@
  * and turns them to glances below the low-zoom switch (one subscription to the zoom, here); the
  * zoom the stylesheet reads is published in 0.05 steps, since each write restyles every card.
  */
-import { Background, ReactFlow, ReactFlowProvider, useReactFlow, useStore } from '@xyflow/react';
+import {
+  Background,
+  ReactFlow,
+  ReactFlowProvider,
+  useReactFlow,
+  useStore,
+  useStoreApi,
+} from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
 import { useBoardController } from '../hooks/useBoardController';
 import { useBoardSelection } from '../hooks/useBoardSelection';
+import { useEscapeDeselect } from '../hooks/useEscapeDeselect';
 import { useBranchBoard } from '../hooks/useBranchBoard';
 import { useBoardTools } from '../hooks/useBoardTools';
 import { useCardSources } from '../hooks/useCardSources';
@@ -139,6 +147,7 @@ function Board({ paperId }: { readonly paperId: string }) {
   const big = bigBoard(ctl.nodes.length);
   const glance = useGlanceZoom(big);
   const flow = useReactFlow<PtNode, PtEdge>();
+  const flowStore = useStoreApi();
   const { selection, onSelectionChange } = useBoardSelection();
   const drawing = useThreadDrawing(ctl.nodes);
   const stage = useRef<HTMLDivElement>(null);
@@ -179,6 +188,14 @@ function Board({ paperId }: { readonly paperId: string }) {
     [branch.view.nodes, sources.pages],
   );
   const link = useLinkAs(ctl, drawing, nodes, stage);
+  // After the board's own Escape (useBranchBoard, above) and the link gestures', Escape puts the
+  // selection away, as a click on the empty pane does.
+  useEscapeDeselect(
+    (selection.nodes.length > 0 || selection.edges.length > 0) &&
+      link.request === null &&
+      !link.keyboard.walking,
+    () => flowStore.getState().unselectNodesAndEdges(),
+  );
   const tools = useBoardTools({
     ctl,
     selection,

@@ -180,11 +180,22 @@ test('branch a conversation: ask, branch from words, focus a path, tidy, fold, o
   const third = answerCards(page).nth(2);
   const thirdBox = (await third.boundingBox())!;
   expect(thirdBox.y).toBeGreaterThan(secondBox.y + secondBox.height - 2);
-  await expect(page.locator('.pt-tree-edge[data-branch="down"]')).toHaveCount(1);
+  // One real down line (second -> third). The new answer is focused, so it offers its own Follow up
+  // stub, and that one draws a DASHED pending line (`data-pending="true"`): not an edge yet.
+  await expect(page.locator('.pt-tree-edge[data-branch="down"][data-pending="false"]')).toHaveCount(
+    1,
+  );
+  await expect(page.locator('.pt-tree-edge[data-pending="true"]')).toHaveCount(1);
+  await expect(page.locator('.pt-tree-edge[data-pending="true"]')).toHaveCSS(
+    'stroke-dasharray',
+    /\d/,
+  );
 
   // Escape backs out one level: the path focus first.
   await escape(page);
   await expect(crumbs).toBeHidden();
+  // The stub went with the focus: no pending line is left on the board.
+  await expect(page.locator('.pt-tree-edge[data-pending="true"]')).toHaveCount(0);
 
   // Drag a card by its top strip: one PATCH of its offset, and its whole branch moves with it.
   const strip = second.locator('.pt-tc__strip');
