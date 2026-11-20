@@ -1055,9 +1055,14 @@ class SsePlate(Wire):
 
 
 class SseDone(Wire):
+    """The end of a run. `final_text` is the text the server STORED when it differs from what the
+    `text` events carried (the agent repairs or removes a ```mermaid fence after the stream ends),
+    else null: a reader replaces what it streamed with it (contracts.md §2.6, 2026-11-20 note)."""
+
     status: DoneStatus
     error: MessageError | None
     message_id: str
+    final_text: str | None = None
 
 
 #: event name -> the model of its `data`. `usage` is a `RunSummary`.

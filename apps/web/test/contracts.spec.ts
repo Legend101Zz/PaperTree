@@ -425,13 +425,26 @@ const EVENTS: SseEvent[] = [
   { event: 'part', data: CITED_PART },
   { event: 'link', data: LINK },
   { event: 'usage', data: RUN },
-  { event: 'done', data: { status: 'complete', error: null, message_id: ANSWER.message_id } },
+  {
+    event: 'done',
+    data: { status: 'complete', error: null, message_id: ANSWER.message_id, final_text: null },
+  },
+  {
+    event: 'done',
+    data: {
+      status: 'complete',
+      error: null,
+      message_id: ANSWER.message_id,
+      final_text: '## TL;DR\nThe stored text.',
+    },
+  },
   {
     event: 'done',
     data: {
       status: 'error',
       error: { code: 'budget_exhausted', retryable: false, message: 'Daily budget used.' },
       message_id: ANSWER.message_id,
+      final_text: null,
     },
   },
 ];

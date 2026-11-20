@@ -256,7 +256,12 @@ export function useBoardAsk(
             patchStream(id, { citations: event.data.items });
           } else if (event.event === 'done') {
             const { status, error } = event.data;
+            // The stored text when the agent repaired or removed a figure after the stream: it
+            // replaces what streamed (also on the card, until the node is read back below).
+            const stored = event.data.final_text;
+            if (typeof stored === 'string') written = stored;
             patchStream(id, {
+              ...(typeof stored === 'string' ? { text: stored } : {}),
               status: status === 'aborted' ? 'stopped' : status,
               thinking: false,
               settling: true,

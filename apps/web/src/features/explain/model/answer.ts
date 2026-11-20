@@ -203,7 +203,11 @@ export function answerModel(
     else if (item.k === 'diagram' || item.k === 'mermaid') {
       // A cut-off answer's open fence is no figure: never show raw lines, never a placeholder
       // that waits for nothing.
-      if (item.closed || live) blocks.push(item);
+      // While the answer is live a ```mermaid fence stays the quiet placeholder even once it is
+      // closed: the agent may repair or drop it when the stream ends, and `done.final_text`
+      // brings the stored text, so a figure is never shown and then swapped or taken away.
+      if (item.k === 'mermaid' && live) blocks.push({ ...item, closed: false });
+      else if (item.closed || live) blocks.push(item);
     } else if (item.k === 'check') {
       const spec = parseCheck(item.body);
       if (spec !== null) blocks.push({ k: 'check', spec });

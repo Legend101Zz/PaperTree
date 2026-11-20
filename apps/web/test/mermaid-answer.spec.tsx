@@ -41,11 +41,43 @@ describe('a mermaid fence in an answer', () => {
     expect(view.container.querySelector('[data-diagram-pending]')).not.toBeNull();
     expect(view.container.textContent).not.toMatch(/sequenceDiagram|participant|```/);
     expect(mock.render).not.toHaveBeenCalled();
+    // Closed, but the answer is still live: the agent may repair or drop it at the end, so it
+    // stays the placeholder until `done` (the answer is then no longer streaming).
     view.rerender(<Answer text={answer(FENCE)} status="streaming" />);
+    expect(view.container.querySelector('[data-diagram-pending]')).not.toBeNull();
+    expect(view.container.querySelector('[data-mermaid]')).toBeNull();
+    expect(mock.render).not.toHaveBeenCalled();
+    view.rerender(<Answer text={answer(FENCE)} status="complete" />);
     await waitFor(() => expect(view.container.querySelector('[data-mermaid] svg')).not.toBeNull());
     expect(view.container.querySelector('[data-diagram-pending]')).toBeNull();
     expect(view.container.textContent).toContain('After the figure.');
     expect(view.container.textContent).not.toMatch(/participant|```/);
+  });
+
+  it('on done the stored text swaps in: a repaired fence is drawn, a dropped one just goes', async () => {
+    const streamed = answer('sequenceDiagram\n  Reader->>-> Tutor');
+    const view = render(<Answer text={streamed} status="streaming" />);
+    expect(view.container.querySelector('[data-diagram-pending]')).not.toBeNull();
+    // `done.final_text`: the agent's repaired fence, and the answer is complete.
+    view.rerender(<Answer text={answer(FENCE)} status="complete" />);
+    await waitFor(() => expect(view.container.querySelector('[data-mermaid] svg')).not.toBeNull());
+    expect(view.container.querySelector('[data-diagram-pending]')).toBeNull();
+    view.unmount();
+
+    const live = render(<Answer text={answer(FENCE)} status="streaming" />);
+    expect(live.container.querySelector('[data-diagram-pending]')).not.toBeNull();
+    // `done.final_text` without the fence: the placeholder disappears, no figure, no gap of code.
+    live.rerender(
+      <Answer
+        text={'## TL;DR\nShort.\n\n## How it works\nSee:\nAfter the figure.'}
+        status="complete"
+      />,
+    );
+    expect(live.container.querySelector('[data-diagram-pending]')).toBeNull();
+    expect(live.container.querySelector('[data-mermaid]')).toBeNull();
+    expect(mock.render).toHaveBeenCalledTimes(1);
+    expect(live.container.textContent).toContain('After the figure.');
+    expect(live.container.textContent).not.toMatch(/sequenceDiagram|```/);
   });
 
   it('a half-typed fence marker is held back, not flashed as text', () => {
@@ -70,6 +102,14 @@ describe('a mermaid fence in an answer', () => {
     expect(model.blocks.some((b) => b.k === 'mermaid')).toBe(false);
     const live = answerModel(open, () => undefined, true);
     expect(live.blocks.find((b) => b.k === 'mermaid')).toMatchObject({ closed: false });
+  });
+
+  it('a CLOSED fence is still an open placeholder while live, and a figure once it is not', () => {
+    const closed = answer(FENCE);
+    const live = answerModel(closed, () => undefined, true);
+    expect(live.blocks.find((b) => b.k === 'mermaid')).toMatchObject({ closed: false });
+    const done = answerModel(closed, () => undefined, false);
+    expect(done.blocks.find((b) => b.k === 'mermaid')).toMatchObject({ closed: true });
   });
 
   it('an older stored answer keeps its layered ```diagram figure, and loads no Mermaid', async () => {

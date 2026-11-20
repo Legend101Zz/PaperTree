@@ -85,7 +85,7 @@ async function* stream(events: unknown[]): AsyncGenerator<SseEvent> {
 const frames = (id: string, parent: string, over: Partial<NodeSpec> = {}): unknown[] => [
   { event: 'node', data: node({ id, parent, branch: 'right', ...over }) },
   { event: 'text', data: { delta: 'It is a shortcut.' } },
-  { event: 'done', data: { status: 'complete', error: null, message_id: 'm' } },
+  { event: 'done', data: { status: 'complete', error: null, message_id: 'm', final_text: null } },
 ];
 
 beforeEach(() => {

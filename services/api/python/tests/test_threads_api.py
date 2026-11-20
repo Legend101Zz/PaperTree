@@ -76,7 +76,12 @@ def test_explain_streams_the_contract_and_persists_the_whole_turn(tmp_path: Path
 
         run = events(frames, "run")[0]
         done = events(frames, "done")[0]
-        assert done == {"status": "complete", "error": None, "message_id": run["message_id"]}
+        assert done == {
+            "status": "complete",
+            "error": None,
+            "message_id": run["message_id"],
+            "final_text": None,
+        }
         streamed = "".join(t["delta"] for t in events(frames, "text"))
 
         # The REQUEST the API sent: the selected block is b1, datamarked, no block id leaks.
@@ -221,6 +226,58 @@ def test_a_marker_the_run_never_issued_is_dropped_and_logged(
     assert (
         dropped and dropped[0]["marker"] == "b999" and dropped[0]["error_code"] == "unknown_marker"
     )
+
+
+# ── live = stored: `done.final_text` (v0.3 W6) ────────────────────────────────────────────────
+
+_FENCE_BODY = 'flowchart TD\n  a["One"] --> b["Two"]\n  b --> c["Three"]'
+
+
+def _with_fence(sentence: str, body: str = _FENCE_BODY) -> str:
+    return f"{sentence}\n\n```mermaid\n{body}\n```\n\nSection 3."
+
+
+def _streamed(frames: list[Any]) -> str:
+    return "".join(f.data["delta"] for f in frames if f.event == "text")
+
+
+def test_done_carries_the_text_the_agent_repaired_and_the_message_stores_it(
+    tmp_path: Path,
+) -> None:
+    broken = _with_fence("It adds the input back.", "flowchart TD\n  a --> --> b\n  b --> c")
+    repaired = _with_fence("It adds the input back.")
+    script = Script("explain-ok", final_text=lambda _c: broken, done_patch={"final_text": repaired})
+    with ai_harness(tmp_path, script) as h:
+        token, paper_id = alice_with_paper(h)
+        frames, _ = read_sse(explain(h, token, paper_id, paragraph_anchor()))
+        done = events(frames, "done")[0]
+        assert _streamed(frames) == broken, "what streamed is what the model wrote"
+        assert done["final_text"] == repaired
+        assert not contract_errors(done, "api/sse.schema.json", "SseDone", BROWSER_EVENTS["done"])
+        thread_id = events(frames, "run")[0]["thread_id"]
+        detail = h.client.get(f"/papers/{paper_id}/threads/{thread_id}", headers=auth(token))
+        assert detail.json()["messages"][-1]["content"] == repaired, "live is what a reload shows"
+
+
+def test_done_carries_the_text_with_a_dropped_fence_removed(tmp_path: Path) -> None:
+    streamed = _with_fence("It adds the input back.")
+    kept = "It adds the input back.\n\nSection 3."
+    script = Script("explain-ok", final_text=lambda _c: streamed, done_patch={"final_text": kept})
+    with ai_harness(tmp_path, script) as h:
+        token, paper_id = alice_with_paper(h)
+        frames, _ = read_sse(explain(h, token, paper_id, paragraph_anchor()))
+        done = events(frames, "done")[0]
+        assert "```mermaid" in _streamed(frames)
+        assert done["final_text"] == kept and "mermaid" not in done["final_text"]
+
+
+def test_done_final_text_is_null_when_the_stored_text_is_what_streamed(tmp_path: Path) -> None:
+    with ai_harness(tmp_path, Script("explain-ok")) as h:
+        token, paper_id = alice_with_paper(h)
+        frames, _ = read_sse(explain(h, token, paper_id, paragraph_anchor()))
+        done = events(frames, "done")[0]
+        assert "final_text" in done and done["final_text"] is None
+        assert not contract_errors(done, "api/sse.schema.json", "SseDone", BROWSER_EVENTS["done"])
 
 
 # ── follow-up: history, handles, busy ────────────────────────────────────────────────────────
