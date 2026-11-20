@@ -54,3 +54,43 @@ export function fitLabel(
   }
   return { size: 13, lines: [first, cut(words.join(' '), room, 13)] };
 }
+
+/**
+ * A label for a box in the layered figure (inline diagrams): wrapped at word breaks, 14 px on up to
+ * two lines, else 13 px on up to three, the last line cut with "…" when even that is not enough.
+ *
+ * @param label The label as plain words (maths already read as text).
+ * @param room The box's inner width.
+ * @returns The size and the lines to draw.
+ * @example
+ * wrapLabel('Bidirectional encoder', 130); // { size: 14, lines: ['Bidirectional', 'encoder'] }
+ */
+export function wrapLabel(label: string, room: number): { size: number; lines: string[] } {
+  const wrap = (size: number): string[] => {
+    const max = Math.max(1, Math.floor(room / (size * ADVANCE)));
+    const lines: string[] = [];
+    let line = '';
+    for (const word of label.split(/\s+/).filter((w) => w !== '')) {
+      const next = line === '' ? word : `${line} ${word}`;
+      if (next.length <= max || line === '') {
+        line = next;
+      } else {
+        lines.push(line);
+        line = word;
+      }
+    }
+    if (line !== '') lines.push(line);
+    return lines;
+  };
+  const fits = (size: number, lines: string[], most: number): boolean => {
+    const max = Math.max(1, Math.floor(room / (size * ADVANCE)));
+    return lines.length <= most && lines.every((l) => l.length <= max);
+  };
+  const big = wrap(14);
+  if (fits(14, big, 2)) return { size: 14, lines: big };
+  const small = wrap(13);
+  if (fits(13, small, 3)) return { size: 13, lines: small };
+  // Still too much: three lines, the third holding the rest, every line cut to the room.
+  const lines = small.length > 3 ? [...small.slice(0, 2), small.slice(2).join(' ')] : small;
+  return { size: 13, lines: lines.map((l) => cut(l, room, 13)) };
+}
