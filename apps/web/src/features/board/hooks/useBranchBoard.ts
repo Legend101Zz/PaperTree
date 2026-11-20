@@ -6,13 +6,14 @@
  * the pane's own size (the 60% cap and the span menu follow the PANE, so the split view can embed
  * the same board), Escape one level at a time, and the arrival of a card from "Send to board" (#342).
  *
- * Arrival: `?card=<id>` pans so the card AND its open ask box, as a pair, sit in the middle of the
- * pane, then the card glows once (reduced motion: no animation, a static ring for one second).
+ * Arrival: `?card=<id>` (or the split view's own arrival, #344) pans so the card AND its open ask
+ * box, as a pair, sit in the middle of the pane, then the card glows once (reduced motion: no
+ * animation, a static ring for one second). A DROPPED card keeps the view and lands where it was
+ * dropped. Source links go through the host: beside the paper the paper flashes and the board stays.
  */
 import { useReactFlow } from '@xyflow/react';
 import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 
-import { citationHref } from '../model/chrome';
 import { DRAFT_ID } from '../model/display';
 import { heightCap } from '../model/layout';
 import { viewToCentre } from '../model/panes';
@@ -21,6 +22,7 @@ import { useBoardAsk, type BoardAsk } from './useBoardAsk';
 import { useBoardTree, type TreeView } from './useBoardTree';
 import { useBoardUi, type BoardUiControl } from './useBoardUi';
 
+import type { BoardHost } from '../components/BoardHost';
 import type { BranchActions } from '../components/BranchContext';
 import type { PtEdge, PtNode } from '../model/flow';
 import type { BoardController } from './controllerShared';
@@ -34,7 +36,7 @@ export interface BranchBoard {
   readonly actions: BranchActions;
   /** The cards a path focus keeps lit; null when nothing is focused. */
   readonly onPath: ReadonlySet<string> | null;
-  /** The card the URL asked the board to open on (`?card=`), or null. */
+  /** The card the board is to open on (`?card=` or the host's arrival), or null. */
   readonly arrivalCard: string | null;
 }
 
@@ -66,12 +68,14 @@ function useArrivalParam(): string | null {
  * @param paperId The paper.
  * @param ctl The board controller (its store and writes are the tree's).
  * @param stage The pane the board sits in; its size sets the card cap and places the span menu.
+ * @param host Where the board is shown: its arrival, its source links, its first branch, its Escape.
  * @returns The branching board.
  */
 export function useBranchBoard(
   paperId: string,
   ctl: BoardController,
   stage: RefObject<HTMLElement | null>,
+  host: BoardHost,
 ): BranchBoard {
   const { store, writes, offer } = ctl.internals;
   const flow = useReactFlow<PtNode, PtEdge>();
@@ -79,7 +83,13 @@ export function useBranchBoard(
   const control = useBoardUi(boardId);
   const [paneHeight, setPaneHeight] = useState(0);
   const [arrivedId, setArrivedId] = useState<string | null>(null);
-  const cardParam = useArrivalParam();
+  const urlCard = useArrivalParam();
+  // The host's arrival (a send beside the paper, a drop) wins over the address.
+  const hostArrival = host.arrival;
+  const cardParam = hostArrival?.cardId ?? urlCard;
+  const arrivalKey =
+    hostArrival === null ? urlCard : `${hostArrival.cardId}#${String(hostArrival.nonce)}`;
+  const centre = hostArrival?.centre ?? true;
 
   // The pane's height sets the cap on every card (60%), as a CSS variable the cards read and as the
   // number the layout uses, so what is drawn and what is laid out agree.
@@ -112,7 +122,7 @@ export function useBranchBoard(
     focusId: control.ui.focusId,
     arrivedId,
   });
-  const ask = useBoardAsk(paperId, store, writes, offer, control, view.tree);
+  const ask = useBoardAsk(paperId, store, writes, offer, control, view.tree, host.onBranched);
   const onPath = useMemo(
     () => onPathIds(view.tree, control.ui.focusId),
     [view.tree, control.ui.focusId],
@@ -123,10 +133,11 @@ export function useBranchBoard(
     const onKey = (event: KeyboardEvent): void => {
       if (event.key !== 'Escape' || event.defaultPrevented) return;
       if (control.escape()) event.preventDefault();
+      else host.onEscapeUnused();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [control]);
+  }, [control, host]);
 
   // The selection belongs to the menu: closing the menu clears it.
   const menuOpen = control.ui.menu !== null;
@@ -138,8 +149,13 @@ export function useBranchBoard(
   const arrived = useRef<string | null>(null);
   const { tree, layout, heights } = view;
   const { openAsk } = control;
+  // A card made outside the board (a send beside the paper, a drop) is read in before it can arrive.
+  const { reload } = ctl;
   useEffect(() => {
-    if (cardParam === null || ctl.status !== 'ready' || arrived.current === cardParam) return;
+    if (hostArrival !== null) void reload();
+  }, [hostArrival, reload]);
+  useEffect(() => {
+    if (cardParam === null || ctl.status !== 'ready' || arrived.current === arrivalKey) return;
     const card = layout.cards.get(cardParam);
     const row = tree.byId.get(cardParam);
     if (card === undefined || row === undefined) return;
@@ -154,7 +170,19 @@ export function useBranchBoard(
       return;
     }
     if (wantsBox && (box === undefined || !heights.has(DRAFT_ID))) return;
-    arrived.current = cardParam;
+    arrived.current = arrivalKey;
+    setArrivedId(cardParam);
+    if (hostArrival === null) {
+      // Arrived by address: a reload must not pan again, so the address no longer names the card.
+      const here = new URL(window.location.href);
+      here.searchParams.delete('card');
+      window.history.replaceState(
+        window.history.state,
+        '',
+        `${here.pathname}${here.search}${here.hash}`,
+      );
+    }
+    if (!centre) return; // a drop: the card is where the reader let go, and the view stays
     const pane = {
       w: stage.current?.clientWidth ?? window.innerWidth,
       h: stage.current?.clientHeight ?? window.innerHeight,
@@ -168,17 +196,11 @@ export function useBranchBoard(
     const target = viewToCentre(boxes, pane, flow.getZoom());
     const calm = reducedMotion();
     void flow.setViewport(target, { duration: calm ? 0 : 400 });
-    setArrivedId(cardParam);
-    // Arrived: a reload must not pan again, so the address no longer names the card.
-    const here = new URL(window.location.href);
-    here.searchParams.delete('card');
-    window.history.replaceState(
-      window.history.state,
-      '',
-      `${here.pathname}${here.search}${here.hash}`,
-    );
   }, [
+    arrivalKey,
+    centre,
     cardParam,
+    hostArrival,
     control.ui.draft,
     ctl.nodes,
     ctl.status,
@@ -197,10 +219,21 @@ export function useBranchBoard(
     return () => clearTimeout(timer);
   }, [arrivedId]);
 
+  // A source link: the passage card's own anchor, or the cited passage of an answer. Beside the
+  // paper the host flashes it there and the board stays put; on the full-width board it opens the
+  // paper beside this board, with the clicked card kept on screen.
+  const { showInPaper } = host;
+  const byId = view.tree.byId;
   const openSource = useCallback(
-    (nodeId: string, citationId?: string, threadId?: string) =>
-      window.location.assign(citationHref(paperId, nodeId, citationId, threadId)),
-    [paperId],
+    (nodeId: string, citationId?: string) => {
+      const row = byId.get(nodeId);
+      const anchor =
+        citationId === undefined
+          ? (row?.source_anchor ?? null)
+          : (row?.citations?.find((c) => c.citation_id === citationId)?.anchor ?? null);
+      showInPaper({ nodeId, anchor, ...(citationId === undefined ? {} : { citationId }) });
+    },
+    [byId, showInPaper],
   );
 
   const actions = useMemo<BranchActions>(
@@ -212,15 +245,29 @@ export function useBranchBoard(
       streams: ask.streams,
       reports: view.reports,
       send: ask.send,
+      sending: ask.sending,
       quick: ask.quick,
       keepNote: ask.keepNote,
       retry: ask.retry,
       stop: ask.stop,
       fold: ask.fold,
       openSource,
+      visiblePages: host.visiblePages,
+      beside: host.beside,
       stage,
     }),
-    [view.tree, view.layout, view.draft, view.reports, control, ask, openSource, stage],
+    [
+      view.tree,
+      view.layout,
+      view.draft,
+      view.reports,
+      control,
+      ask,
+      openSource,
+      host.visiblePages,
+      host.beside,
+      stage,
+    ],
   );
 
   return { control, view, ask, actions, onPath, arrivalCard: cardParam };

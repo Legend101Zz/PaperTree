@@ -44,7 +44,6 @@ export function PassageCard({ id, data, selected }: NodeProps<PtNode>): ReactNod
                 ? 'Open the passage in the paper'
                 : `Show p. ${String(page + 1)} in the paper`
             }
-            // TODO(#344): in split view the paper scrolls and flashes while the board stays put.
             onClick={(event) => {
               event.stopPropagation();
               branch.openSource(id);

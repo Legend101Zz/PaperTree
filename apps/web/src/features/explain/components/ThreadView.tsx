@@ -124,12 +124,13 @@ export function ThreadView({
   }, [growth, state.view]);
 
   const sendToCanvas = useCallback(
-    (messageId: string) => actions.sendToCanvas({ kind: 'explanation', messageId }),
+    (messageId: string): Promise<void> =>
+      actions.sendToCanvas({ kind: 'explanation', messageId }).then(() => undefined),
     [actions],
   );
   const sendPlate = useCallback(
     (messageId: string, title: string) =>
-      actions.sendToCanvas({ kind: 'diagram', messageId, title }),
+      actions.sendToCanvas({ kind: 'diagram', messageId, title }).then(() => undefined),
     [actions],
   );
   const { diveIn } = useDiveIn(paperId);

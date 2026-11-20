@@ -140,10 +140,9 @@ export function useBoardTree(input: BoardTreeInput): TreeView {
     return draftNode(board.board_id, draft, branch);
   }, [base, board, draft]);
 
-  const tree = useMemo(
-    () => buildTree(draftRow === null ? rows : [...rows, draftRow]),
-    [draftRow, rows],
-  );
+  // The ask box is a layout-only slot: the model tree (what Outline, Export, the counts and the
+  // knots read) never holds it.
+  const tree = base;
   // The window stands in for a pane that has no size yet (first paint, tests).
   const viewportHeight =
     paneHeight > 0 ? paneHeight : typeof window === 'undefined' ? 800 : window.innerHeight;
@@ -153,8 +152,9 @@ export function useBoardTree(input: BoardTreeInput): TreeView {
         viewportHeight,
         measure: (id) => heights.get(id),
         spanY: (parentId, span) => spanYs.get(spanKey(parentId, span.start, span.end)),
+        ...(draftRow === null ? {} : { slot: draftRow }),
       }),
-    [tree, viewportHeight, heights, spanYs],
+    [tree, viewportHeight, heights, spanYs, draftRow],
   );
   const onPath = useMemo(() => onPathIds(tree, focusId), [tree, focusId]);
   const nodes = useMemo(

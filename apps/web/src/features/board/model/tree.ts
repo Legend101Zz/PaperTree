@@ -9,6 +9,8 @@
  * No DOM, no clock, no randomness: the same nodes always build the same tree, so the layout, the
  * outline and the tests are deterministic.
  */
+import { spanWords } from './spans';
+
 import type { BoardBranch, CanvasNode, ParentSpan } from '@/lib/api/types';
 
 /** The fields of a node the tree reads (`CanvasNode` satisfies it; tests build smaller ones). */
@@ -333,7 +335,7 @@ export function spanKnots<N extends TreeNodeInput>(
     .map(({ span, childIds }) => ({
       start: span.start,
       end: span.end,
-      quote: span.quote,
+      quote: spanWords(span.quote),
       childIds,
       count: childIds.length,
     }));

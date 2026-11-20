@@ -7,6 +7,7 @@ import {
   occurrencesBefore,
   plainOf,
   spanNth,
+  spanWords,
 } from './spans';
 
 const SOURCE = [
@@ -40,7 +41,43 @@ describe('locateQuote', () => {
   it('finds words across a bold mark and gives offsets into the Markdown', () => {
     const span = locateQuote(SOURCE, 'An identity mapping hands', 0)!;
     expect(SOURCE.slice(span.start, span.end)).toBe('An **identity mapping** hands');
-    expect(span.quote).toBe('An identity mapping hands');
+    expect(span.quote).toBe('An **identity mapping** hands');
+    expect(span.words).toBe('An identity mapping hands');
+  });
+
+  /** What the server checks (`check_span`): the quote is exactly the source at the offsets. */
+  const serverAccepts = (source: string, selected: string): string => {
+    const located = locateQuote(source, selected, 0);
+    expect(located, `selection "${selected}"`).not.toBeNull();
+    const { start, end, quote, words } = located!;
+    expect(source.slice(start, end)).toBe(quote);
+    expect(spanWords(quote)).toBe(words);
+    return quote;
+  };
+
+  it('stores the exact source slice for a selection over bold, a handle, maths and a paragraph break', () => {
+    const text = 'Energy is **conserved** in a closed system [b1].';
+    expect(serverAccepts(text, 'is conserved in')).toBe('is **conserved** in');
+    expect(serverAccepts(text, 'system')).toBe('system');
+    // A handle in the middle of the selection.
+    expect(serverAccepts('The sum [b2] holds when x is small.', 'sum holds')).toBe(
+      'sum [b2] holds',
+    );
+    // Inline maths in the middle.
+    expect(serverAccepts('With $F(x)=0$ the block outputs x.', 'With the block')).toBe(
+      'With $F(x)=0$ the block',
+    );
+    // A paragraph break becomes one space in the rendered words and stays "\n\n" in the quote.
+    expect(
+      serverAccepts('First idea ends here.\n\nSecond idea starts.', 'ends here. Second idea'),
+    ).toBe('ends here.\n\nSecond idea');
+  });
+
+  it('shows the reader the words of a stored quote, not its markup', () => {
+    expect(spanWords('is **conserved** in')).toBe('is conserved in');
+    expect(spanWords('sum [b2] holds')).toBe('sum holds');
+    expect(spanWords('ends here.\n\nSecond idea')).toBe('ends here. Second idea');
+    expect(spanWords('With $F(x)=0$ the block')).toBe('With the block');
   });
 
   it('picks the occurrence the reader selected when the words appear twice', () => {

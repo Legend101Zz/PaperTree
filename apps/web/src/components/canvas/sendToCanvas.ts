@@ -63,10 +63,18 @@ function sentence(error: unknown): string {
   return "Couldn't add this to the board. Check your connection and try again.";
 }
 
+/**
+ * Sends a passage, an answer or a plate to the paper's board.
+ *
+ * @param paperId The paper, or null for a sample paper (which has no board).
+ * @param input What to send.
+ * @returns The id of the card this send made, or of the one already there for the same passage or
+ *   plate; null when it was an answer that could not be added (that throws instead).
+ */
 export async function sendToCanvas(
   paperId: string | null,
   input: SendToCanvasInput,
-): Promise<void> {
+): Promise<string | null> {
   if (paperId === null) {
     // A fixture paper has no account, so there is nowhere to keep a board.
     const message = 'This sample paper is not in your library, so it has no board.';
@@ -82,7 +90,7 @@ export async function sendToCanvas(
     // the height of. Everything else on the board (loose answers, plates) stays on the grid.
     const spot =
       input.kind === 'excerpt'
-        ? rootSpot(view.nodes, size, window.innerHeight)
+        ? (input.at ?? rootSpot(view.nodes, size, window.innerHeight))
         : freeSpot(view.nodes, size);
     if (input.kind === 'diagram') {
       // One plate, one card: a second send points at the card already there (#217).
@@ -95,7 +103,7 @@ export async function sendToCanvas(
           href: boardHref(paperId, existing.node_id),
           linkLabel: 'Open board',
         });
-        return;
+        return existing.node_id;
       }
       added = newNodeId();
       await boardsApi.createNode(paperId, {
@@ -110,14 +118,35 @@ export async function sendToCanvas(
       // The same passage twice would be two identical cards: say so and point at the board.
       const existing = findExcerptFor(view.nodes, input.anchor);
       if (existing !== null) {
-        showCanvasToast({
-          message: 'Already on your board',
-          href: boardHref(paperId, existing.node_id),
-          linkLabel: 'Open board',
-        });
-        return;
+        // A drop on a passage already there: a root with no tree yet goes to the drop point (the
+        // reader let go there); one with a tree is not torn from it, the board pans to it instead.
+        const movable =
+          input.at !== undefined &&
+          existing.parent_id == null &&
+          !view.nodes.some((n) => n.parent_id === existing.node_id) &&
+          view.board !== null;
+        if (movable && input.at !== undefined && view.board !== null) {
+          await boardsApi.patchNode(view.board.board_id, existing.node_id, {
+            version: existing.version,
+            x: Math.round(input.at.x),
+            y: Math.round(input.at.y),
+          });
+          input.onOutcome?.('moved');
+          return existing.node_id;
+        }
+        if (input.at !== undefined) input.onOutcome?.('existing');
+        // With the board about to open (or beside), the board says it by arriving on the card.
+        if (input.toast !== 'none') {
+          showCanvasToast({
+            message: 'Already on your board',
+            href: boardHref(paperId, existing.node_id),
+            linkLabel: 'Open board',
+          });
+        }
+        return existing.node_id;
       }
       added = newNodeId();
+      input.onOutcome?.('added');
       await boardsApi.createNode(paperId, {
         node_id: added,
         kind: 'excerpt',
@@ -147,17 +176,18 @@ export async function sendToCanvas(
         source_message_id: input.messageId,
       });
     }
-    if (input.kind === 'excerpt' && input.toast === 'none') return;
+    if (input.kind === 'excerpt' && input.toast === 'none') return added ?? null;
     if (input.kind === 'excerpt' && input.toast === 'added' && added !== undefined) {
       // A quiet send (the menu's "Just send"): "Added" and a Show link that opens the board on the card.
       showCanvasToast({ message: 'Added', href: boardHref(paperId, added), linkLabel: 'Show' });
-      return;
+      return added;
     }
     showCanvasToast({
       message: ADDED[input.kind],
       href: boardHref(paperId, added),
       linkLabel: 'Open board',
     });
+    return added ?? null;
   } catch (error) {
     if (input.kind === 'explanation') showCanvasToast({ message: sentence(error), tone: 'error' });
     throw error;

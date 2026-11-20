@@ -22,9 +22,16 @@ export type BoardIconName =
   | 'redo'
   | 'tidy'
   | 'fold'
-  | 'outline';
+  | 'outline'
+  | 'beside';
 
 const SHAPES: Readonly<Record<BoardIconName, ReactNode>> = {
+  beside: (
+    <>
+      <rect x="3" y="4" width="14" height="12" rx=".5" />
+      <path d="M10 4v12" />
+    </>
+  ),
   back: <path d="M16 10H4M9 5l-5 5 5 5" />,
   select: <path d="M4.5 3l10.5 7.8-4.6.6 2.6 5.2-2 1-2.6-5.2-3.9 3z" />,
   note: (

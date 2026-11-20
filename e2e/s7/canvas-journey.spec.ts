@@ -97,8 +97,9 @@ test.describe('Journey D: the canvas', () => {
       })
       .toBeGreaterThan(20);
     expect(await page.evaluate(() => document.visibilityState)).toBe('visible');
-    // #203: the reader's header names the board "Board".
-    await expect(page.getByRole('link', { name: 'Board' })).toBeVisible();
+    // #344: the reader's header offers the board beside the paper (key B); the plain "Board" link
+    // is the phone's.
+    await expect(page.getByRole('button', { name: /^Board beside/ })).toBeVisible();
     await reveal(page, 'Deeper neural networks');
     const points = await pointsFor(page, 'Deeper neural networks', 'substantially deeper');
     await drag(page, points.from, points.to);
@@ -381,7 +382,14 @@ test.describe('Journey D: the canvas', () => {
       .locator(`.react-flow__node[data-id="${excerpt.node_id}"]`)
       .getByRole('button', { name: /in the paper$/ })
       .click();
-    await expect(page).toHaveURL(new RegExp(`/paper/${paperId}/read\\?focus=${excerpt.node_id}$`));
+    // #349: from a full-width board the source opens the paper BESIDE, the card stays on screen.
+    await expect(page).toHaveURL(
+      new RegExp(
+        `/paper/${paperId}/read\\?(?=.*\\bbeside=1\\b)(?=.*\\bfocus=${excerpt.node_id}\\b)`,
+      ),
+    );
+    await expect(page.locator('html')).toHaveAttribute('data-pt-board', 'open');
+    await expect(page.locator(`.react-flow__node[data-id="${excerpt.node_id}"]`)).toBeVisible();
     const flash = page.locator('polygon.pt-flash').first();
     await expect(flash).toBeAttached({ timeout: 60_000 });
     expect(await page.evaluate(() => document.visibilityState)).toBe('visible');

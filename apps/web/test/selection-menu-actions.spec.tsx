@@ -179,6 +179,23 @@ describe('the items', () => {
     expect(spy.onOpenBoard).not.toHaveBeenCalled();
   });
 
+  it('Board beside opens the board ON the card the send made (#344)', async () => {
+    const spy = spies();
+    spy.sendToCanvas.mockResolvedValue('cn_new');
+    render(<Harness spy={spy} selected />);
+    spy.actions?.onSendToBoard?.('beside');
+    await vi.waitFor(() => expect(spy.onOpenBoard).toHaveBeenCalledWith('cn_new'));
+  });
+
+  it('Escape clears the selection and is used up: the board beside keeps its own', () => {
+    const spy = spies();
+    render(<Harness spy={spy} selected />);
+    const event = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+    document.dispatchEvent(event);
+    expect(spy.clear).toHaveBeenCalled();
+    expect(event.defaultPrevented).toBe(true);
+  });
+
   it('Board beside sends without a toast, then opens the board', async () => {
     const spy = spies();
     render(<Harness spy={spy} selected />);

@@ -12,7 +12,7 @@
  * Escape is the board's (`escapeStep`): it closes this picker before the ask box. Arrow keys move
  * between the options; Enter or Space picks.
  */
-import { useEffect, useRef, type KeyboardEvent, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, type KeyboardEvent, type ReactNode } from 'react';
 
 import {
   DIAGRAM_LABELS,
@@ -20,6 +20,7 @@ import {
   PAPER_SENTENCES,
   type ReadList,
 } from '../../model/askPayload';
+import { shiftInto } from '../../model/panes';
 
 import type { AskLevel, AskUses } from '@/lib/api/types';
 import type { PickerName } from '../../model/ui';
@@ -110,6 +111,24 @@ export function UsesPicker(props: UsesPickerProps): ReactNode {
   const { name, read } = props;
   const box = useRef<HTMLDivElement>(null);
   const options = optionsFor(props);
+
+  // Inside the pane (#349): a picker the board is panned under, or one near the pane's edge, is
+  // shifted back in. The card (and so the picker) is drawn at the board's zoom: the shift is
+  // measured on screen and given back in the card's own units.
+  useLayoutEffect(() => {
+    const el = box.current;
+    const pane = el?.closest<HTMLElement>('.pt-cv__stage');
+    if (el == null || pane == null) return;
+    el.style.translate = '';
+    const at = el.getBoundingClientRect();
+    const around = pane.getBoundingClientRect();
+    const zoom = el.offsetWidth > 0 ? at.width / el.offsetWidth : 1;
+    const { dx, dy } = shiftInto(
+      { x: at.left - around.left, y: at.top - around.top, w: at.width, h: at.height },
+      { w: around.width, h: around.height },
+    );
+    if (dx !== 0 || dy !== 0) el.style.translate = `${String(dx / zoom)}px ${String(dy / zoom)}px`;
+  }, [name]);
 
   useEffect(() => {
     // The chosen option takes focus, so arrows and Enter work at once.

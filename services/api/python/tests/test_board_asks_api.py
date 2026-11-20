@@ -125,6 +125,25 @@ def test_an_ask_on_a_passage_streams_the_node_first_and_is_a_right_branch(tmp_pa
         assert stored["uses"]["paper"] == "page" and stored["uses"]["path"] is True
 
 
+def test_get_board_returns_each_answers_citations_with_its_final_text(tmp_path: Path) -> None:
+    """#344/#349: handle -> page and Anchor ride on the node, so the board needs no thread scan
+    (which stopped at the newest 20 threads): a board with more than 20 asks resolves them all."""
+    with ai_harness(tmp_path, _script()) as h:
+        b = _setup(h)
+        answers = [b.ask(b.root, question=f"Question {i}?")[1]["node_id"] for i in range(22)]
+        nodes = b.nodes()
+        for node_id in answers:
+            cites = nodes[node_id]["citations"]
+            assert cites and {c["marker"] for c in cites} == {"b1"}
+            assert [c["ordinal"] for c in cites] == sorted(c["ordinal"] for c in cites)
+            first = cites[0]
+            assert first["citation_id"].startswith("cit_") and isinstance(first["page_index"], int)
+            assert first["anchor"]["selectors"], "the Anchor is there to flash the passage"
+            assert nodes[node_id]["final_text"].startswith("## TL;DR")
+        # A passage (or any non-answer card) carries none.
+        assert nodes[b.root]["citations"] is None
+
+
 def test_a_board_answers_thread_is_not_one_of_the_readers_threads(tmp_path: Path) -> None:
     with ai_harness(tmp_path, _script()) as h:
         b = _setup(h)
@@ -231,6 +250,50 @@ def test_a_span_must_be_the_words_at_its_offsets_of_the_parents_answer(tmp_path:
             headers=auth(b.token),
         )
         assert_envelope(noted, 422, "validation_failed")
+
+
+_MARKED = (
+    "## TL;DR\nEnergy is **conserved** in a closed system [b1].\n\n"
+    "## How it works\nWith $F(x)=0$ the block outputs the input back."
+)
+
+
+def test_a_span_over_bold_a_handle_maths_and_a_paragraph_break_is_the_source_slice(
+    tmp_path: Path,
+) -> None:
+    """#343 review: the quote is `source[start:end]` exactly, markup included, so a selection that
+    crosses `**bold**`, a `[bN]` handle, `$maths$` or a paragraph break is accepted; the words the
+    reader saw (whitespace collapsed, marks dropped) are refused as a quote, and the agent is told
+    the words the reader saw, not the markup."""
+    script = Script("followup-ok", call_tools=False, final_text=lambda _c: _MARKED)
+    with ai_harness(tmp_path, script) as h:
+        b = _setup(h)
+        _, answer = b.ask(b.root, question="First?")
+        node_id = answer["node_id"]
+        text = b.nodes()[node_id]["final_text"]
+        assert text == _MARKED
+        slices = {
+            "is **conserved** in": "is conserved in",
+            "system [b1].\n\n## How": "system. How",
+            "With $F(x)=0$ the block": "With the block",
+            "closed system [b1]": "closed system",
+        }
+        for quote, words in slices.items():
+            start = text.index(quote)
+            span = {"start": start, "end": start + len(quote), "quote": quote}
+            h.fake.requests.clear()
+            assert b.ask_raw(node_id, question="Why?", span=span).status_code == 200, quote
+            asked = h.fake.requests[-1]["question"]
+            assert f'"{words}"' in asked and "**" not in asked and "[b1]" not in asked, asked
+            noted = h.client.post(
+                f"/boards/{b.board_id}/nodes/{node_id}/notes",
+                json={"span": span, "text": words},
+                headers=auth(b.token),
+            )
+            assert noted.status_code == 201, quote
+            # The rendered words (the old web contract) are not the source at those offsets.
+            rendered = {**span, "quote": words}
+            assert b.ask_raw(node_id, question="Why?", span=rendered).status_code == 422, quote
 
 
 def test_the_span_offsets_count_utf16_code_units(tmp_path: Path) -> None:
@@ -352,6 +415,40 @@ def test_the_agent_gets_the_path_not_the_siblings_and_the_depth_rule(tmp_path: P
         parents = [e["parentId"] for e in entries]
         assert parents == [None, *[e["id"] for e in entries[:-1]]]
         assert request["limits"]["max_tool_calls"] == 8  # `whole`: tools on
+
+
+def test_path_off_sends_the_passage_and_the_card_asked_from_and_nothing_between(
+    tmp_path: Path,
+) -> None:
+    """The UI says "the passage and the card asked from": with `path: false` the agent still gets
+    the root passage and the card asked from (its question and answer), not the cards between."""
+    with ai_harness(tmp_path, _script()) as h:
+        b = _setup(h)
+        _, a1 = b.ask(b.root, question="Question one?")
+        _, a2 = b.ask(a1["node_id"], question="Question two?")
+        _, a3 = b.ask(a2["node_id"], question="Question three?")
+        h.fake.requests.clear()
+        b.ask(a3["node_id"], question="Question four?", uses={"path": False})
+        request = h.fake.requests[0]
+        assert h.fake.contract_errors == []
+        entries = request["history"]["entries"]
+        users = [
+            e["message"]["content"][0]["text"] for e in entries if e["message"]["role"] == "user"
+        ]
+        assert [u.split("\n")[0] for u in users] == ["Question three?"]
+        assert "<untrusted_document" in users[0]  # the root passage
+        assert request["seed"]["quote"]  # and the seed still names it
+        assert "Question one?" not in str(entries) and "Question two?" not in str(entries)
+        answers = [
+            e["message"]["content"][0]["text"]
+            for e in entries
+            if e["message"]["role"] == "assistant"
+        ]
+        assert len(answers) == 1 and "## In the paper" in answers[0]  # the card asked from, in full
+        # Asking straight from the passage with the path off sends no turns, as before.
+        h.fake.requests.clear()
+        b.ask(b.root, question="From the top?", uses={"path": False})
+        assert h.fake.requests[0]["history"] is None
 
 
 def _span(b: Board, node_id: str, quote: str) -> dict[str, Any]:

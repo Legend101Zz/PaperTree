@@ -45,6 +45,11 @@ export interface ModeSwitchProps {
   readonly guidedAvailable?: boolean;
   /** Shown as text when the gate is closed. §19.8 forbids an affordance that is silently inert. */
   readonly unavailableReason?: string;
+  /**
+   * The board is beside the paper (the split view, #344): the reader's own "Split" segment is left
+   * out, so the word is not used twice (the board's design, decision 1).
+   */
+  readonly hideSplit?: boolean;
   readonly className?: string;
 }
 
@@ -53,25 +58,28 @@ export function ModeSwitch({
   onModeChange,
   guidedAvailable = true,
   unavailableReason,
+  hideSplit = false,
   className,
 }: ModeSwitchProps): ReactNode {
   const options = useMemo(
     () =>
-      READING_MODES.map(({ mode: value, label }) => ({
-        value,
-        label:
-          value === 'source' || guidedAvailable ? (
-            label
-          ) : (
-            // KNOWN LIMITATION: `SegmentedOption` has no `disabled` field, so the radio cannot carry
-            // `aria-disabled` and a screen reader is told only by the status line below. The right
-            // fix is a `disabled` flag on `SegmentedOption` in `@papertree/ui`; reimplementing the
-            // whole control here to get one attribute would recreate exactly the duplication §18.1
-            // is about. Filed as a note in the epic report rather than worked around silently.
-            <span style={{ opacity: 0.45 }}>{label}</span>
-          ),
-      })),
-    [guidedAvailable],
+      READING_MODES.filter(({ mode: value }) => !(hideSplit && value === 'split')).map(
+        ({ mode: value, label }) => ({
+          value,
+          label:
+            value === 'source' || guidedAvailable ? (
+              label
+            ) : (
+              // KNOWN LIMITATION: `SegmentedOption` has no `disabled` field, so the radio cannot carry
+              // `aria-disabled` and a screen reader is told only by the status line below. The right
+              // fix is a `disabled` flag on `SegmentedOption` in `@papertree/ui`; reimplementing the
+              // whole control here to get one attribute would recreate exactly the duplication §18.1
+              // is about. Filed as a note in the epic report rather than worked around silently.
+              <span style={{ opacity: 0.45 }}>{label}</span>
+            ),
+        }),
+      ),
+    [guidedAvailable, hideSplit],
   );
 
   const change = useCallback(

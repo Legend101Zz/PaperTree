@@ -1,0 +1,171 @@
+/*
+ * split/components/split — the split view (#344, P4 step 7, V3-25): the board's pane on the right
+ * of the paper, its divider and fold buttons, and the strip the paper folds to. The page makes
+ * room for the pane exactly as it does for the explain drawer (`data-pt-board`, `--pt-board-width`
+ * set by `useBoardBeside`); both live below the reader's bar, which keeps the whole width. Tokens only.
+ */
+
+.pt-beside {
+  position: fixed;
+  inset-block: 0;
+  inset-inline-end: 0;
+  z-index: 29;
+  display: flex;
+  flex-direction: column;
+  color: var(--pt-ink);
+  background: var(--pt-linen);
+  border-inline-start: 1px solid var(--pt-rule);
+  box-shadow: var(--pt-float-shadow);
+}
+
+html:has(.pt-reader__bar) .pt-beside,
+html:has(.pt-reader__bar) .pt-split__strip {
+  inset-block-start: var(--pt-reader-bar-h);
+}
+
+.pt-split__board {
+  display: flex;
+  flex: 1 1 auto;
+  min-block-size: 0;
+  min-inline-size: 0;
+}
+
+.pt-split__board[hidden] {
+  display: none;
+}
+
+.pt-split__board > .pt-cv {
+  flex: 1 1 auto;
+  min-inline-size: 0;
+  block-size: 100%;
+}
+
+/* The divider: a hairline pair with a wide hit area, on the board's left edge. */
+.pt-split__divider {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: -5px;
+  z-index: 3;
+  inline-size: 10px;
+  cursor: col-resize;
+  touch-action: none;
+  border-inline: 1px solid var(--pt-control-border);
+  background: var(--pt-page);
+}
+
+.pt-split__divider:hover,
+.pt-split__divider:focus-visible {
+  background: var(--pt-ai-slip);
+}
+
+.pt-split__divider:focus-visible {
+  outline: var(--pt-focus-width, 2px) solid var(--pt-focus);
+  outline-offset: 1px;
+}
+
+/* Fold either side: two small buttons on the divider, half-way down. */
+.pt-split__grip {
+  position: absolute;
+  inset-block-start: 50%;
+  inset-inline-start: -14px;
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  transform: translateY(-50%);
+}
+
+.pt-split__fold,
+.pt-split__restore {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: 28px;
+  block-size: 28px;
+  padding: 0;
+  color: var(--pt-ink);
+  background: var(--pt-page);
+  border: 1px solid var(--pt-control-border);
+  border-radius: var(--pt-radius-control);
+  cursor: pointer;
+}
+
+.pt-split__fold:hover,
+.pt-split__restore:hover {
+  background: var(--pt-ai-slip);
+}
+
+/* The board folded to a strip: only the divider's buttons show. */
+.pt-beside[data-folded='board'] {
+  overflow: visible;
+}
+
+/* The paper folded to a strip over the left edge: one click brings it back. */
+.pt-split__strip {
+  position: fixed;
+  inset-block-end: 0;
+  inset-inline-start: 0;
+  z-index: 28;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-block-start: 10px;
+  background: var(--pt-desk);
+  border-inline-end: 1px solid var(--pt-rule);
+}
+
+.pt-split__restore {
+  flex-direction: column;
+  inline-size: 36px;
+  block-size: auto;
+  padding-block: 8px;
+  gap: 8px;
+}
+
+.pt-split__restore-label {
+  writing-mode: vertical-rl;
+  font: 13px / 1 var(--pt-font-you);
+  letter-spacing: 0.04em;
+  color: var(--pt-ink-2);
+}
+
+/* The page makes room for the pane, and the bar keeps the full width (as for the explain drawer). */
+@media (min-width: 768px) {
+  html[data-pt-board='open'] body {
+    padding-inline-end: var(--pt-board-width);
+  }
+
+  html[data-pt-board='open'] .pt-reader__bar {
+    margin-inline-end: calc(-1 * var(--pt-board-width));
+  }
+
+  html[data-pt-board='open'] .pt-notice,
+  html[data-pt-board='open'] .pt-toast {
+    inset-inline-end: calc(var(--pt-board-width) + 16px);
+  }
+}
+
+@media (max-width: 767px) {
+  .pt-beside,
+  .pt-split__strip {
+    display: none;
+  }
+}
+
+/* The key cap on the reader's Board beside button (as the board's own tool caps). */
+.pt-reader__key {
+  margin-inline-start: 6px;
+  padding: 3px 6px 2px;
+  font: 12px / 1 var(--pt-font-you);
+  color: var(--pt-ink-2);
+  background: var(--pt-page);
+  border: 1px solid var(--pt-control-border);
+  border-block-end-width: 2px;
+  border-radius: var(--pt-radius-control);
+}
+
+@media (max-width: 1099px) {
+  .pt-reader__key {
+    display: none;
+  }
+}

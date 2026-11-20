@@ -6,8 +6,8 @@
  *
  *   Explain         opens the panel on the passage and asks the default question.
  *   Ask…            opens the panel on the passage with the question box ready.
- *   Send to board   Board beside: sends the card and opens the board (TODO(#344): next to the paper,
- *                   when the split view arrives). Just send: stays reading; toasts "Added · Show".
+ *   Send to board   Board beside: sends the card and opens the board next to the paper, on the new
+ *                   card (the split view, #344). Just send: stays reading; toasts "Added · Show".
  *   Note            makes a highlight (a highlight already carries a note) and opens its card on the
  *                   note field. No AI call, no board card.
  *   a colour        keeps the highlight, as it always did.
@@ -43,8 +43,11 @@ export interface UseSelectionActionsArgs {
   readonly onCreateHighlight: (captured: SelectionCapture, color?: HighlightColor) => void;
   /** Note: drawn only when given. */
   readonly onCreateNote?: (captured: SelectionCapture, at: NoteAt | null) => void;
-  /** Board beside: open the board. Without it the choice is not offered. */
-  readonly onOpenBoard?: () => void;
+  /**
+   * Board beside: open the board on the card just sent (`cardId`; null when the send made none).
+   * Without it the choice is not offered.
+   */
+  readonly onOpenBoard?: (cardId: string | null) => void;
   readonly onNotice?: (message: string) => void;
   readonly highlightDisabledReason?: string | undefined;
 }
@@ -122,8 +125,8 @@ export function useSelectionActions(args: UseSelectionActionsArgs): SelectionAct
           anchor: captured.anchor,
           toast: beside ? 'none' : 'added',
         })
-        .then(() => {
-          if (beside) onOpenBoard();
+        .then((cardId) => {
+          if (beside) onOpenBoard(cardId ?? null);
         })
         .catch(() => {
           onNotice?.("Couldn't send this passage to the board. Try again.");
@@ -152,6 +155,8 @@ export function useSelectionActions(args: UseSelectionActionsArgs): SelectionAct
     const onKey = (event: KeyboardEvent): void => {
       if (event.defaultPrevented) return;
       if (event.key === 'Escape') {
+        // One level per press: the selection is this press's, so the board beside keeps its own.
+        event.preventDefault();
         clear();
         return;
       }

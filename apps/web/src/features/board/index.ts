@@ -4,6 +4,13 @@
  * reader's "Send to board" and "Open source" helpers keep their v0.1 home, `components/canvas`.
  */
 export { BoardView } from './components/BoardView';
+export {
+  BoardHostProvider,
+  type BoardArrival,
+  type BoardHost,
+  type DragIn,
+  type SourceTarget,
+} from './components/BoardHost';
 export { citationHref } from './model/chrome';
 export { nodeTypes } from './components/cards';
 export { useBoardController, staleSubject } from './hooks/useBoardController';

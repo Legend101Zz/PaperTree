@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
-import { anchorPageIndex, countsLine, explanationSource, miniature } from './cards';
+import { anchorPageIndex, countsLine, miniature } from './cards';
 import { cardName, nodeLabel, toFlowNode, withPageTitles } from './flow';
-import { THREAD, cardRow, citation } from './test-data';
+import { cardRow, citation } from './test-data';
 
 describe('the page tab comes from the stored anchor', () => {
   it('reads the PageSelector first, the ShapeSelector second, and nothing else', () => {
@@ -29,27 +29,6 @@ describe('a notebook card counts from `counts`', () => {
   it('says an empty page is empty, and invents nothing without counts', () => {
     expect(countsLine(zero)).toBe('Empty page');
     expect(countsLine(null)).toBeNull();
-  });
-});
-
-describe('explanationSource', () => {
-  it('resolves handles as the explain panel does: thread-wide, the follow-up’s b1 is the first answer’s', () => {
-    const second = explanationSource('thr_1', THREAD, 'msg_a2')!;
-    expect(second.threadId).toBe('thr_1');
-    for (const handle of ['b1', 'b6', 'b7', 'b8'])
-      expect(second.numbers.handleCitations.get(handle)?.citation.marker).toBe(handle);
-    expect(second.answer.citations.map((c) => c.marker)).toEqual(['b6', 'b1']);
-  });
-  it('takes the ask just before the answer as the call slip', () => {
-    expect(explanationSource('thr_1', THREAD, 'msg_a1')!.question).toBe('Explain this passage.');
-    expect(explanationSource('thr_1', THREAD, 'msg_a2')!.question).toBe(
-      'Why does dropping recurrence make training faster?',
-    );
-  });
-  it('carries the run, and is null for a message the thread does not hold', () => {
-    const first = explanationSource('thr_1', THREAD, 'msg_a1')!;
-    expect(first.run?.input_tokens).toBe(6286);
-    expect(explanationSource('thr_1', THREAD, 'msg_gone')).toBeNull();
   });
 });
 

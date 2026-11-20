@@ -440,6 +440,11 @@ export interface CanvasNode {
   model: string | null;
   /** `streaming` while the run is live. */
   answer_status: AnswerStatus | null;
+  /**
+   * An answer card's citations (each `[bN]` handle with its page and Anchor), read with the board in
+   * the same query as `final_text`; null on every other kind. No thread scan finds them.
+   */
+  citations: Citation[] | null;
   version: number;
   created_at: string;
   updated_at: string;

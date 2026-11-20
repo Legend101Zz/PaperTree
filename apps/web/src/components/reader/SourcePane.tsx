@@ -36,6 +36,7 @@ import {
 } from '@papertree/anchoring';
 
 import { useHighlightClick, useSelectionToolbar } from '@/features/reader';
+import { setDraggedPassage } from '@/features/split/model/passageDrag';
 import { MAX_ANCHORS_PER_HIGHLIGHT } from '@/lib/api/highlights';
 
 import { type DocumentHandle, type DocumentRef } from './documentHandle';
@@ -79,8 +80,15 @@ export interface SourcePaneProps {
    * The menu's Note: a highlight with its card open on the note field. Drawn only when given.
    */
   readonly onCreateNote?: (capture: SelectionCapture, at: NoteAt | null) => void;
-  /** The menu's Board beside: open the board (TODO(#344): beside the paper, with the split view). */
-  readonly onOpenBoard?: () => void;
+  /** The menu's Board beside: open the board next to the paper, on the card just sent (#344). */
+  readonly onOpenBoard?: (cardId: string | null) => void;
+  /**
+   * The 0-based pages on screen, as the reader scrolls (the split view's faint amber edge on the
+   * cards whose passage is on the page being read).
+   */
+  readonly onVisiblePages?: (pages: readonly number[]) => void;
+  /** The board is beside the paper (#344): the selection menu always docks. */
+  readonly boardBeside?: boolean;
   /** Why Highlight is unavailable right now, or null. */
   readonly highlightUnavailableReason: string | null;
   /** A painted highlight was clicked (or Enter was pressed on it). */
@@ -254,6 +262,46 @@ export function SourcePane(props: SourcePaneProps) {
     highlightDisabledReason: unavailable,
   });
 
+  // The pages on screen are the board beside's business only (the faint amber edge): with no board
+  // beside, the page list is not asked, and the callback is one stable function, not a new closure
+  // per render (the list republishes its visible pages whenever the callback changes).
+  const reportPages = props.onVisiblePages;
+  const besideOpen = props.boardBeside === true;
+  const onVisibleChange = useCallback(
+    (visible: { readonly pages: readonly number[] }): void => reportPages?.(visible.pages),
+    [reportPages],
+  );
+  const visibleChange = besideOpen && reportPages !== undefined ? onVisibleChange : undefined;
+
+  // A selection dragged out of the page is a passage in the air: the board beside (the split view,
+  // #344) shows where it would land and takes it at the drop. Only when there is a board to take it.
+  const canDragToBoard = props.onOpenBoard !== undefined;
+  // `capture` changes whenever the selection state does, and a native drag changes it (pointercancel
+  // reconciles the selection): the listeners must not be torn down, and the passage in the air not
+  // forgotten, in the middle of the very drag that set it. So they read the latest `capture`.
+  const captureRef = useRef(capture);
+  captureRef.current = capture;
+  useEffect(() => {
+    if (root === null || !canDragToBoard) return undefined;
+    const start = (event: DragEvent): void => {
+      const captured = captureRef.current('text');
+      if (captured === null) return;
+      setDraggedPassage({ anchor: captured.anchor, text: captured.selection.text });
+      if (event.dataTransfer !== null) {
+        event.dataTransfer.effectAllowed = 'copy';
+        event.dataTransfer.setData('text/plain', captured.selection.text);
+      }
+    };
+    const end = (): void => setDraggedPassage(null);
+    root.addEventListener('dragstart', start);
+    root.addEventListener('dragend', end);
+    return () => {
+      root.removeEventListener('dragstart', start);
+      root.removeEventListener('dragend', end);
+    };
+  }, [root, canDragToBoard]);
+  useEffect(() => () => setDraggedPassage(null), []);
+
   // A settled selection is painted by the overlay as one band per line (#346), on at most two pages
   // (what the capture measures); the native highlight goes transparent meanwhile. Anything else keeps
   // the native wash, which is the fallback where custom paint cannot run.
@@ -312,6 +360,7 @@ export function SourcePane(props: SourcePaneProps) {
     doc,
     narrow: props.narrow,
     sheetOpen: props.sheetOpen === true,
+    dockOnly: props.boardBeside === true,
     actions: selectionActions,
   });
 
@@ -376,6 +425,7 @@ export function SourcePane(props: SourcePaneProps) {
         onTextLayer={onTextLayer}
         figureRegionsOf={(pageIndex) => figuresByPage.get(pageIndex)}
         onViewportResize={props.onViewportResize}
+        {...(visibleChange === undefined ? {} : { onVisibleChange: visibleChange })}
         initialPosition={props.initialPosition}
         onPositionChange={props.onPositionChange}
         renderOverlay={(pageIndex, meta) => (

@@ -29,15 +29,17 @@ import { useEscapeDeselect } from '../hooks/useEscapeDeselect';
 import { useBranchBoard } from '../hooks/useBranchBoard';
 import { useBoardTools } from '../hooks/useBoardTools';
 import { useCardSources } from '../hooks/useCardSources';
+import { useDropIn } from '../hooks/useDropIn';
 import { useLinkAs } from '../hooks/useLinkAs';
 import { usePaperTitle } from '../hooks/usePaperTitle';
 import { useThreadDrawing } from '../hooks/useThreadDrawing';
 import { useUndoKeys } from '../hooks/useUndoKeys';
 import { anchorPageIndex } from '../model/cards';
-import { ZOOM_RANGE, boardCounts, citationHref, countsLine } from '../model/chrome';
+import { ZOOM_RANGE, besideHref, boardCounts, countsLine, paperBesideHref } from '../model/chrome';
 import { withPageTitles, type PtEdge, type PtNode } from '../model/flow';
 import { bigBoard, glanceAt, publishedZoom } from '../model/glance';
 import { BoardHeader } from './BoardHeader';
+import { NO_PAGES, useProvidedHost, type BoardHost } from './BoardHost';
 import { BoardMinimap } from './BoardMinimap';
 import { BoardFailed, BoardLoading, BoardNotice, UndoToast } from './BoardStates';
 import { BoardToolbar } from './BoardToolbar';
@@ -59,6 +61,7 @@ import { TreeEdges } from './tree/TreeEdges';
 
 import type { CanvasNode } from '@/lib/api/types';
 import './tree/tree.css';
+import './beside.css';
 import './cards.css';
 import './threads.css';
 import './legend.css';
@@ -88,7 +91,31 @@ const WALK_KEYS = cardDescription(
 );
 
 /**
- * The board page for one paper.
+ * The board of a paper that is not beside anything: the whole window. Its source links open the
+ * reader with this board beside it (#349), and B does the same without a card.
+ *
+ * @param paperId The paper.
+ * @returns The host.
+ */
+function fullWidthHost(paperId: string): BoardHost {
+  return {
+    beside: false,
+    visiblePages: NO_PAGES,
+    arrival: null,
+    dragIn: null,
+    showInPaper: (target) =>
+      window.location.assign(besideHref(paperId, target.nodeId, target.citationId)),
+    onBranched: () => undefined,
+    onEscapeUnused: () => undefined,
+    toggleSplit: () => window.location.assign(paperBesideHref(paperId)),
+  };
+}
+
+/** Keys typed into a field are the field's, not the board's. */
+const TYPING = 'input, textarea, select, [contenteditable="true"], [contenteditable=""]';
+
+/**
+ * The board of one paper: the whole page, or (inside the split view's host) the pane beside the paper.
  *
  * @example
  * <BoardView paperId="ppr_…" />
@@ -143,6 +170,9 @@ function exportSource(paperTitle: string | null, passage: CanvasNode): string | 
 }
 
 function Board({ paperId }: { readonly paperId: string }) {
+  const provided = useProvidedHost();
+  const host = useMemo(() => provided ?? fullWidthHost(paperId), [provided, paperId]);
+  const beside = host.beside;
   const ctl = useBoardController(paperId);
   const big = bigBoard(ctl.nodes.length);
   const glance = useGlanceZoom(big);
@@ -180,7 +210,8 @@ function Board({ paperId }: { readonly paperId: string }) {
     [ctl],
   );
 
-  const branch = useBranchBoard(paperId, ctl, stage);
+  const branch = useBranchBoard(paperId, ctl, stage, host);
+  const dropIn = useDropIn(host, stage);
   const sources = useCardSources(paperId, ctl.nodes);
   // The cards as drawn: tree cards where Tidy put them, not where the row says.
   const nodes = useMemo(
@@ -206,6 +237,7 @@ function Board({ paperId }: { readonly paperId: string }) {
     setAreaMode,
     fitOptions,
     branch,
+    ...(beside ? {} : { paperBeside: host.toggleSplit }),
   });
   const selectedEdge =
     selection.edges.length === 1 ? ctl.edges.find((e) => e.id === selection.edges[0]) : undefined;
@@ -217,19 +249,9 @@ function Board({ paperId }: { readonly paperId: string }) {
       commitBody: ctl.commitBody,
       commitTitle: ctl.commitTitle,
       commitSize: ctl.commitSize,
-      openCitation: (nodeId: string, citationId: string, threadId?: string) =>
-        window.location.assign(citationHref(paperId, nodeId, citationId, threadId)),
       sources,
     }),
-    [
-      ctl.editingId,
-      ctl.setEditingId,
-      ctl.commitBody,
-      ctl.commitTitle,
-      ctl.commitSize,
-      paperId,
-      sources,
-    ],
+    [ctl.editingId, ctl.setEditingId, ctl.commitBody, ctl.commitTitle, ctl.commitSize, sources],
   );
 
   const ready = ctl.status === 'ready';
@@ -244,11 +266,32 @@ function Board({ paperId }: { readonly paperId: string }) {
 
   const title = ctl.board?.title ?? paperTitle ?? 'Board';
 
+  // B opens the paper beside a full-width board. (Beside the paper the reader owns the key.)
+  useEffect(() => {
+    if (beside) return undefined;
+    const onKey = (event: KeyboardEvent): void => {
+      if (event.key.toLowerCase() !== 'b' || event.defaultPrevented) return;
+      if (event.metaKey || event.ctrlKey || event.altKey || event.shiftKey || event.isComposing)
+        return;
+      if (event.target instanceof Element && event.target.closest(TYPING) !== null) return;
+      event.preventDefault();
+      host.toggleSplit();
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [beside, host]);
+
   return (
     <CanvasActionsProvider value={actions}>
       <BranchProvider value={branch.actions}>
-        <div className="pt-cv">
-          <BoardHeader paperId={paperId} paperTitle={paperTitle} counts={ready ? counts : null}>
+        <div className="pt-cv" data-beside={beside ? '' : undefined}>
+          <BoardHeader
+            paperId={paperId}
+            paperTitle={paperTitle}
+            counts={ready ? counts : null}
+            beside={beside}
+            {...(ctl.board?.title == null ? {} : { name: ctl.board.title })}
+          >
             <BoardToolbar {...tools} />
           </BoardHeader>
 
@@ -268,7 +311,38 @@ function Board({ paperId }: { readonly paperId: string }) {
               className="pt-cv__stage"
               data-testid="canvas-stage"
               data-status={ctl.status}
+              {...dropIn.handlers}
             >
+              {dropIn.mark === null ? null : (
+                <>
+                  <div
+                    className="pt-drop__foot"
+                    aria-hidden="true"
+                    style={{
+                      left: dropIn.mark.left,
+                      top: dropIn.mark.top,
+                      width: dropIn.mark.width,
+                      height: dropIn.mark.height,
+                    }}
+                  />
+                  <svg
+                    className="pt-drop__cross"
+                    aria-hidden="true"
+                    viewBox="0 0 28 28"
+                    style={{ left: dropIn.mark.x - 14, top: dropIn.mark.y - 14 }}
+                  >
+                    <circle cx="14" cy="14" r="5" />
+                    <path d="M14 2v7M14 19v7M2 14h7M19 14h7" />
+                  </svg>
+                  <span
+                    className="pt-drop__says"
+                    aria-hidden="true"
+                    style={{ left: dropIn.mark.x + 12, top: dropIn.mark.y + 12 }}
+                  >
+                    lands here
+                  </span>
+                </>
+              )}
               {selectedEdge?.data === undefined ? null : (
                 <ThreadBar
                   edge={selectedEdge.data.edge}

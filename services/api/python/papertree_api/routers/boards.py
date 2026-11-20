@@ -138,6 +138,7 @@ def node_wire(
         "level": None if answer is None else (answer.level or "familiar"),
         "model": None if answer is None else answer.model,
         "answer_status": None if answer is None else (status or answer.status),
+        "citations": None if answer is None else [dict(c) for c in answer.citations],
         "version": node.version,
         "created_at": wire_time(node.created_at),
         "updated_at": wire_time(node.updated_at),

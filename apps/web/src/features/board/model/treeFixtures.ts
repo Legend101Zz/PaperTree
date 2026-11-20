@@ -63,6 +63,7 @@ export function node(spec: NodeSpec): CanvasNode {
     level: null,
     model: null,
     answer_status: null,
+    citations: null,
     offset_x: spec.offset?.x ?? 0,
     offset_y: spec.offset?.y ?? 0,
     folded: spec.folded ?? false,

@@ -5,6 +5,7 @@
  */
 import { vi } from 'vitest';
 
+import type { BoardHost } from '@/features/board/components/BoardHost';
 import type { BranchActions } from '@/features/board/components/BranchContext';
 import type { BoardUiControl } from '@/features/board/hooks/useBoardUi';
 import type { BranchBoard } from '@/features/board/hooks/useBranchBoard';
@@ -61,6 +62,8 @@ export function branchActions(
     stop: vi.fn(),
     fold: vi.fn(),
     openSource: vi.fn(),
+    visiblePages: new Set<number>(),
+    beside: false,
     stage: { current: null },
     ...over,
   };
@@ -92,6 +95,7 @@ export function branchBoard(
     },
     ask: {
       streams: new Map(),
+      sending: false,
       send: actions.send,
       quick: actions.quick,
       keepNote: actions.keepNote,
@@ -103,5 +107,25 @@ export function branchBoard(
     actions,
     onPath: null,
     arrivalCard: null,
+  };
+}
+
+/**
+ * The board's host for a test: on its own page by default, or beside the paper.
+ *
+ * @param over What the test replaces.
+ * @returns The host.
+ */
+export function hostOf(over: Partial<BoardHost> = {}): BoardHost {
+  return {
+    beside: false,
+    visiblePages: new Set<number>(),
+    arrival: null,
+    dragIn: null,
+    showInPaper: vi.fn(),
+    onBranched: vi.fn(),
+    onEscapeUnused: vi.fn(),
+    toggleSplit: vi.fn(),
+    ...over,
   };
 }

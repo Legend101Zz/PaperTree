@@ -382,6 +382,19 @@
             }
           ]
         },
+        "citations": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/Citation"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "version": {
           "maximum": 9223372036854775807,
           "minimum": 1,
@@ -425,6 +438,7 @@
         "level",
         "model",
         "answer_status",
+        "citations",
         "version",
         "created_at",
         "updated_at"

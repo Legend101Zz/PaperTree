@@ -32,6 +32,8 @@ export interface BoardToolsInput {
   readonly fitOptions: FitViewOptions<PtNode>;
   /** The branching board (v0.3): Tidy, Fold and Outline act on it. */
   readonly branch: BranchBoard;
+  /** Paper beside (key B): the full-width board offers it; the board beside the paper does not. */
+  readonly paperBeside?: () => void;
 }
 
 /** The history's keys, said in a tool's tooltip and given to assistive technology. */
@@ -69,6 +71,7 @@ export function historyTool(verb: 'Undo' | 'Redo', history: BoardHistory): Board
  */
 export function useBoardTools(input: BoardToolsInput): BoardToolbarProps {
   const { ctl, selection, drawing, link, stage, areaMode, setAreaMode, fitOptions, branch } = input;
+  const { paperBeside } = input;
   const flow = useReactFlow<PtNode, PtEdge>();
   const ready = ctl.status === 'ready';
   const kindOf = (id: string) => ctl.nodes.find((n) => n.id === id)?.data.node.kind;
@@ -92,6 +95,17 @@ export function useBoardTools(input: BoardToolsInput): BoardToolbarProps {
 
   return {
     branch: {
+      ...(paperBeside === undefined
+        ? {}
+        : {
+            paper: {
+              label: 'Paper beside',
+              icon: 'beside' as const,
+              keys: 'B',
+              hint: 'Open the paper next to this board; clicking a card’s source flashes it there.',
+              run: paperBeside,
+            },
+          }),
       tidy: {
         label: 'Tidy',
         icon: 'tidy',

@@ -79,6 +79,22 @@ def unmarked(text: str) -> str:
     return re.sub(r"[ \t]+([.,;:!?])", r"\1", out).strip()
 
 
+_MATHS: Final = re.compile(r"\$[^$\n]*\$")
+_MARKS: Final = re.compile(r"[*_`]")
+_HASHES: Final = re.compile(r"^[ \t]{0,3}#{1,6}[ \t]+", re.MULTILINE)
+
+
+def plain_words(quote: str) -> str:
+    """A span's quote (the exact Markdown source between its offsets) as the words a reader sees.
+
+    Handles, ``$maths$``, heading hashes and the ``*``/``_``/backtick marks are left out and runs of
+    whitespace (a paragraph break included) become one space: the TS twin is ``spanWords``
+    (``spans.ts``; it keeps the space that stood before a handle, this one does not).
+    """
+    text = _MARKS.sub("", _MATHS.sub("", _MARKER.sub("", _HASHES.sub("", quote))))
+    return " ".join(text.split())
+
+
 def tldr(text: str) -> str:
     """The TL;DR line of a tutor answer, else its first sentence (what an older ancestor sends)."""
     plain = unmarked(text)
@@ -107,7 +123,8 @@ def build_path(
 
     The root is the top of the ``parent_id`` chain: a passage (its anchor seeds the run), or a v0.2
     answer card with no parent (its thread's own anchor does, and it is the first turn). ``path``
-    false keeps only the root's words: no ancestor turns.
+    false keeps the root's words and the card asked from (its question and answer): no turns
+    between them.
     """
     chain: list[str] = []
     seen: set[str] = set()
@@ -135,7 +152,8 @@ def build_path(
         question = node.question or got.asked or DEFAULT_FIRST_QUESTION
         answered.append((node_id, question, got.final_text))
     if not path:
-        answered = []
+        # Only the card asked from (its Q and A); the root passage rides on the first turn.
+        answered = [turn for turn in answered if turn[0] == chain[-1]]
     turns = tuple(
         Turn(node_id, question, answer, full=position >= len(answered) - FULL_TURNS)
         for position, (node_id, question, answer) in enumerate(answered)
@@ -235,8 +253,9 @@ def compose_question(question: str, span_quote: str | None, attached: Sequence[s
     """
     out = question[:MAX_QUESTION_CHARS]
     blocks: list[str] = []
-    if span_quote:
-        quote = span_quote if len(span_quote) <= 400 else span_quote[:399] + "…"
+    words = plain_words(span_quote) if span_quote else ""
+    if words:
+        quote = words if len(words) <= 400 else words[:399] + "…"
         blocks.append(f'About these words of your last answer: "{quote}"')
     blocks.extend(attached)
     if attached:

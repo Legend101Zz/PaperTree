@@ -84,8 +84,8 @@ selected.
 
 **Items**, in the prototype's order (`components/reader/SelectionItems`): **Explain** (the default question),
 **Ask…** (`ReaderActions.askAbout`: the panel opens on the passage with the question box focused), **Send to
-board** with two choices, **Board beside** (sends, then opens the board; TODO(#344): next to the paper when the
-split view arrives) and **Just send** (stays reading; the toast says "Added" with Show, which opens the board on
+board** with two choices, **Board beside** (sends, then opens the board next to the paper on the new card: the
+split view, `features/split`, key B; on a window under 768 px it opens the full-width board instead) and **Just send** (stays reading; the toast says "Added" with Show, which opens the board on
 that card), **Note** (makes a highlight and opens its card on the note field: a highlight already carries a note;
 no AI call, no board card) and the **five colours** (a colour keeps the highlight). No Copy (the selection is a
 real selection) and no "Explain with a diagram" (diagrams live inside answers, #339). Every item is at least

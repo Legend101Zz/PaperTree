@@ -8,6 +8,7 @@
  */
 
 import { exportParagraphs, firstLine, moreLineCount } from './answerText';
+import { spanWords } from './spans';
 import {
   branchCounts,
   branchOf,
@@ -174,7 +175,11 @@ export function buildOutline<N extends OutlineNodeInput = CanvasNode>(tree: Boar
         depth,
         down,
         question,
-        from: down ? null : (node.parent_span?.quote ?? null),
+        from: down
+          ? null
+          : node.parent_span === null || node.parent_span === undefined
+            ? null
+            : spanWords(node.parent_span.quote),
         firstLine: firstLine(text),
         moreLines: moreLineCount(text),
         text,
@@ -212,7 +217,11 @@ export function exportMarkdown<N extends OutlineNodeInput = CanvasNode>(
       if (include.notes) lines.push(`> **Note.** ${node.body}`, '');
     } else {
       const level = '#'.repeat(Math.min(6, 2 + depth + (down ? 1 : 0)));
-      const from = down ? null : (node.parent_span?.quote ?? null);
+      const from = down
+        ? null
+        : node.parent_span === null || node.parent_span === undefined
+          ? null
+          : spanWords(node.parent_span.quote);
       lines.push(
         `${level} ${from === null ? '' : `“${from}” → `}${down ? '↓ ' : ''}${questionOf(node)}`,
       );

@@ -22,6 +22,7 @@ import { ApiError, type CanvasNode, type Citation, type ParentSpan } from '@/lib
 import { buildAskBody, isValidQuestion, type QuickAsk } from '../model/askPayload';
 import { toFlowNode } from '../model/flow';
 import { tidyResets } from '../model/layout';
+import { spanWords } from '../model/spans';
 import { branchCounts, countsPhrase, type BoardTree } from '../model/tree';
 import { sentence } from './controllerShared';
 
@@ -41,6 +42,12 @@ export interface AnswerStream {
   readonly thinking: boolean;
   /** A sentence about why the answer stopped short; null otherwise. */
   readonly failure: string | null;
+  /**
+   * True from the end of the stream until the stored final text has been read back. The text that
+   * streamed is not the text the API stored (the agent tidies the answer before it is saved), so
+   * no span may be taken from it: its offsets would point at the wrong words.
+   */
+  readonly settling?: boolean;
 }
 
 /** The tree's gestures that reach the server. */
@@ -48,6 +55,11 @@ export interface BoardAsk {
   readonly streams: ReadonlyMap<string, AnswerStream>;
   /** Sends the ask box. Resolves once the answer card exists (or the ask was refused). */
   readonly send: (draft: Draft) => Promise<boolean>;
+  /**
+   * True from the moment an ask is sent until its `node` event arrives (the card exists and the
+   * box has closed) or it is refused. Another ask in that gap is ignored: Enter twice is one ask.
+   */
+  readonly sending: boolean;
   /** A quick ask from words: no box, no thinking pause. */
   readonly quick: (parentId: string, span: ParentSpan, quick: QuickAsk) => Promise<boolean>;
   /** Keep as note: a note child on the words. */
@@ -70,6 +82,8 @@ export interface BoardAsk {
  * @param offer Where each gesture's step is recorded.
  * @param control What is open (an ask closes its box, a new card takes focus).
  * @param tree The trees as they stand.
+ * @param onBranched Told when a card grows to the RIGHT of an answer (a first branch, #349), so the
+ *   split view can give the tree more room.
  * @returns The streams and the gestures.
  */
 export function useBoardAsk(
@@ -79,6 +93,7 @@ export function useBoardAsk(
   offer: UndoOfferControl,
   control: BoardUiControl,
   tree: BoardTree,
+  onBranched?: () => void,
 ): BoardAsk {
   const {
     boardRef,
@@ -93,8 +108,26 @@ export function useBoardAsk(
   } = store;
   const [streams, setStreams] = useState<ReadonlyMap<string, AnswerStream>>(new Map());
   const aborts = useRef(new Map<string, AbortController>());
+  const [sending, setSendingState] = useState(false);
+  const sendingRef = useRef(false);
+  const setSending = useCallback((on: boolean) => {
+    sendingRef.current = on;
+    setSendingState(on);
+  }, []);
   const treeRef = useRef(tree);
   treeRef.current = tree;
+  const branchedRef = useRef(onBranched);
+  branchedRef.current = onBranched;
+
+  /** A card that hangs to the right of an ANSWER is a branch: the tree is growing sideways. */
+  const branched = useCallback(
+    (node: CanvasNode): void => {
+      if (node.branch !== 'right' || node.parent_id == null) return;
+      const parent = nodesRef.current.find((n) => n.id === node.parent_id)?.data.node;
+      if (parent?.kind === 'explanation') branchedRef.current?.();
+    },
+    [nodesRef],
+  );
 
   useEffect(() => {
     const live = aborts.current;
@@ -125,6 +158,39 @@ export function useBoardAsk(
     [nodesRef, paperId, sentRef, setNodes, versionRef],
   );
 
+  /**
+   * Reads the stored answer back (spec rule 4: a span's offsets are into the STORED final text, and
+   * the agent's tidy step may have rewritten what streamed), replaces the card's text with it and
+   * lets spans be taken again. A failed read keeps what streamed: words can be read, not branched.
+   */
+  const settle = useCallback(
+    async (id: string): Promise<void> => {
+      patchStream(id, { settling: true });
+      try {
+        const view = await boardsApi.get(paperId);
+        if (!aliveRef.current) return;
+        const stored = view.nodes.find((n) => n.node_id === id);
+        const current = nodesRef.current.find((n) => n.id === id)?.data.node.version ?? 0;
+        // A read older than the card (another write landed meanwhile) is not taken over it.
+        if (stored?.final_text != null && stored.final_text !== '' && stored.version >= current) {
+          versionRef.current.set(id, stored.version);
+          mergeData(id, {
+            final_text: stored.final_text,
+            citations: stored.citations ?? null,
+            answer_status: stored.answer_status,
+            model: stored.model,
+            version: stored.version,
+          });
+          patchStream(id, { settling: false });
+        }
+        // Nothing stored to read back (a stopped answer with no words): spans stay off.
+      } catch {
+        // Offline: the streamed text stays on the card and spans stay off until the next read.
+      }
+    },
+    [aliveRef, mergeData, nodesRef, paperId, patchStream, versionRef],
+  );
+
   const run = useCallback(
     async (
       parentId: string,
@@ -133,17 +199,29 @@ export function useBoardAsk(
     ): Promise<boolean> => {
       const boardId = boardRef.current?.board_id;
       if (boardId === undefined) return false;
+      // One ask at a time until the card exists: a second Enter must not send a second ask.
+      if (sendingRef.current) return false;
+      setSending(true);
+      let holding = true;
+      const release = (): void => {
+        if (!holding) return;
+        holding = false;
+        setSending(false);
+      };
       const controller = new AbortController();
       let id: string | null = null;
       let written = '';
+      let cited: readonly Citation[] = [];
       try {
         for await (const event of boardsApi.ask(boardId, parentId, body, controller.signal)) {
           if (!aliveRef.current) return id !== null;
           if (event.event === 'node') {
             const node = event.data;
             id = node.node_id;
+            release();
             aborts.current.set(id, controller);
             adopt(node);
+            branched(node);
             setStreams((prev) =>
               new Map(prev).set(node.node_id, {
                 text: '',
@@ -173,12 +251,15 @@ export function useBoardAsk(
                 thinking: false,
               });
             });
-          } else if (event.event === 'citations') patchStream(id, { citations: event.data.items });
-          else if (event.event === 'done') {
+          } else if (event.event === 'citations') {
+            cited = event.data.items;
+            patchStream(id, { citations: event.data.items });
+          } else if (event.event === 'done') {
             const { status, error } = event.data;
             patchStream(id, {
               status: status === 'aborted' ? 'stopped' : status,
               thinking: false,
+              settling: true,
               failure: error === null ? null : error.message,
             });
           }
@@ -196,18 +277,37 @@ export function useBoardAsk(
         patchStream(id, {
           status: 'error',
           thinking: false,
+          settling: true,
           failure: error instanceof ApiError ? error.detail : 'The answer stopped arriving.',
         });
         return true;
       } finally {
+        release();
         if (id !== null) {
           aborts.current.delete(id);
-          // What arrived is the card's own text now; the stored copy comes with the next read.
-          if (written !== '' && aliveRef.current) mergeData(id, { final_text: written });
+          // What arrived is the card's text for now; the stored copy replaces it below.
+          if (written !== '' && aliveRef.current) {
+            mergeData(id, {
+              final_text: written,
+              ...(cited.length > 0 ? { citations: [...cited] } : {}),
+            });
+          }
+          void settle(id);
         }
       }
     },
-    [adopt, aliveRef, boardRef, control, mergeData, patchStream, setNotice],
+    [
+      adopt,
+      aliveRef,
+      boardRef,
+      branched,
+      control,
+      mergeData,
+      patchStream,
+      setNotice,
+      setSending,
+      settle,
+    ],
   );
 
   const send = useCallback(
@@ -264,9 +364,13 @@ export function useBoardAsk(
       if (boardId === undefined) return;
       control.openMenu(null);
       try {
-        const note = await boardsApi.keepNote(boardId, parentId, { span, text: span.quote });
+        const note = await boardsApi.keepNote(boardId, parentId, {
+          span,
+          text: spanWords(span.quote),
+        });
         if (!aliveRef.current) return;
         adopt(note);
+        branched(note);
         control.focus(note.node_id);
       } catch (error) {
         setNotice(
@@ -274,7 +378,7 @@ export function useBoardAsk(
         );
       }
     },
-    [adopt, aliveRef, boardRef, control, setNotice],
+    [adopt, aliveRef, boardRef, branched, control, setNotice],
   );
 
   const stop = useCallback(
@@ -341,5 +445,5 @@ export function useBoardAsk(
     }
   }, [aliveRef, boardRef, forgetRow, mergeData, reload, setNotice, versionRef]);
 
-  return { streams, send, quick, retry, keepNote, stop, fold, tidy };
+  return { streams, sending, send, quick, retry, keepNote, stop, fold, tidy };
 }

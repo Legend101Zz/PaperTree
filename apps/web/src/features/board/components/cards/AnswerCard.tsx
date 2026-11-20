@@ -12,13 +12,13 @@
  * when the answer stopped short, "Try again", and, when it already has a next turn, "Ask differently".
  */
 import { type NodeProps } from '@xyflow/react';
-import { useRef, type ReactNode } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
 
 import { AnswerBody } from '@/features/explain/components/AnswerBody';
 
+import { shownAnswerText } from '../../model/answerText';
 import { locateQuote } from '../../model/spans';
 import { branchCounts, childrenOf, countsPhrase, downChild, spanKnots } from '../../model/tree';
-import { useCanvasActions } from '../BoardContext';
 import { useBranch } from '../BranchContext';
 import { answerView } from '../tree/answerView';
 import { BranchCard } from '../tree/BranchCard';
@@ -39,16 +39,16 @@ function Stamp(): ReactNode {
 
 /** An answer card: an `explanation` row. */
 export function AnswerCard({ id, data, selected }: NodeProps<PtNode>): ReactNode {
-  const ctx = useCanvasActions();
   const branch = useBranch();
   const node = data.node;
   const body = useRef<HTMLDivElement | null>(null);
   const root = useRef<HTMLDivElement | null>(null);
   const stream = branch.streams.get(id);
-  const source = ctx.sources?.explanations.get(node.source_message_id ?? '') ?? null;
   const live = stream?.status === 'writing';
-  const text =
-    stream !== undefined && stream.text !== '' ? stream.text : (node.final_text ?? node.body);
+  // While it writes, the words that streamed; once it is over, the STORED text, which the span
+  // offsets are into (the agent tidies an answer before it is saved).
+  const text = shownAnswerText(node, stream, live);
+  const settling = live || stream?.settling === true;
   const state = live
     ? 'live'
     : stream?.status === 'stopped' || stream?.status === 'error'
@@ -62,12 +62,22 @@ export function AnswerCard({ id, data, selected }: NodeProps<PtNode>): ReactNode
       : node.answer_status === 'error' ||
         node.answer_status === 'aborted' ||
         node.answer_status === 'partial');
-  const citations = stream?.citations ?? source?.answer.citations ?? [];
-  const view = answerView(id, text, state, citations, source?.numbers);
-  const question = (node.question ?? source?.question ?? node.title ?? '').trim();
+  // The citations ride on the board's own read of the node (no thread scan), the live ones while it streams.
+  const citations = stream?.citations ?? node.citations ?? [];
+  const view = answerView(id, text, state, citations);
+  const question = (node.question ?? node.title ?? '').trim();
   const folded = node.folded === true;
   const knots = spanKnots(branch.tree, id);
   const placed = useSpanMarks(id, root, body, text, knots, branch.reports);
+  // Words selected while the stored text is still being read back are not lost: when it lands, the
+  // selection that is still standing opens the menu (the reader did the right thing, early).
+  const wasSettling = useRef(settling);
+  const reselect = useRef<() => void>(() => undefined);
+  useEffect(() => {
+    const was = wasSettling.current;
+    wasSettling.current = settling;
+    if (was && !settling) reselect.current();
+  }, [settling]);
   const hasNext = downChild(branch.tree, id) !== undefined;
   const kids = childrenOf(branch.tree, id);
   const placedCard = branch.layout.cards.get(id);
@@ -86,7 +96,7 @@ export function AnswerCard({ id, data, selected }: NodeProps<PtNode>): ReactNode
   const onSelectWords = (el: HTMLElement): void => {
     const picked = selectedWords(el);
     const stage = branch.stage.current;
-    if (picked === null || stage === null || live) {
+    if (picked === null || stage === null || settling) {
       if (branch.control.ui.menu?.cardId === id) branch.control.openMenu(null);
       return;
     }
@@ -103,6 +113,10 @@ export function AnswerCard({ id, data, selected }: NodeProps<PtNode>): ReactNode
         h: picked.last.height,
       },
     });
+  };
+
+  reselect.current = () => {
+    if (body.current !== null) onSelectWords(body.current);
   };
 
   const counts = kids.length > 0 ? countsPhrase(branchCounts(branch.tree, id)) : null;
@@ -168,9 +182,7 @@ export function AnswerCard({ id, data, selected }: NodeProps<PtNode>): ReactNode
               type="button"
               className="pt-tc__src"
               aria-label={`Show p. ${String(s.page)} in the paper`}
-              // TODO(#344): in split view the paper scrolls and flashes while the board stays put;
-              // on the full-width board this leaves for the reader, as the old cards did.
-              onClick={() => branch.openSource(id, s.citation.citation_id, source?.threadId)}
+              onClick={() => branch.openSource(id, s.citation.citation_id)}
             >
               p. {s.page}
             </button>
@@ -218,7 +230,7 @@ export function AnswerCard({ id, data, selected }: NodeProps<PtNode>): ReactNode
           blocks={view.model.blocks}
           streaming={live}
           general={false}
-          onShow={(s) => branch.openSource(id, s.citation.citation_id, source?.threadId)}
+          onShow={(s) => branch.openSource(id, s.citation.citation_id)}
         />
         {stream?.failure != null ? <p className="pt-tc__fail">{stream.failure}</p> : null}
       </div>

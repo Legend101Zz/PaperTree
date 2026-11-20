@@ -245,6 +245,18 @@ describe('a selection across a page break (review B2)', () => {
   });
 });
 
+describe('beside the board (#344)', () => {
+  it('always docks, even where the desk beside the page would hold a margin bar', () => {
+    expect(placeToolbar(BASE).kind).toBe('margin');
+    const docked = placeToolbar({ ...BASE, dockOnly: true });
+    expect(docked.kind).toBe('docked');
+    expect(docked.rect.left).toBeGreaterThanOrEqual(BASE.viewport.left);
+    expect(docked.rect.right).toBeLessThanOrEqual(BASE.viewport.right);
+    // ... and still never over a selected line.
+    expect(BASE.selection.some((line) => overlaps(docked.rect, line))).toBe(false);
+  });
+});
+
 describe('the menu is as wide as its longest label (#346)', () => {
   const WIDE = { width: 190, height: 230 };
 

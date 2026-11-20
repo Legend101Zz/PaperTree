@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  shownAnswerText,
   DIAGRAM_PLACEHOLDER,
   answerBlocks,
   exportParagraphs,
@@ -93,5 +94,18 @@ describe('export text', () => {
   it('never reports fewer than one more line', () => {
     expect(moreLineCount('short')).toBe(1);
     expect(moreLineCount('x'.repeat(420))).toBe(9);
+  });
+});
+
+describe('shownAnswerText', () => {
+  const streamed = { text: 'Intro\n```diagram\nbox: a\n```\nBody.' };
+  it('shows the streamed words while it writes, and the STORED text once it is over', () => {
+    const node = { final_text: 'Intro\nBody.', body: '' };
+    expect(shownAnswerText(node, streamed, true)).toBe(streamed.text);
+    expect(shownAnswerText(node, streamed, false)).toBe('Intro\nBody.');
+  });
+  it('falls back to what streamed while nothing is stored, then to the card body', () => {
+    expect(shownAnswerText({ final_text: null, body: 'b' }, streamed, false)).toBe(streamed.text);
+    expect(shownAnswerText({ final_text: null, body: 'b' }, undefined, false)).toBe('b');
   });
 });

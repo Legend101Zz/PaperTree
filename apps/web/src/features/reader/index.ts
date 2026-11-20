@@ -4,6 +4,7 @@
  */
 export {
   ReaderHeader,
+  type BoardBesideToggle,
   type ExplainToggle,
   type ReaderHeaderProps,
 } from './components/ReaderHeader';

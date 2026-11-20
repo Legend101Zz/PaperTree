@@ -29,6 +29,11 @@ export interface PlacementInput {
   readonly dockHeight: number;
   /** The visible part of the reader column. */
   readonly viewport: Rect;
+  /**
+   * Always dock, never a margin bar: beside the board (the split view, #344) there is never room
+   * beside a page, so the docked row is the menu there.
+   */
+  readonly dockOnly?: boolean;
 }
 
 /** The answer: beside the selection in a margin, or docked across the column. */
@@ -141,7 +146,7 @@ function dockRect(input: PlacementInput, edge: 'top' | 'bottom'): Rect {
 export function placeToolbar(input: PlacementInput): Placement {
   const selected = unionOf(input.selection);
   const free = (rect: Rect): boolean => !input.selection.some((line) => overlaps(rect, line));
-  if (selected !== null) {
+  if (selected !== null && input.dockOnly !== true) {
     const text = unionOf(input.typeArea === null ? [selected] : [input.typeArea, selected]);
     if (text !== null) {
       const centre = (selected.left + selected.right) / 2;

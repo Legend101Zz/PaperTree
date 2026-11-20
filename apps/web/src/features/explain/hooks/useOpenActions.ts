@@ -1,6 +1,6 @@
 /**
- * explain/useOpenActions — how the panel's thread starts: Explain a selection, Explain with a
- * diagram, Redraw a plate, Ask about a passage.
+ * explain/useOpenActions — how the panel's thread starts: Explain a selection, Redraw a
+ * plate of a stored diagram thread, Ask about a passage.
  *
  * ONE CONVERSATION PER ASK. Each of these always starts over: it stops whatever was streaming (the
  * run is cancelled, not abandoned), clears the thread and bumps the epoch, so a second Ask or a new
@@ -8,7 +8,7 @@
  */
 import { useCallback } from 'react';
 
-import { threadsApi, type CreateThreadBody } from '@/lib/api/threads';
+import { threadsApi } from '@/lib/api/threads';
 
 import { isStreaming, newestPlate, REDRAW_QUESTION } from '../model/turns';
 
@@ -61,15 +61,8 @@ export function useOpenActions(
       const current = stateRef.current;
       const target = current.messages.find((m) => m.key === key);
       if (paperId === null || target === undefined || current.messages.some(isStreaming)) return;
-      const { epoch, threadId, request } = current;
-      if (threadId === null) {
-        // The first plate never reached a thread (refused or failed before its `run`): ask again.
-        if (request === null) return;
-        const body: CreateThreadBody = { kind: 'diagram', anchor: request.anchor };
-        const open = (signal: AbortSignal) => threadsApi.create(paperId, body, signal);
-        void startTurn(epoch, target.question, false, open, key, {});
-        return;
-      }
+      const { epoch, threadId } = current;
+      if (threadId === null) return;
       // A Redraw that never arrived (refused before the stream) is sent again as the same Redraw,
       // in place; a plate that has an id gets a new plate under a new ask.
       const again = target.messageId === null;

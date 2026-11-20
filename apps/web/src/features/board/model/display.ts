@@ -61,6 +61,7 @@ export function draftNode(boardId: string, draft: Draft, branch: BoardBranch): C
     level: draft.uses.level,
     model: null,
     answer_status: null,
+    citations: null,
     version: 0,
     // Sorts after every real sibling asked from the same words.
     created_at: '9999-12-31T23:59:59Z',

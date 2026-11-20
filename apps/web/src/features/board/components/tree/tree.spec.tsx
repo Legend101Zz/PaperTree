@@ -369,6 +369,24 @@ describe('the ask box and its Uses line', () => {
     expect(branch.send).toHaveBeenCalledWith(typed);
   });
 
+  it('ignores Enter and the button while an ask is on its way (no double submit)', () => {
+    const typed = draftOf({ text: 'what is it?' });
+    const branch = branchActions(rows(), { draft: typed, sending: true }, { draft: typed });
+    render(
+      <ReactFlowProvider>
+        <BranchProvider value={branch}>
+          <AskBox />
+        </BranchProvider>
+      </ReactFlowProvider>,
+    );
+    const box = screen.getByRole('textbox', { name: 'Your question' });
+    fireEvent.keyDown(box, { key: 'Enter' });
+    fireEvent.keyDown(box, { key: 'Enter' });
+    fireEvent.click(screen.getByRole('button', { name: /^Follow up/ }));
+    expect(branch.send).not.toHaveBeenCalled();
+    expect(box.hasAttribute('readonly')).toBe(true);
+  });
+
   it('a focused answer with no next turn shows a one-line stub that grows when focused', () => {
     const stub = draftOf({ expanded: false });
     const branch = mountBox(stub);
