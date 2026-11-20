@@ -9,6 +9,12 @@
 /** The smallest scale a figure is shown at (1 = the size Mermaid drew it). */
 export const MIN_SCALE = 0.7;
 
+/**
+ * A room narrower than this (a board card's ~290 px body) shows the whole drawing as a preview
+ * instead of holding `MIN_SCALE` and scrolling sideways.
+ */
+export const NARROW_ROOM = 380;
+
 /** What a figure's box needs to know. */
 export interface Fit {
   /** The scale applied to the natural size, `MIN_SCALE`..1. */
@@ -25,13 +31,15 @@ export interface Fit {
  * @param natural The drawing's natural width in px (its viewBox).
  * @param room The width the figure has, in px; 0 or less means not measured yet (drawn at natural size).
  * @param large The reader asked for the natural size.
+ * @param narrow A narrow room (a board card): the whole drawing fits the width, with no minimum
+ *   scale and no sideways scroll (a preview; "larger" shows the natural size).
  * @returns The scale, the drawn width and whether it scrolls.
  */
-export function fitFigure(natural: number, room: number, large: boolean): Fit {
+export function fitFigure(natural: number, room: number, large: boolean, narrow = false): Fit {
   if (!(natural > 0)) return { scale: 1, width: 0, scrolls: false };
   if (large) return { scale: 1, width: natural, scrolls: room > 0 && natural > room + 0.5 };
   const wanted = room > 0 ? room / natural : 1;
-  const scale = Math.min(1, Math.max(MIN_SCALE, wanted));
+  const scale = narrow ? Math.min(1, wanted) : Math.min(1, Math.max(MIN_SCALE, wanted));
   const width = Math.round(natural * scale);
   return { scale, width, scrolls: room > 0 && width > room + 0.5 };
 }

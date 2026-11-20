@@ -230,6 +230,7 @@ export function AnswerCard({ id, data, selected }: NodeProps<PtNode>): ReactNode
           blocks={view.model.blocks}
           streaming={live}
           general={false}
+          compact
           onShow={(s) => branch.openSource(id, s.citation.citation_id)}
         />
         {stream?.failure != null ? <p className="pt-tc__fail">{stream.failure}</p> : null}

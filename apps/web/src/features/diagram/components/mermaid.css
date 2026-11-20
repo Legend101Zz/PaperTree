@@ -103,3 +103,27 @@
     transition: none !important;
   }
 }
+
+/*
+ * A narrow room (a board card): the whole drawing is fitted to the width and shown as a preview.
+ * Nothing scrolls, the height follows, and a transparent button over the stage opens the larger view.
+ */
+.pt-mmd[data-preview='true'] .pt-mmd__scroll {
+  overflow: hidden;
+  max-block-size: none;
+}
+
+.pt-mmd__preview {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: zoom-in;
+}
+
+.pt-mmd__preview:focus-visible {
+  outline: var(--pt-focus-width, 2px) solid var(--pt-focus);
+  outline-offset: -2px;
+}

@@ -13,6 +13,10 @@
  *  - A fence Mermaid cannot parse draws NOTHING (a hidden, empty figure): a quiet "diagram
  *    unavailable" note would put the app's failure into an answer that reads fine without the
  *    picture, and raw code is never shown. The old plate figure behaves the same way.
+ *  - In a narrow room (a board card, `compact`, or any box under `NARROW_ROOM`) the whole drawing
+ *    is fitted to the width instead (no minimum scale, no sideways scroll, height follows): a
+ *    preview that is itself a button opening the larger view (`nodrag`, so it never starts a card
+ *    drag). The caption-row control stays.
  *  - It scales to the room it has (the panel, or a board card about half as wide) but never below
  *    `MIN_SCALE` (`../mermaid/scale`): a wider drawing keeps that scale and scrolls sideways inside
  *    the figure, with a fade at the edge it scrolls toward; its height is capped like a board card
@@ -35,7 +39,7 @@ import {
 
 import { mermaidName } from '../mermaid/fence';
 import { renderMermaid, type MermaidResult } from '../mermaid/render';
-import { fitFigure } from '../mermaid/scale';
+import { fitFigure, NARROW_ROOM } from '../mermaid/scale';
 import { readTokens, tokensKey, type FigureTokens } from '../mermaid/theme';
 
 import './inline.css';
@@ -47,6 +51,12 @@ export interface MermaidDiagramProps {
   readonly body: string;
   /** The closing fence has arrived. False: a placeholder, nothing is loaded or read yet. */
   readonly closed: boolean;
+  /**
+   * A board card (or any narrow room): the whole drawing is fitted to the width as a preview, a
+   * button that opens the larger view. A container narrower than `NARROW_ROOM` does the same
+   * without being told.
+   */
+  readonly compact?: boolean;
 }
 
 /** The attributes on <html> that change the room or the page (packages/ui styles.css). */
@@ -110,7 +120,7 @@ function useRoom(ref: RefObject<HTMLElement | null>, active: boolean): number {
 }
 
 /** The figure of one ```mermaid fence. */
-export function MermaidDiagram({ body, closed }: MermaidDiagramProps): ReactNode {
+export function MermaidDiagram({ body, closed, compact = false }: MermaidDiagramProps): ReactNode {
   const ref = useRef<HTMLElement | null>(null);
   const tokens = useTokens(ref, closed);
   const [result, setResult] = useState<MermaidResult | null>(null);
@@ -131,7 +141,9 @@ export function MermaidDiagram({ body, closed }: MermaidDiagramProps): ReactNode
 
   const drawn = result?.ok === true ? result : null;
   const room = useRoom(box, drawn !== null);
-  const fit = fitFigure(drawn?.width ?? 0, room, large);
+  const narrow = compact || (room > 0 && room < NARROW_ROOM);
+  const fit = fitFigure(drawn?.width ?? 0, room, large, narrow);
+  const preview = narrow && !large;
   // A new size starts at the left edge again: the fade is back until the reader reaches the end.
   useLayoutEffect(() => setAtEnd(false), [fit.width, room]);
   if (result?.ok === false) {
@@ -156,6 +168,7 @@ export function MermaidDiagram({ body, closed }: MermaidDiagramProps): ReactNode
       className="pt-diagram-inline pt-mmd"
       data-mermaid=""
       data-large={large}
+      data-preview={preview}
       data-scrolls={fit.scrolls && !atEnd}
       aria-label={mermaidName(body)}
       style={{ '--pt-mmd-w': `${String(fit.width)}px` } as CSSProperties}
@@ -176,12 +189,25 @@ export function MermaidDiagram({ body, closed }: MermaidDiagramProps): ReactNode
             dangerouslySetInnerHTML={{ __html: drawn.svg }}
           />
         </span>
+        {preview ? (
+          <button
+            type="button"
+            className="pt-mmd__preview nodrag nopan"
+            aria-label="Show the diagram larger"
+            title="Show larger"
+            onClick={(event) => {
+              // A click on the preview is the reader's, never a card drag or a board click.
+              event.stopPropagation();
+              setLarge(true);
+            }}
+          />
+        ) : null}
         <span className="pt-mmd__fade" aria-hidden="true" />
       </span>
       <span className="pt-mmd__caption">
         <button
           type="button"
-          className="pt-mmd__btn"
+          className="pt-mmd__btn nodrag nopan"
           aria-expanded={large}
           aria-label={label}
           title={large ? 'Show smaller (Esc)' : 'Show larger'}

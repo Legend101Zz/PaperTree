@@ -67,3 +67,17 @@ describe('the figure box (mermaid.css)', () => {
     expect(css).toMatch(/\.pt-mmd\[data-scrolls='true'\] \.pt-mmd__fade \{[^}]*opacity: 1;/);
   });
 });
+
+describe('fitFigure in a narrow room (board card)', () => {
+  it('fits the whole drawing to the width with no minimum scale and no scroll', () => {
+    const fit = fitFigure(700, 290, false, true);
+    expect(fit.width).toBe(290);
+    expect(fit.scale).toBeLessThan(MIN_SCALE);
+    expect(fit.scrolls).toBe(false);
+  });
+
+  it('never grows a small drawing, and "larger" is still the natural size', () => {
+    expect(fitFigure(200, 290, false, true).width).toBe(200);
+    expect(fitFigure(700, 290, true, true)).toEqual({ scale: 1, width: 700, scrolls: true });
+  });
+});

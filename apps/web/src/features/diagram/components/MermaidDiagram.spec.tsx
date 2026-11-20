@@ -33,8 +33,8 @@ afterEach(() => {
 
 const BODY = 'timeline\n  title History\n  2014 : Bahdanau';
 
-async function drawn(): Promise<HTMLElement> {
-  render(<MermaidDiagram body={BODY} closed />);
+async function drawn(compact = false): Promise<HTMLElement> {
+  render(<MermaidDiagram body={BODY} closed compact={compact} />);
   return waitFor(() => {
     const figure = document.querySelector<HTMLElement>('figure[data-mermaid]');
     if (figure === null) throw new Error('not drawn yet');
@@ -114,5 +114,78 @@ describe('MermaidDiagram size', () => {
     expect(button.textContent).toBe('smaller');
     fireEvent.keyDown(button, { key: 'Escape' });
     expect(figure.getAttribute('data-large')).toBe('false');
+  });
+});
+
+describe('MermaidDiagram in a board card', () => {
+  const CARD = 290;
+  beforeEach(() => {
+    vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(CARD);
+  });
+
+  it('shows the whole drawing fitted to the width: no minimum scale, no sideways scroll', async () => {
+    draw.width = 700;
+    const figure = await drawn(true);
+    // 290 / 700 = 0.41, well under the panel's 0.7 floor.
+    expect(figure.style.getPropertyValue('--pt-mmd-w')).toBe(`${String(CARD)}px`);
+    expect(figure.getAttribute('data-scrolls')).toBe('false');
+    expect(figure.getAttribute('data-preview')).toBe('true');
+  });
+
+  it('a very wide drawing is still fitted whole', async () => {
+    draw.width = 3290;
+    const figure = await drawn(true);
+    expect(figure.style.getPropertyValue('--pt-mmd-w')).toBe(`${String(CARD)}px`);
+    expect(figure.getAttribute('data-scrolls')).toBe('false');
+  });
+
+  it('the preview is a nodrag button that opens the larger view, and does not bubble', async () => {
+    draw.width = 700;
+    const onClick = vi.fn();
+    render(<MermaidDiagram body={BODY} closed compact />);
+    document.body.addEventListener('click', onClick);
+    const figure = await waitFor(() => {
+      const f = document.querySelector<HTMLElement>('figure[data-mermaid]');
+      if (f === null) throw new Error('not drawn yet');
+      return f;
+    });
+    const preview = figure.querySelector<HTMLElement>('.pt-mmd__preview') as HTMLElement;
+    expect(preview.tagName).toBe('BUTTON');
+    expect(preview.classList.contains('nodrag')).toBe(true);
+    expect(preview.getAttribute('aria-label')).toBe('Show the diagram larger');
+    fireEvent.click(preview);
+    document.body.removeEventListener('click', onClick);
+    expect(onClick).not.toHaveBeenCalled();
+    expect(figure.getAttribute('data-large')).toBe('true');
+    expect(figure.getAttribute('data-preview')).toBe('false');
+    expect(figure.style.getPropertyValue('--pt-mmd-w')).toBe('700px');
+    expect(figure.querySelector('.pt-mmd__preview')).toBeNull();
+  });
+
+  it('keeps the caption-row "larger" control too', async () => {
+    draw.width = 700;
+    const figure = await drawn(true);
+    const caption = figure.querySelector<HTMLElement>('.pt-mmd__caption button') as HTMLElement;
+    expect(caption.textContent).toBe('larger');
+    fireEvent.click(caption);
+    expect(figure.getAttribute('data-large')).toBe('true');
+  });
+
+  it('any container narrower than 380 px does the same without being told', async () => {
+    draw.width = 700;
+    const figure = await drawn(false);
+    expect(figure.getAttribute('data-preview')).toBe('true');
+    expect(figure.style.getPropertyValue('--pt-mmd-w')).toBe(`${String(CARD)}px`);
+  });
+});
+
+describe('MermaidDiagram in the panel', () => {
+  it('is unchanged: min scale 0.7, scrolls, no preview button', async () => {
+    draw.width = 3290;
+    const figure = await drawn(false);
+    expect(figure.getAttribute('data-preview')).toBe('false');
+    expect(figure.querySelector('.pt-mmd__preview')).toBeNull();
+    expect(figure.style.getPropertyValue('--pt-mmd-w')).toBe(`${String(Math.round(3290 * 0.7))}px`);
+    expect(figure.getAttribute('data-scrolls')).toBe('true');
   });
 });

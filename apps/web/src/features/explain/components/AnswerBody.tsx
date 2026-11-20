@@ -44,6 +44,8 @@ export interface AnswerBodyProps extends Pick<AnswerTextProps, 'streaming' | 'on
   readonly touch?: boolean;
   /** The paragraph that ends the text so far: the typed caret sits on it while streaming. */
   readonly caretAt?: number | null;
+  /** A narrow surface (the board card): a Mermaid figure shows whole, as a preview button. */
+  readonly compact?: boolean;
   /** Present only in the Explain panel: the Check yourself block. */
   readonly check?: CheckControl | undefined;
 }
@@ -56,6 +58,7 @@ export function AnswerBody({
   onShow,
   touch = false,
   caretAt = null,
+  compact = false,
   check,
 }: AnswerBodyProps): ReactNode {
   return blocks.map((block, i) => {
@@ -94,7 +97,7 @@ export function AnswerBody({
       case 'diagram':
         return <InlineDiagram key={i} body={block.body} closed={block.closed} />;
       case 'mermaid':
-        return <MermaidDiagram key={i} body={block.body} closed={block.closed} />;
+        return <MermaidDiagram key={i} body={block.body} closed={block.closed} compact={compact} />;
       case 'check':
         return check === undefined ? null : (
           <CheckYourself key={i} spec={block.spec} state={check.state} onChange={check.onChange} />
