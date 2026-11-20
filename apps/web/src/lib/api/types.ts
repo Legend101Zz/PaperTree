@@ -88,6 +88,11 @@ export interface JobSummary {
 /** The reading mode the reader saves with a place (`PUT /papers/{id}/reading-state`). */
 export type ReadingMode = 'source' | 'guided' | 'split';
 
+/** `PATCH /papers/{id}` (v0.3 #337): the name the library shows; 1 to 300 characters once trimmed. */
+export interface PaperRename {
+  readonly title: string;
+}
+
 /** `GET /auth/me` and `PATCH /auth/me`. `display_name` is null until the person sets one. */
 export interface Me {
   user_id: string;

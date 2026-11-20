@@ -1,6 +1,6 @@
 /**
  * The phone library's rule (#199): the breakpoint and what changes under it (flat books at any
- * count, Reading now always, the card as a sheet), and the flat-book row model: frame 08a's lengths
+ * count), and the flat-book row model: frame 08a's lengths
  * and offsets, the faces, the ribbon and the year, and the stack's arrow keys.
  */
 import { describe, expect, it } from 'vitest';
@@ -11,9 +11,9 @@ import {
   PHONE_QUERY,
   flatPicture,
   flatStep,
-  libraryPlan,
+  libraryShelf,
 } from './phone';
-import { AT_SCALE_MIN, FACE_OUT_MAX } from './states';
+import { AT_SCALE_MIN } from './states';
 
 import type { ShelfPaper } from './shelf';
 
@@ -46,20 +46,17 @@ describe('the phone layout rule', () => {
     expect(PHONE_QUERY).toBe('(max-width: 900px)');
   });
 
-  it('lays the books flat at every count on a phone, with Reading now and the sheet', () => {
-    for (const count of [1, FACE_OUT_MAX, FACE_OUT_MAX + 1, AT_SCALE_MIN + 1, 400]) {
-      expect(libraryPlan(count, true)).toEqual({ shelf: 'flat', readingNow: true, card: 'sheet' });
+  it('lays the books flat at every count on a phone', () => {
+    for (const count of [1, 12, 13, AT_SCALE_MIN + 1, 400]) {
+      expect(libraryShelf(count, true)).toBe('flat');
     }
   });
 
-  it('keeps the desktop layouts unchanged off the phone', () => {
-    expect(libraryPlan(FACE_OUT_MAX, false)).toEqual({
-      shelf: 'face-out',
-      readingNow: false,
-      card: 'band',
-    });
-    expect(libraryPlan(24, false)).toEqual({ shelf: 'spines', readingNow: true, card: 'band' });
-    expect(libraryPlan(AT_SCALE_MIN + 1, false).shelf).toBe('rows');
+  it('stands spines on planks off the phone, whatever the count, and rows at scale', () => {
+    expect(libraryShelf(1, false)).toBe('spines');
+    expect(libraryShelf(12, false)).toBe('spines');
+    expect(libraryShelf(24, false)).toBe('spines');
+    expect(libraryShelf(AT_SCALE_MIN + 1, false)).toBe('rows');
   });
 });
 

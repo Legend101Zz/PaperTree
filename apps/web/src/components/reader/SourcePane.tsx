@@ -40,7 +40,7 @@ import { setDraggedPassage } from '@/features/split/model/passageDrag';
 import { MAX_ANCHORS_PER_HIGHLIGHT } from '@/lib/api/highlights';
 
 import { type DocumentHandle, type DocumentRef } from './documentHandle';
-import { figureRegions } from './figureRegions';
+import { figureMats, type MatRegion } from './figureRegions';
 import { FLASH_SCROLL_MS, prefersReducedMotion } from './flash';
 import { HighlightOverlay, type FlashPaint, type PaintItem } from './HighlightOverlay';
 import { usePdfDocument } from './PdfDocumentProvider';
@@ -238,9 +238,8 @@ export function SourcePane(props: SourcePaneProps) {
   // The figure boxes per page, for the dark and sepia page's mats. Built once per document: a new
   // array on every render would redraw every mat each time.
   const figuresByPage = useMemo(() => {
-    const byPage = new Map<number, readonly BBox[]>();
-    for (const [pageIndex, blocks] of doc?.byPage ?? [])
-      byPage.set(pageIndex, figureRegions(blocks));
+    const byPage = new Map<number, readonly MatRegion[]>();
+    for (const [pageIndex, blocks] of doc?.byPage ?? []) byPage.set(pageIndex, figureMats(blocks));
     return byPage;
   }, [doc]);
 

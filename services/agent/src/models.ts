@@ -3,7 +3,8 @@
  * and how hard it thinks.
  *
  *   PAPERTREE_MODEL            one model for every kind (unset: DEFAULT_MODELS below)
- *   PAPERTREE_MODEL_EXPLAIN    override for `explain`; likewise _ASK, _SUMMARY, _DIAGRAM and _TOPIC
+ *   PAPERTREE_MODEL_EXPLAIN    override for `explain`; likewise _ASK, _SUMMARY, _DIAGRAM, _TOPIC and
+ *                              _GLANCE
  *   PAPERTREE_MODEL_EFFORT     Flash thinking effort (low | medium | high); likewise per kind
  *                              (unset: DEFAULT_EFFORTS below)
  *
@@ -27,7 +28,7 @@ export const FLASH_MODEL_ID = 'MiniMax-M3.1-Flash';
 export const ALLOWED_MODEL_IDS = [M3_MODEL_ID, FLASH_MODEL_ID] as const;
 export type ModelId = (typeof ALLOWED_MODEL_IDS)[number];
 
-export const RUN_KINDS = ['explain', 'ask', 'summary', 'diagram', 'topic'] as const;
+export const RUN_KINDS = ['explain', 'ask', 'summary', 'diagram', 'topic', 'glance'] as const;
 export type RunKind = (typeof RUN_KINDS)[number];
 
 export const EFFORTS = ['low', 'medium', 'high'] as const;
@@ -45,6 +46,7 @@ export const DEFAULT_MODELS: Readonly<Record<RunKind, ModelId>> = {
   summary: FLASH_MODEL_ID,
   diagram: FLASH_MODEL_ID,
   topic: FLASH_MODEL_ID,
+  glance: FLASH_MODEL_ID,
 };
 
 /** Flash's default effort per kind. A global or per-kind env var overrides it exactly as before. */
@@ -60,6 +62,9 @@ export const DEFAULT_EFFORTS: Readonly<Record<RunKind, Effort>> = {
   diagram: 'low',
   // One short JSON object per upload, no tools.
   topic: 'low',
+  // One short JSON sheet from the digest, no tools, made once per paper in the background: the
+  // gist and the caps are a summary of text already in front of it, so speed and cost win.
+  glance: 'low',
 };
 
 export interface ModelChoice {
@@ -126,6 +131,7 @@ export function readPolicy(env: NodeJS.ProcessEnv): ModelPolicy {
     summary: choice('summary'),
     diagram: choice('diagram'),
     topic: choice('topic'),
+    glance: choice('glance'),
   };
 }
 
@@ -142,7 +148,7 @@ export function uniformPolicy(id: ModelId, effort: Effort = 'low'): ModelPolicy 
     label: modelLabel(id),
     effort: id === FLASH_MODEL_ID ? effort : null,
   };
-  return { explain: c, ask: c, summary: c, diagram: c, topic: c };
+  return { explain: c, ask: c, summary: c, diagram: c, topic: c, glance: c };
 }
 
 /** The models a policy uses, once each. */

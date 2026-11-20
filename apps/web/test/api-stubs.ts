@@ -1,7 +1,7 @@
 /**
  * In-process answers for the API reads a spec makes only because the screen it mounts makes them
- * (#310): the library reads `GET /topics` for its stats line, and the reader reads the paper's
- * highlights. A spec that is not about those reads mocks the module with one of these instead of
+ * (#310): the library reads `GET /topics` for its stats line, an opened book reads its figures,
+ * abstract and summary, and the reader reads the paper's highlights. A spec that is not about those reads mocks the module with one of these instead of
  * letting the read reach `localhost:8000`, which `setup-no-network.ts` fails. Only the read is
  * replaced: the writes stay real, so a spec that makes one still trips the guard.
  *
@@ -13,7 +13,9 @@
  */
 import { vi } from 'vitest';
 
+import type * as BookApi from '@/features/book/api/bookApi';
 import type * as Highlights from '@/lib/api/highlights';
+import type * as Summary from '@/lib/api/summary';
 import type * as Topics from '@/lib/api/topics';
 import type { Highlight } from '@/lib/api/types';
 
@@ -52,6 +54,50 @@ export function withNoHighlights(actual: typeof Highlights): typeof Highlights {
     highlightsApi: {
       ...actual.highlightsApi,
       list: vi.fn(async (): Promise<Highlight[]> => []),
+    },
+  };
+}
+
+/**
+ * `@/features/book/api/bookApi` for a paper the parser found no figures or abstract in: the
+ * reads an opened book makes answer "nothing there". The writes (the plate) stay real.
+ *
+ * @param actual - The real module, from the `vi.mock` factory's `importOriginal()`.
+ * @returns The module with `bookApi.figures`, `abstract` and `glance` answering in-process.
+ * @example
+ *   vi.mock('@/features/book/api/bookApi', async (importOriginal) =>
+ *     (await import('./api-stubs')).withEmptyBook(await importOriginal()),
+ *   );
+ */
+export function withEmptyBook(actual: typeof BookApi): typeof BookApi {
+  return {
+    ...actual,
+    bookApi: {
+      ...actual.bookApi,
+      figures: vi.fn(async () => []),
+      abstract: vi.fn(async () => ({ text: null, page_index: null, anchor: null })),
+      // No sheet is coming (v0.3 #337): the spread shows the abstract alone.
+      glance: vi.fn(async () => ({ state: 'none' as const, glance: null })),
+    },
+  };
+}
+
+/**
+ * `@/lib/api/summary` for a paper with no summary yet: `GET /papers/{id}/summary` answers `none`.
+ *
+ * @param actual - The real module, from the `vi.mock` factory's `importOriginal()`.
+ * @returns The module with `summaryApi.get` answering in-process (a `vi.fn`).
+ * @example
+ *   vi.mock('@/lib/api/summary', async (importOriginal) =>
+ *     (await import('./api-stubs')).withNoSummary(await importOriginal()),
+ *   );
+ */
+export function withNoSummary(actual: typeof Summary): typeof Summary {
+  return {
+    ...actual,
+    summaryApi: {
+      ...actual.summaryApi,
+      get: vi.fn(async (): Promise<Summary.SummaryStatus> => ({ state: 'none', summary: null })),
     },
   };
 }

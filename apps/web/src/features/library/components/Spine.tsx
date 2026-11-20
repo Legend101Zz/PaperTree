@@ -31,11 +31,7 @@ export interface SpineProps {
   readonly tabIndex: 0 | -1;
   /** While a search runs: true lights the spine, false dims it. Undefined: no search. */
   readonly match?: boolean;
-  /** This spine's catalogue card is open. */
-  readonly expanded: boolean;
-  /** The catalogue card's id, for `aria-controls` while it is open. */
-  readonly cardId?: string;
-  /** Click, Enter or Space. */
+  /** Click, Enter or Space: take the book off the shelf and open it. */
   readonly onActivate: (paperId: string) => void;
   /** Keeps the roving tab stop on the spine that last had focus. */
   readonly onFocusSpine: (paperId: string) => void;
@@ -111,14 +107,12 @@ function SpineFace({
  * One spine. Memoised: a search keystroke re-renders only the spines whose `match` changed.
  *
  * @example
- * <Spine paper={p} tabIndex={0} expanded={false} onActivate={open} onFocusSpine={setActive} />
+ * <Spine paper={p} tabIndex={0} onActivate={open} onFocusSpine={setActive} />
  */
 export const Spine = memo(function Spine({
   paper,
   tabIndex,
   match,
-  expanded,
-  cardId,
   onActivate,
   onFocusSpine,
   compact = false,
@@ -139,8 +133,7 @@ export const Spine = memo(function Spine({
       }}
       tabIndex={tabIndex}
       aria-label={spineName(paper)}
-      aria-expanded={expanded}
-      aria-controls={expanded ? cardId : undefined}
+      aria-haspopup="dialog"
       data-paper-id={paper.id}
       data-processing-state={paper.processing}
       data-spine-state={state}

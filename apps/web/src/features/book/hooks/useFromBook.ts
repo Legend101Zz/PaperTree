@@ -21,14 +21,30 @@ import type { Anchor } from '@papertree/anchoring';
  * The reader's URL from the book, optionally aimed at the abstract or the summary.
  *
  * @param paperId - The paper.
- * @param target - `abstract` flashes it; `summary` opens the summary.
- * @returns A path such as `/paper/ppr_1/read?from=book&at=abstract`.
+ * @param target - `abstract` flashes it; `summary` opens the summary; `{ page }` opens at that page
+ *   (1-based: the page a block of the "At a glance" sheet cites, or 1 for "from the start").
+ * @returns A path such as `/paper/ppr_1/read?from=book&at=abstract` or `…?from=book&page=3`.
  */
-export function bookReaderHref(paperId: string, target?: 'abstract' | 'summary'): string {
+export function bookReaderHref(
+  paperId: string,
+  target?: 'abstract' | 'summary' | { readonly page: number },
+): string {
   const base = `/paper/${encodeURIComponent(paperId)}/read`;
   if (target === undefined) return base;
+  if (typeof target === 'object') return `${base}?from=book&page=${String(target.page)}`;
   const query = target === 'abstract' ? 'from=book&at=abstract' : 'from=book&open=summary';
   return `${base}?${query}`;
+}
+
+/**
+ * The 1-based page `?page=` names, or null when the address has none or it is not a page number.
+ *
+ * @param value - The query value.
+ * @returns A whole number of at least 1, else null.
+ */
+export function pageFromQuery(value: string | null | undefined): number | null {
+  if (value === null || value === undefined || !/^[1-9][0-9]{0,5}$/.test(value)) return null;
+  return Number(value);
 }
 
 /**
@@ -39,7 +55,7 @@ export function bookReaderHref(paperId: string, target?: 'abstract' | 'summary')
 function dropBookParams(): void {
   if (typeof window === 'undefined') return;
   const url = new URL(window.location.href);
-  for (const key of ['from', 'at', 'open']) url.searchParams.delete(key);
+  for (const key of ['from', 'at', 'open', 'page']) url.searchParams.delete(key);
   window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`);
 }
 
@@ -102,4 +118,40 @@ export function useSummaryFromBook(paperId: string | null, openSummary: () => vo
     dropBookParams();
     latest.current();
   }, [wanted, paperId]);
+}
+
+/**
+ * Opens the reader at a page when it was opened from the book: a block of the "At a glance" sheet
+ * (`p. 3 ›`) or "from the start" (page 1). Once the parse is loaded, jumps there; runs once per
+ * paper and page.
+ *
+ * @param paperId - The paper open in the reader (null for a sample).
+ * @param ready - True once the parse is loaded and `jumpToPage` can scroll.
+ * @param jumpToPage - The reader's jump, by ZERO-based page index.
+ */
+export function usePageFromBook(
+  paperId: string | null,
+  ready: boolean,
+  jumpToPage: (pageIndex: number) => void,
+): void {
+  const params = useSearchParams();
+  const page = params?.get('from') === 'book' ? pageFromQuery(params.get('page')) : null;
+  const done = useRef<string | null>(null);
+  const latest = useRef(jumpToPage);
+  latest.current = jumpToPage;
+  useEffect(() => {
+    if (
+      page === null ||
+      paperId === null ||
+      !ready ||
+      done.current === `${paperId}:${String(page)}`
+    )
+      return undefined;
+    done.current = `${paperId}:${String(page)}`;
+    const timer = setTimeout(() => {
+      latest.current(page - 1);
+      dropBookParams();
+    }, FOCUS_SETTLE_MS);
+    return () => clearTimeout(timer);
+  }, [page, paperId, ready]);
 }

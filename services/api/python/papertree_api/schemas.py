@@ -597,6 +597,18 @@ class PaperFigure(Wire):
     anchor: AnchorV1 | None
 
 
+#: A paper's name as its owner gives it: 1 to 300 characters AFTER trimming (`papertree_db
+#: .PAPER_TITLE_MAX`). Enforced here and by the data layer, not by a CHECK (0012).
+PaperTitle = Annotated[str, BeforeValidator(_trimmed), Field(min_length=1, max_length=300)]
+
+
+class PaperRename(Wire):
+    """`PATCH /papers/{id}` (v0.3 #337): the name the library shows for this paper from now on.
+    The parsed title is kept; this one wins over it and over the filename."""
+
+    title: PaperTitle
+
+
 class PlatePut(Wire):
     """`PUT /papers/{id}/plate`: the Anchor of one of the paper's figures (from `…/figures`)."""
 
@@ -777,7 +789,7 @@ MessageStatus = Literal["streaming", "complete", "partial", "error", "aborted"]
 ThreadKind = Literal["explain", "ask", "diagram"]
 #: The reader's level an explain/ask answer is written for (v0.3, #339; 0014).
 AnswerLevel = Literal["new", "familiar", "expert"]
-RunKind = Literal["explain", "ask", "summary", "diagram", "topic"]
+RunKind = Literal["explain", "ask", "summary", "diagram", "topic", "glance"]
 DoneStatus = Literal["complete", "partial", "error", "aborted"]
 
 
@@ -1059,6 +1071,65 @@ class SummaryRequest(Wire):
     regenerate: bool = False
 
 
+# ── the spread's "At a glance" sheet (v0.3 #337) ────────────────────────────────────────────
+
+#: A page number (1-based, the number printed in the reader), or null when the block cites nothing.
+GlancePage = Annotated[int, Field(ge=1, le=100_000)]
+
+
+class GlanceBlock(Wire):
+    """Problem, Idea, How it works or Limits: the words, and the page they come from (the quiet
+    `p. 3 ›` link), or null when the model cited no passage."""
+
+    text: str = Field(min_length=1)
+    page: GlancePage | None
+
+
+class GlanceNumber(Wire):
+    """A large number under Results: its value and what it measures."""
+
+    value: str = Field(min_length=1)
+    measures: str = Field(min_length=1)
+
+
+class GlanceResults(Wire):
+    numbers: list[GlanceNumber] = Field(max_length=2)
+    note: str | None
+    page: GlancePage | None
+
+
+class GlanceWord(Wire):
+    term: str = Field(min_length=1)
+    gloss: str = Field(min_length=1)
+
+
+class Glance(Wire):
+    """The sheet. Maths in any text is `$…$`. Every cap of `glance.py` is already applied."""
+
+    gist: str = Field(min_length=1)
+    problem: GlanceBlock
+    idea: GlanceBlock
+    how: GlanceBlock
+    results: GlanceResults
+    limits: GlanceBlock
+    #: Names sections; it needs no page mark.
+    read_first: str = Field(min_length=1)
+    words: list[GlanceWord] = Field(min_length=5, max_length=5)
+    #: The model that wrote it, as the agent reported it (`MiniMax-M3.1-Flash`).
+    model: str = Field(min_length=1)
+    #: The parse it was written from (the pages are pages of that one).
+    generation: Generation
+
+
+class GlanceStatus(Wire):
+    """`GET /papers/{id}/glance`. `ready`: 200 with the sheet. `making`: 202, no sheet yet (a run is
+    writing it; ask again). `none`: 200, no sheet and none coming (the model is not configured, the
+    daily cap is reached, or the run failed): the spread shows the abstract alone."""
+
+    state: Literal["ready", "making", "none"]
+    glance: Glance | None
+
+
 # ── §2.5 usage ───────────────────────────────────────────────────────────────────────────────
 
 
@@ -1077,8 +1148,9 @@ class UsageByKind(Wire):
     ask: UsageBucket
     summary: UsageBucket
     diagram: UsageBucket
-    #: The topic run (#242) is not built yet; its bucket is 0 until it is.
     topic: UsageBucket
+    #: The spread's "At a glance" run (v0.3 #337).
+    glance: UsageBucket
 
 
 class UsageTotals(Wire):
@@ -1680,7 +1752,9 @@ class AgentRunRequest(Wire):
     run_id: str = Field(pattern=server_id("run"))
     request_id: str = Field(pattern=server_id("req"))
     kind: RunKind
-    prompt_version: Literal["explain-v1", "ask-v1", "summary-v1", "diagram-v1", "topic-v1"]
+    prompt_version: Literal[
+        "explain-v1", "ask-v1", "summary-v1", "diagram-v1", "topic-v1", "glance-v1"
+    ]
     tool: AgentToolAccess
     datamark: str = Field(pattern=r"^\^[0-9a-f]{8}$")
     paper: AgentPaper
@@ -1700,7 +1774,7 @@ class AgentRunRequest(Wire):
     @classmethod
     def _seed_matches_kind(cls, value: AgentSeed | None, info: ValidationInfo) -> Any:
         kind = info.data.get("kind")
-        if kind in ("summary", "explain", "diagram", "topic") and value is None:
+        if kind in ("summary", "explain", "diagram", "topic", "glance") and value is None:
             raise PydanticCustomError("missing", f"Field required for a {kind} run")
         return value
 

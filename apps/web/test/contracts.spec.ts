@@ -58,7 +58,17 @@ import type {
 } from '@/lib/api/highlights';
 import type { SummaryStatus, summaryApi } from '@/lib/api/summary';
 import type { CreateThreadBody, FollowUpBody, threadsApi } from '@/lib/api/threads';
-import type { PaperAbstract, PaperFigure, PlatePut } from '@/features/book/api/bookApi';
+import type {
+  Glance,
+  GlanceBlock,
+  GlanceNumber,
+  GlanceResults,
+  GlanceStatus,
+  GlanceWord,
+  PaperAbstract,
+  PaperFigure,
+  PlatePut,
+} from '@/features/book/api/bookApi';
 import type {
   AcceptTopicBody,
   CreateTopicBody,
@@ -89,6 +99,7 @@ import type {
   ReadingProgress,
   Message,
   MessageDiagram,
+  PaperRename,
   PassageLocator,
   ResolutionWire,
   RunErrorCode,
@@ -100,6 +111,7 @@ import type {
 import type { UsageBucket, UsageTotals } from '@/lib/api/usage';
 
 import boardsSchema from '../../../contracts/api/boards.schema.json';
+import glanceSchema from '../../../contracts/api/glance.schema.json';
 import highlightsSchema from '../../../contracts/api/highlights.schema.json';
 import papersSchema from '../../../contracts/api/papers.schema.json';
 import sseSchema from '../../../contracts/api/sse.schema.json';
@@ -125,6 +137,7 @@ const API_GROUPS = [
   'sse',
   'summary',
   'usage',
+  'glance',
   'boards',
   'topics',
   'healthz',
@@ -581,6 +594,7 @@ const SCHEMAS = {
   sse: sseSchema,
   summary: summarySchema,
   usage: usageSchema,
+  glance: glanceSchema,
   boards: boardsSchema,
   topics: topicsSchema,
 };
@@ -645,6 +659,12 @@ const OPTIONAL = {
   'summary.Summary': [],
   'summary.SummaryBullet': [],
   'summary.SummaryStatus': [],
+  'glance.Glance': [],
+  'glance.GlanceStatus': [],
+  'glance.GlanceBlock': [],
+  'glance.GlanceResults': [],
+  'glance.GlanceNumber': [],
+  'glance.GlanceWord': [],
   'boards.Board': [],
   'boards.Viewport': [],
   'boards.CanvasNode': [],
@@ -757,6 +777,7 @@ const KEYS_ARE_EXACT: true[] = [
   true satisfies Equal<keyof PaperAbstract, SchemaKeys<'papers', 'PaperAbstract'>>,
   true satisfies Equal<OptionalKeys<PaperAbstract>, Opt<'papers.PaperAbstract'>>,
   true satisfies Equal<keyof PlatePut, SchemaKeys<'papers', 'PlatePut'>>,
+  true satisfies Equal<keyof PaperRename, SchemaKeys<'papers', 'PaperRename'>>,
   true satisfies Equal<keyof LibraryLink, SchemaKeys<'papers', 'LibraryLink'>>,
   true satisfies Equal<OptionalKeys<LibraryLink>, Opt<'papers.LibraryLink'>>,
   true satisfies Equal<keyof LibraryReference, SchemaKeys<'papers', 'LibraryReference'>>,
@@ -820,6 +841,18 @@ const KEYS_ARE_EXACT: true[] = [
   true satisfies Equal<OptionalKeys<Summary['bullets'][number]>, Opt<'summary.SummaryBullet'>>,
   true satisfies Equal<keyof SummaryStatus, SchemaKeys<'summary', 'SummaryStatus'>>,
   true satisfies Equal<OptionalKeys<SummaryStatus>, Opt<'summary.SummaryStatus'>>,
+  true satisfies Equal<keyof Glance, SchemaKeys<'glance', 'Glance'>>,
+  true satisfies Equal<OptionalKeys<Glance>, Opt<'glance.Glance'>>,
+  true satisfies Equal<keyof GlanceStatus, SchemaKeys<'glance', 'GlanceStatus'>>,
+  true satisfies Equal<OptionalKeys<GlanceStatus>, Opt<'glance.GlanceStatus'>>,
+  true satisfies Equal<keyof GlanceBlock, SchemaKeys<'glance', 'GlanceBlock'>>,
+  true satisfies Equal<OptionalKeys<GlanceBlock>, Opt<'glance.GlanceBlock'>>,
+  true satisfies Equal<keyof GlanceResults, SchemaKeys<'glance', 'GlanceResults'>>,
+  true satisfies Equal<OptionalKeys<GlanceResults>, Opt<'glance.GlanceResults'>>,
+  true satisfies Equal<keyof GlanceNumber, SchemaKeys<'glance', 'GlanceNumber'>>,
+  true satisfies Equal<OptionalKeys<GlanceNumber>, Opt<'glance.GlanceNumber'>>,
+  true satisfies Equal<keyof GlanceWord, SchemaKeys<'glance', 'GlanceWord'>>,
+  true satisfies Equal<OptionalKeys<GlanceWord>, Opt<'glance.GlanceWord'>>,
   true satisfies Equal<keyof Board, SchemaKeys<'boards', 'Board'>>,
   true satisfies Equal<OptionalKeys<Board>, Opt<'boards.Board'>>,
   true satisfies Equal<keyof NonNullable<Board['viewport']>, SchemaKeys<'boards', 'Viewport'>>,
@@ -947,6 +980,7 @@ const ENUMS = {
   'SseDone.status': ['complete', 'partial', 'error', 'aborted'],
   'Summary.status': ['complete', 'partial'],
   'SummaryStatus.state': ['none', 'running', 'ready', 'partial', 'failed'],
+  'GlanceStatus.state': ['ready', 'making', 'none'],
   'CanvasNode.kind': ['excerpt', 'explanation', 'note', 'group', 'question', 'notebook', 'diagram'],
   'CanvasNode.branch': ['down', 'right', null],
   'CanvasNode.level': ['new', 'familiar', 'expert', null],
@@ -1046,6 +1080,7 @@ const ENUM_TYPES_ARE_EXACT: true[] = [
   true satisfies Equal<SseData<'done'>['status'], Values<'SseDone.status'>>,
   true satisfies Equal<Summary['status'], Values<'Summary.status'>>,
   true satisfies Equal<SummaryStatus['state'], Values<'SummaryStatus.state'>>,
+  true satisfies Equal<GlanceStatus['state'], Values<'GlanceStatus.state'>>,
   true satisfies Equal<CanvasNode['kind'], Values<'CanvasNode.kind'>>,
   true satisfies Equal<CanvasNode['branch'], Values<'CanvasNode.branch'>>,
   true satisfies Equal<CanvasNode['level'], Values<'CanvasNode.level'>>,
@@ -1245,6 +1280,7 @@ describe('contracts.spec — lib/api/types.ts against contracts/api (exported fr
       anchor: null,
     } satisfies PaperAbstract);
     expectValid('papers', 'PlatePut', { anchor: CITATION_ANCHOR } satisfies PlatePut);
+    expectValid('papers', 'PaperRename', { title: 'My notes' } satisfies PaperRename);
     expectValid('highlights', 'Highlight', HIGHLIGHT);
     expectValid('threads', 'RunSummary', RUN);
     expectValid('threads', 'Citation', CITATION);
@@ -1287,9 +1323,41 @@ describe('contracts.spec — lib/api/types.ts against contracts/api (exported fr
         summary: bucket,
         diagram: bucket,
         topic: bucket,
+        glance: bucket,
       },
     };
     expectValid('usage', 'UsageTotals', usage);
+    // v0.3 #337: the spread's "At a glance" sheet, ready, being made, and none coming.
+    const sheet: Glance = {
+      gist: 'Treat layers as steps of a continuous process.',
+      problem: { text: 'A deep net is a fixed stack of layers.', page: 1 },
+      idea: { text: 'Let $dh/dt = f(h, t)$ define the hidden state.', page: 2 },
+      how: { text: 'A black-box ODE solver runs the forward pass.', page: null },
+      results: {
+        numbers: [{ value: '0.42%', measures: 'test error, MNIST' }],
+        note: null,
+        page: 6,
+      },
+      limits: { text: 'You must choose solver tolerances.', page: 8 },
+      read_first: '§1 and Figure 1, then §3.',
+      words: ['ODE', 'Euler method', 'adjoint method', 'normalizing flow', 'Lipschitz'].map(
+        (term): GlanceWord => ({ term, gloss: 'a short gloss' }),
+      ),
+      model: 'MiniMax-M3.1-Flash',
+      generation: 1,
+    };
+    expectValid('glance', 'GlanceStatus', { state: 'ready', glance: sheet } satisfies GlanceStatus);
+    expectValid('glance', 'GlanceStatus', { state: 'making', glance: null } satisfies GlanceStatus);
+    expectValid('glance', 'GlanceStatus', { state: 'none', glance: null } satisfies GlanceStatus);
+    // Three large numbers, four words to know, a page 0 and a stray key are not a sheet.
+    const number = { value: '1', measures: 'm' };
+    expectInvalid('glance', 'Glance', {
+      ...sheet,
+      results: { numbers: [number, number, number], note: null, page: null },
+    });
+    expectInvalid('glance', 'Glance', { ...sheet, words: sheet.words.slice(0, 4) });
+    expectInvalid('glance', 'Glance', { ...sheet, problem: { text: 'x', page: 0 } });
+    expectInvalid('glance', 'Glance', { ...sheet, stands_on: 6 });
     const topic: Topic = {
       topic_id: 'top_01J9Z3K8Q4R5S6T7V8W9X0Y1Z2',
       name: 'Transformers & attention',

@@ -1,7 +1,7 @@
 # library
 
 The signed-in library at `/dashboard` (#195–#199; frames 00, 01, 01b–01f, 03, 08a): the papers stand as cloth
-spines on one walnut plank (on a phone they lie flat in stacks), a row per group, each row under a brass label holder. A spine shows its state: a red ribbon
+spines on walnut planks, at every size (on a phone they lie flat in stacks), a row per group; the groups flow left to right and wrap onto the next plank when one is full (`packPlanks`: a plank's books run at most `PLANK_BAY` = 640 px, so the prototype's nine books stand 6 + 3 on two planks at 1440 px), each row under a brass label holder. A spine lifts 14 px on hover with a paper tag ("He et al. · 2015 · 12 pages · not started", `SpineTag`). A spine shows its state: a red ribbon
 while you are reading it, a kraft wrap while we read it, a torn red label when we could not. The Table view lists the
 same papers as a ruled catalogue, Topics shows each topic as a card, and the Map is a plan of the reading room.
 
@@ -17,17 +17,12 @@ same papers as a ruled catalogue, Topics shows each topic as a card, and the Map
 - **Empty** (01b): "No papers yet" in the stats slot, the view tabs (no Arrange by), and an empty plank with the
   accession slip: "Drop PDFs here or choose files" (the header's picker; drops land in the page-wide target)
   and what happens next.
-- **Few** (01c): at **12 papers or fewer** (`FACE_OUT_MAX`, owner may change) the books stand face-out as
-  typographic covers in their cloth, as many to a plank as fit (four at 1440 px), each with its caption under
-  the plank: title, authors · year · pages, the topic once topics exist, then Continue with the rule while you
-  read it, or the state ("Read", "Not started", "Queued"…) and Open. The covers keep the spines' keyboard
-  model (`useRovingShelf`); the caption's buttons are ordinary tab stops. A face-out library carries Continue
-  itself, so Reading now is not shown above it (01c draws no strip); the strip is decided from the whole
-  library, so the "need a look" filter never hides it.
-- **Focus across layouts:** the shelf swaps components at its thresholds, so the roving tab stop lives in the
-  section (`useShelfFocus`), keyed by paper id. When a commit removes the focused book (Delete, an upload
-  crossing a threshold, a poll) and focus fell to the page, it goes back to the same paper's book, or Delete's
-  neighbour; focus the person moved elsewhere is left alone.
+- **Few:** a short library stands as spines too (v0.3 #337: the face-out covers and their captions are gone,
+  whatever the library's size), with Reading now above them whenever you have a place in a paper (owner
+  decision D).
+- **Focus across layouts:** the shelf swaps components at its threshold (spines ↔ rows at 40/41, and the phone's flat stacks), so the roving tab stop lives in the
+  section (`useShelfFocus`), keyed by paper id. When a commit removes the focused book (an upload
+  crossing a threshold, a poll) and focus fell to the page, it goes back to the same paper's book; focus the person moved elsewhere is left alone.
 - **Many** (01f): past **40 papers** (`AT_SCALE_MIN`, owner may change) each row (a topic, or the arrangement's
   group) stands on its own plank, with shorter spines, and scrolls sideways. A row wider than the page says
   "28 of 36 shown · scroll sideways" on its plank and ends in a sticky "+8 more" bookend: a tab stop that brings
@@ -40,7 +35,7 @@ same papers as a ruled catalogue, Topics shows each topic as a card, and the Map
   re-renders only the spines whose match changed (memoised rows and spines).
 
 - **Header:** the sprout and name; the search ("/" focuses it, Esc clears it, "2 of 24" inside the field, Enter
-  takes down the first match); Add papers; Aa (the theme switch from `features/settings`); the account (its
+  takes the first match off the shelf and opens it); Add papers; Aa (the theme switch from `features/settings`); the account (its
   initial; a menu with the email and Sign out).
 - **Uploads** show as a quiet row under the header with Cancel; PDFs also drop anywhere on the page.
 - **Title block:** "Your library", the stats line computed from the papers ("24 papers · 6 topics · 3 reading
@@ -120,40 +115,34 @@ same papers as a ruled catalogue, Topics shows each topic as a card, and the Map
   popover or menu is placed on the screen (upward on the last rows), so the region never clips it. A poll
   re-draws only the rows whose paper changed: `useLibrary` keeps an unchanged paper's object.
   Nothing is virtualised: 400 rows are measured in `research/build/v0.2-ui/shots/S2f/README.md`.
-- **The shelf** is one tab stop: ←/→ walk along it, Home and End jump to its ends. Enter on a book whose parse is
-  in takes it OUT and opens it (#200, `features/book`: the pull-out, then the spread). A click or Space takes a
-  book down: its catalogue card opens in the band above, pointing at the spine, with focus on Read (Enter again
-  opens the reader), "Open the book" for a parsed paper, Retry for a paper we could not read, and Delete (danger,
-  confirmed inline). Enter on a paper that cannot be opened yet (queued, being read, failed, a sample) still opens
-  its card. Esc puts it
-  back and returns focus to the spine. The card is keyed by paper (an armed Delete never follows it to
-  the next book), sits in the band's flow (a taller card moves the shelf down rather than covering the view
-  row) and re-points at its spine whenever the shelf re-lays itself out. Focus never falls to the page: after
-  Retry it is on Read, after Delete on the next spine (else the previous, else Add papers), after "Got it" on
-  the shelf. A search dims what does not match and lights what does, without reordering anything; the hint
-  row under the plank says what the keys do.
+- **The shelf** is one tab stop: ←/→ walk along it, Home and End jump to its ends. A click, Enter or Space on ANY
+  spine, on any plank, takes that book off its plank and opens it (v0.3 #337, `features/book`: one motion of
+  880 ms landing on the opened spread with focus on Read; a click or any key skips to the end; Esc, a click outside
+  or "Put it back" puts it back in 420 ms and returns focus to the spine). There is no card in between, so the book
+  that opens is always the one that was clicked (#336). Every paper of the person's opens its spread, whatever its
+  state: a queued, being-read or failed one shows its status sentence there (a failed one Retry and Remove instead
+  of Read); only a sample, which has no server, is read directly. The spread's Delete hides the book at once and
+  offers Undo for 10 s before the request goes (`hooks/usePendingDelete.ts`, `DeleteUndoToast.tsx`: Undo puts the
+  spine back where it was; a hidden page, a closed view or a second delete sends the pending one now, with
+  `keepalive`). After "Got it" focus is on the shelf. A search dims what does not match and lights what does,
+  without reordering anything; the hint row under the plank says what the keys do.
 - **Touch:** on a phone width or a coarse pointer every control in the header, title row and hints is 44 px
-  (`useTouchTargets`); on a desktop they keep frame 01's 36–40 px. The spines keep their 26–48 px widths
+  (`useTouchTargets`); on a desktop they keep frame 01's 36–40 px. The spines keep their 46–88 px widths
   (WCAG 2.5.8's 24 px holds); a phone lays the books flat instead. A coarse pointer gets no key hints and no
   "/" in the search (a finger has neither); a narrow window with a keyboard keeps the key hints.
 - **Phone** (08a, #199; at most 900 px wide, `PHONE_MAX_WIDTH`, the width at which the header goes compact and the
   Table scrolls sideways; owner may change): search under the header, the stats, the four view tabs across the
-  screen, Reading now (always: flat books carry no Continue, so a short library shows it too), then the books
+  screen, Reading now (at every size), then the books
   **lying flat**, a stack per row of the arrangement under its brass holder, on a strip of walnut
   (`FlatShelf`, `FlatBook`; two stacks side by side where two fit). Each book is a 44 px button with the
   spine's name, its short title across it (two lines at most), the year in gilt, the ribbon out of the
   fore-edge while you read it, kraft with "being read", a torn red label with "could not read". The stacks are
   the shelf's one tab stop: ↓/↑ (and →/←) walk every book in order, down a stack and into the next. A book
-  taken down opens its catalogue card as a **modal bottom sheet** (`useModalSheet`): Read focused, the rest of
-  the page `inert` behind a scrim (no key or tap can reach a book under it), Tab wrapping inside it, its book
-  scrolled clear above it and room under the stacks of the sheet's measured height; Esc, Put it back or a tap
-  on the scrim puts the book back and returns focus to it once the inert has lifted. On a phone Enter and
-  Space take a book down into the sheet, as a tap does: there is no pull-out (#200's 02a turns a standing
-  spine out of its row, a desktop moment; a book lying flat has no row to turn out of), and the hints say
-  "Enter take it down". The sheet's **Open the book** closes the sheet and opens #200's spread, which stacks
-  at 390; Esc puts it back on the flat book. Crossing 900 px with a
-  card open re-points it (band ↔ sheet). The Map's list comes first, by CSS (one element at every width, so
-  focus in it survives a resize), and opens; its summary, its papers and the Topics "…" are 44 px up to
+  tapped opens #200's spread (it stacks at 390) through the same take-out motion: Read focused, the rest of the
+  page `inert`, Tab wrapping inside it; Esc, Put it back or a tap outside puts the book back and returns focus to
+  it once the inert has lifted. Enter and Space on a flat book are its click too. Crossing 900 px with a book open
+  keeps it open, its slot the gap in whichever shelf draws it. The Map's list comes first, by CSS (one element at
+  every width, so focus in it survives a resize), and opens; its summary, its papers and the Topics "…" are 44 px up to
   900 px and on any coarse pointer. The search's clear button is an × there, not "Esc". No page scrolls
   sideways at 320, 390 or 768.
 
@@ -186,7 +175,8 @@ ribbon, no year means no year on the spine.
 - **Flat book length** (phone): `274 + 1.12 × pages` px on frame 08a's 358 px stack, kept as how far it falls short
   of the stack (0–84 px), so a 320 px phone draws the same stack narrower; each book sits 0–12 px in from the
   stack's edge by a hash of its id.
-- **Spine width**: `26 + 0.85 × pages` px (fitted to frame 01), capped at 48; 40 while the page count is
+- **Spine width** (v0.3, V3-AI-NOTES §6.1): `34 + 1.5 × pages` px, capped at 88 (a 34-page paper is 85, the
+  prototype's FlashAttention 88); 48 while the page count is
   unknown or the paper is still being read, so the count arriving mid-parse does not reflow the shelf.
 - **Order within a row**: shelving order (when added) for Topic; Year rows by title; Title A–Z; Recently
   opened most recent first.
@@ -195,12 +185,12 @@ ribbon, no year means no year on the spine.
 
 - `model/shelf.ts`: arrangements, spine width, height, title, author line, state, name, cloth, search
   matching, the arrow-key step (pure; tested in `model/shelf.spec.ts`).
-- `model/shelf.ts` also: the stats line, "need a look", where the catalogue card goes (`placeCard`).
-- `model/states.ts`: who is reading now, the face-out and at-scale thresholds, covers per plank, what a
+- `model/shelf.ts` also: the stats line, "need a look", the hover tag's words (`spineTag`).
+- `model/states.ts`: who is reading now, the at-scale threshold, what a
   sideways row shows (`rowWindow`), the stats line (`statsLine`), Continue's reader place (pure; tested in
   `model/states.spec.ts`). `hooks/useContinue.ts` stores that place and opens the reader;
-  `hooks/useRovingShelf.ts` is the one-tab-stop keyboard model for spines and covers;
-  `hooks/useElementWidth.ts` measures the plank for `coversPerRow`.
+  `hooks/useRovingShelf.ts` is the one-tab-stop keyboard model for spines and flat books;
+  `hooks/useElementWidth.ts` measures a sideways row for `rowWindow`.
 - `model/topics.ts`: the cards' papers, stats, source line, an offer in words, a new topic's cloth and the grid's
   arrow step (pure; tested in `model/topics.spec.ts`). `hooks/useTopics.ts` is `GET /topics`, every topic write
   (each re-reads topics, papers and offers) and the Unshelved offers (`lib/api/topics.ts`).
@@ -216,20 +206,20 @@ ribbon, no year means no year on the spine.
   `tablePool` and `tableRows`, and the stored columns (pure; tested beside them). `hooks/useTableView.ts` holds
   the Table's state; `hooks/usePopover.ts` is every disclosure's open/close rules (Esc, a press outside, focus
   leaving; the header menus too), drawn by `PopoverMenu.tsx`; `hooks/usePanelPlace.ts` places a row's popover
-  and menu on the screen; `hooks/useBookActions.ts` is Retry and the confirmed Remove for the card and a row,
+  and menu on the screen; `hooks/useBookActions.ts` is Retry and the confirmed Remove for a row,
   with one guard against a second request.
 - `components/TableView.tsx` (Filter, the table) with `TableChips.tsx`, `TableRow.tsx`, `TableCells.tsx` (authors
-  popover, topic, "…" menu), `TableMenus.tsx` (Columns, Filter), `RemoveConfirm.tsx` (shared with the card) and
+  popover, topic, "…" menu), `TableMenus.tsx` (Columns, Filter), `RemoveConfirm.tsx` and
   `table.css`.
 - `hooks/useLibrary.ts`: the data layer (query, polling, upload, cancel's re-read, retry, delete);
-  `hooks/useUploadQueue.ts`: the upload queue (progress, Cancel, refusals); `hooks/useCardPlacement.ts`.
+  `hooks/usePendingDelete.ts`: the spread's deferred delete (the 10 s Undo, the flush on page hide);
+  `hooks/useUploadQueue.ts`: the upload queue (progress, Cancel, refusals).
 - `components/LibraryView.tsx`: the page; `LibraryHeader.tsx` (with `SearchField.tsx`, `AddPapers.tsx`),
   `UploadRow.tsx`, `LibraryTitle.tsx`, `ShelfSection.tsx` (with `Shelf.tsx`, `Spine.tsx`, `ShelfPlank.tsx`,
-  `CatalogueCard.tsx`, `ShelfHints.tsx`), `ReadingNow.tsx`, `AccessionSlip.tsx`, `CoverShelf.tsx` (with
-  `Cover.tsx`, `CoverCaption.tsx`), `ShelfRows.tsx` (with `ShelfRow.tsx`); `library.css`: their styles, from the tokens.
-- `model/phone.ts`: the phone rule (`libraryPlan`: what a phone draws instead), a flat book's picture (`flatPicture`)
+  `SpineTag.tsx`, `ShelfHints.tsx`), `ReadingNow.tsx`, `AccessionSlip.tsx`, `ShelfRows.tsx` (with `ShelfRow.tsx`); `library.css`: their styles, from the tokens.
+- `model/phone.ts`: the phone rule (`libraryShelf`: what a phone draws instead), a flat book's picture (`flatPicture`)
   and the stack keys (`flatStep`), tested in `model/phone.spec.ts`; `hooks/usePhoneLayout.ts`;
-  `hooks/useModalSheet.ts`; `components/FlatShelf.tsx`, `FlatBook.tsx` and `phone.css` (imported by the page:
+  `components/FlatShelf.tsx`, `FlatBook.tsx` and `phone.css` (imported by the page:
   it holds the phone's page-wide rules too); tests in `apps/web/test/library-phone.spec.tsx`,
   e2e `e2e/v02/library-phone.spec.ts`.
 - Tests: `apps/web/test/library-table.spec.tsx` (the Table through the page), `apps/web/test/library-shelf.spec.tsx`, `library-page.spec.tsx`, `library-states.spec.tsx` (with

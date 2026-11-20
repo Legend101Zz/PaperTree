@@ -83,12 +83,21 @@ test.describe('v0.2 S7b: a stored plate in the explain panel → tap a part → 
 
     // ── tap part B: its passage flashes (no margin tab) ──
     await panel.getByRole('button', { name: /^Part B:/ }).click();
-    const flash = page.locator('svg [data-flash="true"] polygon.pt-flash');
+    // The outline is painted in `flash` (1.7 s) and STAYS in `linger` until the reader's next action
+    // (`reader/flash`), so the spec matches both: on a CI runner whose main thread is busy painting
+    // page 4 the first paint can land at the very end of the 1.7 s `flash` phase, and a selector
+    // pinned to `data-flash="true"` then never matches again (`boundingBox` waited out the 10 min
+    // test timeout).
+    const flash = page.locator('svg [data-flash] polygon.pt-flash');
     await expect(flash.first()).toBeVisible({ timeout: 10_000 });
     await expect(page.locator('[data-flash-tab], .pt-flash-tab')).toHaveCount(0);
-    await page.waitForTimeout(500);
-    const box = await flash.first().boundingBox();
-    expect((box?.y ?? -1) >= 0 && (box?.y ?? 1e9) < 900).toBe(true);
+    // The page is on screen once the scroll has settled: poll the box, never sleep a fixed 500 ms.
+    await expect
+      .poll(async () => {
+        const y = (await flash.first().boundingBox({ timeout: 5_000 }))?.y ?? -1;
+        return y >= 0 && y < 900;
+      })
+      .toBe(true);
     // WHERE it flashed: the text-layer lines under the polygon are §3.2.1 ¶1, which holds B's quote.
     const flashed = await page.evaluate(() => {
       const poly = document.querySelector('svg [data-flash] polygon');

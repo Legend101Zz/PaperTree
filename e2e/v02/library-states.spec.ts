@@ -1,8 +1,9 @@
 /**
- * S2e (#196) on the real stack: a new account → one corpus PDF goes up → it stands on the shelf
- * face-out (01c) → open it and go to p. 3 → back in the library its cover says "p. 3 of 15" with
- * Continue → Continue opens the reader on p. 3, from the place the server stored (the browser's own
- * place is cleared first, so this is the cross-device path, not the reader restoring itself).
+ * S2e (#196, v0.3 #337) on the real stack: a new account → one corpus PDF goes up → it stands on
+ * the shelf as a spine → a click takes it off the shelf and opens it, Read goes to p. 3 → back in
+ * the library the Reading now strip says "p. 3 of 15" with Continue → Continue opens the reader on
+ * p. 3, from the place the server stored (the browser's own place is cleared first, so this is the
+ * cross-device path, not the reader restoring itself).
  *
  * The e2e web runs with the committed sample papers ON (harness/stack.ts), for every spec at once,
  * so a new account is not empty: it shows the three samples, and that is asserted as it is. On a
@@ -10,9 +11,7 @@
  * covered by apps/web/test/library-states.spec.tsx either way. One sample shares its title with
  * the upload ("Attention Is All You Need"), so the uploaded book is found by its paper id only.
  *
- * A one-paper shelf stands face-out, and 01c carries Continue under the cover instead of the
- * Reading now strip; the strip above the spines is covered by apps/web/test/library-states.spec.tsx.
- * The PDF is the committed corpus's; the spec SKIPS, loudly, without it.
+ * Reading now stands above the spines at every size (owner decision D). The PDF is the committed corpus's; the spec SKIPS, loudly, without it.
  */
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
@@ -65,7 +64,7 @@ test('empty → upload → read to p. 3 → the library says p. 3 → Continue o
   }
   await page.screenshot({ path: shot('s2e-new-account-1440.png') });
 
-  // ── the picker; the PDF goes up and stands face-out ──
+  // ── the picker; the PDF goes up and stands as a spine ──
   const chooser = page.waitForEvent('filechooser');
   await choose.click();
   const posted = page.waitForResponse(
@@ -74,15 +73,15 @@ test('empty → upload → read to p. 3 → the library says p. 3 → Continue o
   await (await chooser).setFiles(ATTENTION);
   const paperId = ((await (await posted).json()) as { paper_id: string }).paper_id;
   await waitParsed(stack.apiUrl, token, paperId);
-  const cover = shelf.locator(`button[data-paper-id="${paperId}"]`);
-  await expect(cover).toHaveClass(/pt-cover/, { timeout: 60_000 });
-  await expect(cover).toHaveAttribute('data-spine-state', 'ready', { timeout: 60_000 });
+  const spine = shelf.locator(`button[data-paper-id="${paperId}"]`);
+  await expect(spine).toHaveClass(/pt-spine/, { timeout: 60_000 });
+  await expect(spine).toHaveAttribute('data-spine-state', 'ready', { timeout: 60_000 });
 
-  // ── open it and go to p. 3; the reader tells the server ──
-  await cover.click();
+  // ── take it off the shelf and open it, then Read; the reader tells the server ──
+  await spine.click();
   await page
-    .locator('[data-card-paper-id]')
-    .getByRole('button', { name: /^Read / })
+    .locator('[role="dialog"][data-book-stage="open"]')
+    .getByRole('button', { name: /^(Read|Continue at p\. \d+) / })
     .click();
   await page.waitForURL(`**/paper/${paperId}/read`);
   expect(await page.evaluate(() => document.visibilityState)).toBe('visible');
@@ -102,18 +101,25 @@ test('empty → upload → read to p. 3 → the library says p. 3 → Continue o
   await page.keyboard.press('Escape');
   expect((await stored).status()).toBe(204);
 
-  // ── back in the library: the cover's caption says where you are ──
+  // ── back in the library: the Reading now strip says where you are ──
   // Clear this browser's own place, so Continue must use the server's (the other-device path).
   await page.evaluate((id) => window.localStorage.removeItem(`papertree/reader/${id}`), paperId);
   await page.goto('/dashboard');
-  const caption = shelf.locator(`[data-caption-paper-id="${paperId}"]`);
-  await expect(caption).toContainText('p. 3 of 15', { timeout: 60_000 });
-  await expect(cover.locator('.pt-cover__ribbon')).toBeAttached();
+  const strip = page.locator(`[data-reading-paper-id="${paperId}"]`);
+  await expect(strip).toContainText('p. 3 of 15', { timeout: 60_000 });
+  await expect(spine.locator('.pt-spine__ribbon')).toBeAttached();
   await expect(page.locator('.pt-libtitle__stats')).toContainText('1 reading now');
   await page.screenshot({ path: shot('s2e-reading-p3-1440.png') });
 
+  // ── the opened book says it too: Read has become "Continue at p. 3", with focus on it ──
+  await spine.click();
+  const reopened = page.locator('[role="dialog"][data-book-stage="open"]');
+  await expect(reopened.getByRole('button', { name: /^Continue at p\. 3 / })).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(reopened).toHaveCount(0);
+
   // ── Continue opens the reader on p. 3 ──
-  await caption.getByRole('button', { name: 'Continue reading Attention Is All You Need' }).click();
+  await strip.getByRole('button', { name: 'Continue reading Attention Is All You Need' }).click();
   await page.waitForURL(`**/paper/${paperId}/read`);
   await expect(page.locator('.papertree-text-layer span[data-item-index]').first()).toBeAttached({
     timeout: 120_000,

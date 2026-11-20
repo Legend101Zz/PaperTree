@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 
 import { cleanCheckFence, tidyAnswer } from '../src/answer.ts';
-import { cleanDiagramFence } from '../src/diagram.ts';
+import { cleanDiagramFence, MIN_INLINE_PARTS } from '../src/diagram.ts';
 
 const PLATE = '{"t":"plate","title":"Residual block"}';
 const A = '{"t":"part","label":"Input x","text":"enters","kind":"input","after":[],"cite":null}';
@@ -60,8 +60,8 @@ describe('the diagram fence', () => {
   });
 
   test('a second diagram fence is removed, the first kept', () => {
-    const one = fence('diagram', [PLATE, A].join('\n'));
-    const two = fence('diagram', ['{"t":"plate","title":"Other"}', A].join('\n'));
+    const one = fence('diagram', [PLATE, A, B].join('\n'));
+    const two = fence('diagram', ['{"t":"plate","title":"Other"}', A, B].join('\n'));
     const out = tidyAnswer(`${prose}\n${one}\n${two}`, false);
     assert.equal((out.match(/```diagram/g) ?? []).length, 1);
     assert.doesNotMatch(out, /Other/);
@@ -86,6 +86,68 @@ describe('the diagram fence', () => {
     assert.match(lines[2]!, /"edge":\["identity"\]/);
     assert.equal(lines[3], '{"t":"link","from":"B","to":"A","label":"loop"}');
     assert.equal(cleanDiagramFence('{"t":"plate","title":"Only a title"}'), null);
+  });
+
+  // The next three are live MiniMax-M3.1-Flash outputs for ResNet p. 2 (2026-11-20): the stored
+  // one-box fence of the live check, and a real five-part fence the model wrote.
+  const ONE_BOX = [
+    '{"t":"plate","title":"Residual block"}',
+    '{"t":"part","label":"input x","text":"signal entering the block","kind":"input","after":[],"cite":null}',
+  ].join('\n');
+  const FIVE_PARTS = [
+    '{"t":"plate","title":"Residual shortcut connection"}',
+    '{"t":"part","label":"Input","text":"x enters the block","kind":"input","after":["A"],"cite":null}',
+    '{"t":"part","label":"Stacked layers","text":"compute F(x)","kind":"step","after":["A"],"cite":null}',
+    '{"t":"part","label":"Shortcut","text":"passes x unchanged","kind":"concept","after":["A"],"cite":null}',
+    '{"t":"part","label":"Addition","text":"combines F(x) and x","kind":"step","after":["B","C"],"cite":null}',
+    '{"t":"part","label":"Output","text":"y = F(x) + x","kind":"output","after":["D"],"cite":null}',
+  ].join('\n');
+
+  test('a one-box figure explains nothing: the fence is removed, not shipped (live ResNet answer)', () => {
+    assert.equal(MIN_INLINE_PARTS, 2);
+    assert.equal(cleanDiagramFence(ONE_BOX), null);
+    const text = `${prose}\n${fence('diagram', ONE_BOX)}\n\n## In the paper\nSays so.`;
+    const out = tidyAnswer(text, false);
+    assert.doesNotMatch(out, /diagram|input x/);
+    assert.match(out, /Says so\.$/);
+  });
+
+  test('a real five-part residual block is kept whole; only its self-arrow is trimmed', () => {
+    const lines = (cleanDiagramFence(FIVE_PARTS) ?? '').split('\n');
+    assert.equal(lines.filter((l) => l.includes('"t":"part"')).length, 5);
+    assert.match(
+      lines[1]!,
+      /"label":"Input".*"after":\[\]/,
+      'part A pointing at itself loses only that arrow',
+    );
+    assert.match(lines[4]!, /"label":"Addition".*"after":\["B","C"\]/);
+    assert.match(lines[5]!, /"label":"Output".*"after":\["D"\]/);
+    const text = `${prose}\n${fence('diagram', FIVE_PARTS)}`;
+    assert.equal(tidyAnswer(tidyAnswer(text, false), false), tidyAnswer(text, false));
+  });
+
+  test('small slips cost a field, not the part: no cite, an odd kind, lowercase or word letters, four arrows', () => {
+    const body = [
+      PLATE,
+      '{"t":"part","label":"Input","text":"enters","kind":"input","after":[]}',
+      '{"t":"part","label":"Layers","text":"learn","kind":"layer","after":["a"],"cite":"[b1]"}',
+      '{"t":"part","label":"Shortcut","text":"skips","kind":"step","after":["Input"],"edge":"x","cite":{"nope":1}}',
+      '{"t":"part","label":"Sum","text":"adds","kind":"output","after":["A","B","C","A"],"cite":null}',
+    ].join('\n');
+    const kept = (cleanDiagramFence(body) ?? '')
+      .split('\n')
+      .slice(1)
+      .map((l) => JSON.parse(l));
+    assert.equal(kept.length, 4);
+    assert.deepEqual(
+      kept.map((p) => p.kind),
+      ['input', 'step', 'step', 'output'],
+    );
+    assert.deepEqual(
+      kept.map((p) => p.after),
+      [[], ['A'], [], ['A', 'B', 'C']],
+    );
+    assert.ok(kept.every((p) => p.cite === null));
   });
 });
 

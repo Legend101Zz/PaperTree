@@ -4,8 +4,11 @@
  * topic's source, the abstract excerpt. Pure: no React, no fetch; every rule is in `book.spec.ts`.
  * Nothing here invents a fact: a missing year, id, name or count is left out, never guessed.
  */
+import { PROCESSING_DETAIL } from '@/components/library/types';
+import { readingPage } from '@/features/library/model/shelf';
 import { dehyphenate } from '@/lib/markdown';
 
+import type { Glance, GlanceStatus } from '../api/bookApi';
 import type { BookFigure, BookPaper, BookPlate } from './types';
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -144,29 +147,31 @@ export function countsLine(paper: BookPaper): string {
   return parts.length === 0 ? 'No highlights, threads or notebook pages yet' : parts.join(' · ');
 }
 
-/** The excerpt stops after the sentence that reaches this many characters. */
-export const EXCERPT_CHARS = 360;
+/** Below this many characters an abstract is not worth folding: two lines hold it. */
+export const ABSTRACT_FOLD_CHARS = 150;
 
 /**
- * The abstract's first sentences, as a reader should see them: a typesetter's line-end hyphen
- * joined, whitespace collapsed, whole sentences up to about `EXCERPT_CHARS` (always at least one).
+ * The abstract as a reader should see it: a typesetter's line-end hyphen joined and whitespace
+ * collapsed, the whole of it. The spread folds it to two lines with CSS ("all of it" unfolds).
  *
  * @param text - `GET /papers/{id}/abstract`'s text (the paper's words, line breaks kept).
- * @returns The excerpt, or null when there is no abstract.
+ * @returns The abstract on one line of text, or null when there is none.
  */
-export function abstractExcerpt(text: string | null): string | null {
+export function abstractText(text: string | null): string | null {
   if (text === null) return null;
   const flat = dehyphenate(text).replace(/\s+/g, ' ').trim();
-  if (flat === '') return null;
-  // A sentence ends at a stop followed by a space and a capital (or an opening quote or bracket):
-  // "e.g. the", "Fig. 3" and "28.4 BLEU" do not end one (#200 review).
-  const sentences = flat.split(/(?<=[.!?]["”’)]*)\s+(?=[A-Z“"(])/);
-  let out = '';
-  for (const sentence of sentences) {
-    out = out === '' ? sentence : `${out} ${sentence}`;
-    if (out.length >= EXCERPT_CHARS) break;
-  }
-  return out.trim();
+  return flat === '' ? null : flat;
+}
+
+/**
+ * The model's name as the sheet prints it: `MiniMax-M3.1-Flash` is "M3.1 Flash" (the vendor is
+ * implied).
+ *
+ * @param model - The model id the run reported.
+ * @returns The short name.
+ */
+export function shortModel(model: string): string {
+  return model.replace(/^MiniMax-/i, '').replaceAll('-', ' ');
 }
 
 /**
@@ -184,17 +189,67 @@ export function arxivLink(
 }
 
 /**
- * Whether a book can be taken out and opened: the parse is in (complete or partial) and the paper
- * is the person's (a sample has no server to ask). A queued, reading or failed paper keeps the
- * catalogue card, where Retry and Delete are.
+ * Whether a book can be taken out and opened: it is the person's own (a sample has no server to
+ * ask). Every state opens the spread (v0.3 #337): a queued, being-read or failed paper shows its
+ * status in place of its facts, and a failed one offers Retry and Remove instead of Read.
  *
- * @param paper - The book's processing state and sample flag.
- * @returns True when Enter should pull it out.
+ * @param paper - The book's sample flag.
+ * @returns True when a click should take it off the shelf and open it.
  */
-export function canOpenBook(paper: Pick<BookPaper, 'processing' | 'isSample'>): boolean {
-  return (
-    paper.isSample !== true && (paper.processing === 'complete' || paper.processing === 'partial')
-  );
+export function canOpenBook(paper: Pick<BookPaper, 'isSample'>): boolean {
+  return paper.isSample !== true;
+}
+
+/**
+ * Whether the paper has been read in, so the spread can show its facts (the abstract, figures and
+ * summary) and ask the server for them. Before that those routes have nothing to say.
+ *
+ * @param paper - The book's processing state.
+ * @returns True for a complete or partial parse.
+ */
+export function isReadIn(paper: Pick<BookPaper, 'processing'>): boolean {
+  return paper.processing === 'complete' || paper.processing === 'partial';
+}
+
+/**
+ * The sentence the spread shows for a paper that is not simply ready, in place of its facts: what
+ * state it is in and what the person can do. Null for a ready paper. The failed and partial ones
+ * are the old catalogue card's reason sentences (`failureReason`, `partialReason`), which already
+ * say the next action; a failed paper never shows a raw error code.
+ *
+ * @param paper - The book and the reasons its state carries.
+ * @returns The sentence, or null.
+ */
+export function statusSentence(
+  paper: Pick<BookPaper, 'processing'> & {
+    readonly failureReason?: string;
+    readonly partialReason?: string;
+  },
+): string | null {
+  switch (paper.processing) {
+    case 'pending':
+      return 'Waiting for its turn to be read. The PDF opens in Source mode meanwhile.';
+    case 'parsing':
+      return 'We are reading this paper now. It opens as soon as that is done.';
+    case 'failed':
+      return paper.failureReason ?? PROCESSING_DETAIL.failed;
+    case 'partial':
+      return paper.partialReason ?? PROCESSING_DETAIL.partial;
+    default:
+      return null;
+  }
+}
+
+/**
+ * What the primary button says: "Continue at p. 4" once reading has started (the reader resumes
+ * there, `useContinue`), else "Read".
+ *
+ * @param paper - The book's reading progress and page count.
+ * @returns The label.
+ */
+export function readLabel(paper: Pick<BookPaper, 'reading' | 'pageCount'>): string {
+  const at = readingPage(paper);
+  return at === null ? 'Read' : `Continue at p. ${String(at.page)}`;
 }
 
 /**
@@ -241,4 +296,28 @@ export function summaryLine(state: SummaryState | null): { button: string; line:
     default:
       return { button: 'Summary', line: '' };
   }
+}
+
+/** What the sheet draws: the sheet, a sheet being made (or about to be asked for), or nothing. */
+export type GlanceView =
+  | { readonly kind: 'ready'; readonly glance: Glance }
+  | { readonly kind: 'making'; readonly known: boolean }
+  | { readonly kind: 'none' };
+
+/**
+ * Which picture the sheet draws. Before the first answer arrives it is the sheet being made, with
+ * its labels in place and no claim that anything is being written (`known: false`), so the page
+ * never jumps and never shows a spinner; a failed request draws nothing.
+ *
+ * @param answer - The query's data, or undefined while it is loading.
+ * @param failed - The request failed.
+ * @returns The view.
+ */
+export function glanceView(answer: GlanceStatus | undefined, failed: boolean): GlanceView {
+  if (failed) return { kind: 'none' };
+  if (answer === undefined) return { kind: 'making', known: false };
+  if (answer.state === 'ready' && answer.glance !== null)
+    return { kind: 'ready', glance: answer.glance };
+  if (answer.state === 'making') return { kind: 'making', known: true };
+  return { kind: 'none' };
 }

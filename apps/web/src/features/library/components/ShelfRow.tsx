@@ -24,8 +24,6 @@ export interface ShelfRowProps {
   readonly matches: ReadonlySet<string> | null;
   /** The shelf's one tab stop, wherever it is. */
   readonly stop: string | null;
-  readonly openId: string | null;
-  readonly cardId: string;
   readonly onActivate: (paperId: string) => void;
   readonly onFocusBook: (paperId: string) => void;
 }
@@ -58,15 +56,12 @@ function keepClearOfBookend(event: FocusEvent<HTMLDivElement>): void {
  * when their own `match` changed.
  *
  * @example
- * <ShelfRow group={group} matches={null} stop={id} openId={null} cardId="card"
- *   onActivate={takeDown} onFocusBook={setStop} />
+ * <ShelfRow group={group} matches={null} stop={id} onActivate={open} onFocusBook={setStop} />
  */
 export const ShelfRow = memo(function ShelfRow({
   group,
   matches,
   stop,
-  openId,
-  cardId,
   onActivate,
   onFocusBook,
 }: ShelfRowProps): ReactNode {
@@ -110,8 +105,6 @@ export const ShelfRow = memo(function ShelfRow({
               compact
               tabIndex={paper.id === stop ? 0 : -1}
               {...(matches === null ? {} : { match: matches.has(paper.id) })}
-              expanded={paper.id === openId}
-              cardId={cardId}
               onActivate={onActivate}
               onFocusSpine={onFocusBook}
             />

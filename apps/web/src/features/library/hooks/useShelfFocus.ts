@@ -1,7 +1,7 @@
 /**
  * useShelfFocus: keyboard focus survives the shelf re-laying itself out under it (#196, review B2).
- * The shelf swaps components at its thresholds (covers ↔ spines at 12/13, spines ↔ rows at
- * 40/41), so a Delete, an upload or a poll can unmount the very book that has focus. This hook
+ * The shelf swaps components at its threshold (spines ↔ rows at 40/41, and the phone's flat
+ * stacks at 900 px), so a Delete, an upload or a poll can unmount the very book that has focus. This hook
  * holds the roving tab stop above those components (keyed by paper id) and, after every commit,
  * puts focus back on the same paper's book (or Delete's neighbour) when the focused element was
  * removed and focus fell to the page. It never takes focus from somewhere the person moved it.
@@ -14,7 +14,7 @@ import type { FocusEvent, RefObject } from 'react';
 
 /** What `useShelfFocus` gives the shelf section. */
 export interface ShelfFocus {
-  /** The section that holds the band, the shelf and its hints. */
+  /** The section that holds the shelf and its hints. */
   readonly section: RefObject<HTMLElement>;
   /** The book that last had focus: the shelf's roving tab stop, whichever layout draws it. */
   readonly focusedId: string | null;
@@ -26,19 +26,13 @@ export interface ShelfFocus {
 }
 
 /**
- * The paper a focused element belongs to: a book, a cover's caption or the catalogue card.
+ * The paper a focused element belongs to: its book.
  *
  * @param element - The focused element.
  * @returns Its paper's id, or null outside any book.
  */
 function paperOf(element: Element): string | null {
-  const owner = element.closest('[data-paper-id], [data-caption-paper-id], [data-card-paper-id]');
-  if (owner === null) return null;
-  return (
-    owner.getAttribute('data-paper-id') ??
-    owner.getAttribute('data-caption-paper-id') ??
-    owner.getAttribute('data-card-paper-id')
-  );
+  return element.closest('[data-paper-id]')?.getAttribute('data-paper-id') ?? null;
 }
 
 /**
