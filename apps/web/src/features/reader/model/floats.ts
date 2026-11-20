@@ -9,6 +9,7 @@
  * selectable box is the float and its caption together. A float the parser missed is not here; the
  * area tool is the fallback that always works (#103).
  */
+import { figureExtent } from '@/components/reader/figureRegions';
 import { longLabel } from '@/lib/imageAnchor';
 
 import type { IndexedBlock, IndexedDocument } from '@papertree/anchoring';
@@ -162,12 +163,27 @@ export function floatsOnPage(doc: IndexedDocument, pageIndex: number): readonly 
         ? undefined
         : (linkedCaption(doc, block) ?? nearbyCaption(blocks, block, taken));
     if (caption !== undefined) taken.add(caption.id);
-    const text = caption === undefined ? null : caption.text.replace(/\s+/g, ' ').trim() || null;
+    // A figure is its drawing and its own text labels (the same region the dark-page mat keeps);
+    // the caption is added to the selection beside it, the parser's block or one fused with the labels.
+    const extent =
+      kind === 'figure'
+        ? figureExtent(
+            block.bbox,
+            blocks.filter((b) => !FIGURE_LIKE.has(b.type)),
+          )
+        : null;
+    const drawn = extent === null ? block.bbox : extent.box;
+    const fused = caption === undefined ? (extent?.caption ?? null) : null;
+    const text =
+      caption !== undefined
+        ? caption.text.replace(/\s+/g, ' ').trim() || null
+        : (fused?.text ?? null);
+    const captionBox = caption?.bbox ?? fused?.box;
     floats.push({
       id: block.id,
       kind,
       page: pageIndex,
-      box: caption === undefined ? block.bbox : union(block.bbox, caption.bbox),
+      box: captionBox === undefined ? drawn : union(drawn, captionBox),
       block,
       caption: text,
       label: labelOf(kind, block, text),

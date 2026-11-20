@@ -10,6 +10,13 @@
  * anything else (captions, headings, body text) is an obstacle, and each side's padding stops short
  * of it (`gaps`), down to none; an obstacle that cuts into the box from outside trims the box.
  *
+ * ONE FIGURE REGION, three users. `figureExtent` is the rule; the mat (`figureMats`), the float the
+ * reader selects (`floatsOnPage`, so also the anchor's rectangle and the crop asked of it) all take
+ * it, so the three can never disagree about where a figure ends. The parser sometimes fuses a
+ * figure's label lines and its caption into one paragraph ("identity", "F(x) + x", "Figure 2. ...":
+ * ResNet's Figure 2). Such a block is split by its polygon into the label bands, which belong to
+ * the figure, and the caption band, which never does (`splitMixed`).
+ *
  * Source recolours the whole PDF canvas, which is right for type and wrong for a plot or a photo.
  * The figure regions are the parser's `figure` and `image` boxes (the same blocks Guided shows as
  * crops, `guidedFigures`); `PageMats` draws the page's original pixels back over them on a mat.
@@ -34,9 +41,9 @@ function overlap(a: BBox, b: BBox): number {
 }
 
 /** How far outside the box a short text block may be and still count as one of the figure's labels. */
-const LABEL_REACH_PT = 6;
+const LABEL_REACH_PT = 14;
 /** A label's short side is at most this (about one line of type), its long sides a fraction of the figure's. */
-const LABEL_SHORT_SIDE_PT = 16;
+const LABEL_SHORT_SIDE_PT = 20;
 const LABEL_MAX_FRACTION = 0.4;
 /** How much of a block must lie inside the box for it to belong to the figure. */
 const LABEL_INSIDE = 0.5;
@@ -111,12 +118,109 @@ function reaches(o: BBox, box: BBox): boolean {
   );
 }
 
-/** Which blocks of `others` are this figure's own labels. */
-function labelsOf(box: BBox, others: readonly IndexedBlock[]): readonly IndexedBlock[] {
+/** A piece of page text near a figure: a whole block, or one band of a block that fuses labels and caption. */
+interface Piece {
+  readonly id: string;
+  readonly type: string;
+  readonly bbox: BBox;
+  /** A band of label lines taken out of a fused block: the figure's own, whatever its size. */
+  readonly labelBand?: true;
+  /** The caption's words, on the caption band of a fused block. */
+  readonly captionText?: string;
+}
+
+/** A line that opens a caption. */
+const CAPTION_LINE = /^\s*(Figure|Fig\.?|Table|Algorithm|Alg\.?)\s*\d/i;
+/** Two coordinates this close are the same edge. */
+const SAME_EDGE = 0.5;
+
+/**
+ * The horizontal bands of a rectilinear polygon (line boxes unioned), top to bottom, one x-interval
+ * each; null when the polygon is not that shape.
+ */
+function bandsOf(polygon: readonly (readonly number[])[] | undefined): BBox[] | null {
+  if (polygon === undefined || polygon.length < 4) return null;
+  const pts = polygon.map((p) => [p[0] ?? Number.NaN, p[1] ?? Number.NaN] as const);
+  if (pts.some(([x, y]) => !Number.isFinite(x) || !Number.isFinite(y))) return null;
+  const edges = pts.map((a, i) => [a, pts[(i + 1) % pts.length] as typeof a] as const);
+  if (edges.some(([a, b]) => Math.abs(a[0] - b[0]) > 1e-6 && Math.abs(a[1] - b[1]) > 1e-6)) {
+    return null;
+  }
+  const ys = [...new Set(pts.map(([, y]) => y))].sort((a, b) => a - b);
+  const bands: BBox[] = [];
+  for (let k = 0; k + 1 < ys.length; k += 1) {
+    const [y0, y1] = [ys[k] as number, ys[k + 1] as number];
+    const mid = (y0 + y1) / 2;
+    const xs = edges
+      .filter(
+        ([a, b]) =>
+          Math.abs(a[0] - b[0]) <= 1e-6 && Math.min(a[1], b[1]) < mid && Math.max(a[1], b[1]) > mid,
+      )
+      .map(([a]) => a[0])
+      .sort((a, b) => a - b);
+    if (xs.length !== 2) return null; // a gap in the middle of a band: not a stack of lines
+    const last = bands[bands.length - 1];
+    if (
+      last !== undefined &&
+      Math.abs(last[0] - (xs[0] as number)) < SAME_EDGE &&
+      Math.abs(last[2] - (xs[1] as number)) < SAME_EDGE
+    ) {
+      bands[bands.length - 1] = [last[0], last[1], last[2], y1];
+    } else {
+      bands.push([xs[0] as number, y0, xs[1] as number, y1]);
+    }
+  }
+  return bands;
+}
+
+/**
+ * A block that fuses a figure's label lines with its caption ("identity / F(x) + x / Figure 2. ...")
+ * as the pieces it is made of: the narrow label bands, then the caption band(s) as wide as the
+ * widest line. Null when the block is not that: no caption line after other lines, or a polygon
+ * that does not show label lines narrower than the caption.
+ */
+function splitMixed(block: IndexedBlock): readonly Piece[] | null {
+  const lines = (block.text ?? '').split('\n');
+  const at = lines.findIndex((line, i) => i > 0 && CAPTION_LINE.test(line));
+  if (at < 1) return null;
+  const bands = bandsOf(block.polygon);
+  if (bands === null || bands.length < 2) return null;
+  const widest = Math.max(...bands.map((b) => width(b)));
+  let firstCaption = bands.length;
+  while (firstCaption > 0 && width(bands[firstCaption - 1] as BBox) >= 0.9 * widest)
+    firstCaption -= 1;
+  if (firstCaption === 0 || firstCaption === bands.length) return null;
+  const captionBand = bands.slice(firstCaption).reduce((acc, b) => union(acc, b));
+  const captionText = lines.slice(at).join(' ').replace(/\s+/g, ' ').trim();
+  return [
+    ...bands.slice(0, firstCaption).map((bbox, i) => ({
+      id: `${block.id}#label${String(i)}`,
+      type: block.type,
+      bbox,
+      labelBand: true as const,
+    })),
+    { id: `${block.id}#caption`, type: 'caption', bbox: captionBand, captionText },
+  ];
+}
+
+/** The page's non-figure text as pieces, a fused label-and-caption block in its parts. */
+function piecesOf(blocks: readonly IndexedBlock[]): readonly Piece[] {
+  return blocks
+    .filter((b) => !FIGURE_TYPES.has(b.type) && area(b.bbox) > 0)
+    .flatMap((b) =>
+      NOT_A_LABEL.test(b.type)
+        ? [{ id: b.id, type: b.type, bbox: b.bbox }]
+        : (splitMixed(b) ?? [{ id: b.id, type: b.type, bbox: b.bbox }]),
+    );
+}
+
+/** Which pieces are this figure's own labels. */
+function labelsOf(box: BBox, others: readonly Piece[]): readonly Piece[] {
   return others.filter((o) => {
     if (NOT_A_LABEL.test(o.type) || area(o.bbox) <= 0) return false;
     const inside = overlap(o.bbox, box) / area(o.bbox);
     if (inside >= 0.98) return true; // wholly inside: drawn within the figure, whatever it is
+    if (o.labelBand === true) return inside >= LABEL_INSIDE || reaches(o.bbox, box);
     if (!isLabelSized(o.bbox, box)) return false;
     return inside >= LABEL_INSIDE || reaches(o.bbox, box);
   });
@@ -194,6 +298,43 @@ function gapsAround(box: BBox, obstacles: readonly BBox[]): [number, number, num
   return gaps;
 }
 
+/** A figure's extent on its page: the figure and its labels, and the caption line fused with them. */
+export interface FigureExtent extends MatRegion {
+  /** The caption the parser fused into a label block, with its box; null when there is none. */
+  readonly caption: { readonly text: string; readonly box: BBox } | null;
+}
+
+function extentOf(figure: BBox, pieces: readonly Piece[]): FigureExtent {
+  const owned = labelsOf(figure, pieces);
+  const grown = owned.reduce<BBox>((acc, b) => union(acc, b.bbox), figure);
+  const rest = pieces.filter((b) => !owned.includes(b));
+  const box = trimmed(
+    grown,
+    rest.map((b) => b.bbox),
+  );
+  const fused = rest.find((b) => b.captionText !== undefined && reaches(b.bbox, box));
+  return {
+    box,
+    gaps: gapsAround(
+      box,
+      rest.map((b) => b.bbox),
+    ),
+    caption: fused === undefined ? null : { text: fused.captionText as string, box: fused.bbox },
+  };
+}
+
+/**
+ * The extent of ONE figure: its box grown to hold its own text labels, whole, and never the
+ * caption (a caption fused with the labels in one block is split off and reported in `caption`).
+ *
+ * @param figure The figure block's box, IR points, y down.
+ * @param blocks The page's blocks; figure and image blocks among them are ignored.
+ * @returns The box, the padding each side can have, and a fused caption when there is one.
+ */
+export function figureExtent(figure: BBox, blocks: readonly IndexedBlock[]): FigureExtent {
+  return extentOf(figure, piecesOf(blocks));
+}
+
 /**
  * The mats for one page: each figure region grown to hold its own labels, trimmed where outside text
  * grazes it, with the padding each side can have without covering any other text.
@@ -206,13 +347,9 @@ function gapsAround(box: BBox, obstacles: readonly BBox[]): [number, number, num
  * figureMats(blocks)[0].gaps[2]; // 3.5: the bottom padding stops short of the caption
  */
 export function figureMats(blocks: readonly IndexedBlock[]): readonly MatRegion[] {
-  const figures = figureRegions(blocks);
-  const others = blocks.filter((b) => !FIGURE_TYPES.has(b.type) && area(b.bbox) > 0);
-  return figures.map((figure) => {
-    const owned = labelsOf(figure, others);
-    const grown = owned.reduce<BBox>((acc, b) => union(acc, b.bbox), figure);
-    const rest = others.filter((b) => !owned.includes(b)).map((b) => b.bbox);
-    const box = trimmed(grown, rest);
-    return { box, gaps: gapsAround(box, rest) };
+  const pieces = piecesOf(blocks);
+  return figureRegions(blocks).map((figure) => {
+    const { box, gaps } = extentOf(figure, pieces);
+    return { box, gaps };
   });
 }
