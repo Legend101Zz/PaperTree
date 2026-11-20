@@ -177,8 +177,30 @@ test.describe('v0.3 #344 - the split view', () => {
     }
 
     // ── the first branch widens the board and folds the paper to a strip ──
-    await answer.locator('.pt-tc__answer p').first().dblclick();
-    await expect(pane.getByRole('menu', { name: 'On the selected words' })).toBeVisible();
+    // On a word (the middle of a wrapped paragraph can be a gap between lines), and again if the
+    // card was still reading its stored text back: words selected before that are not branched.
+    const menu = pane.getByRole('menu', { name: 'On the selected words' });
+    await expect(async () => {
+      const at = await answer
+        .locator('.pt-tc__answer p')
+        .first()
+        .evaluate((p) => {
+          const walker = document.createTreeWalker(p, NodeFilter.SHOW_TEXT);
+          for (let n = walker.nextNode(); n !== null; n = walker.nextNode()) {
+            const m = /[A-Za-z]{4,}/.exec(n.textContent ?? '');
+            if (m === null) continue;
+            const r = document.createRange();
+            r.setStart(n, m.index);
+            r.setEnd(n, m.index + m[0].length);
+            const b = r.getBoundingClientRect();
+            return { x: b.left + b.width / 2, y: b.top + b.height / 2 };
+          }
+          return null;
+        });
+      expect(at).not.toBeNull();
+      await page.mouse.dblclick(at!.x, at!.y);
+      await expect(menu).toBeVisible({ timeout: 2_000 });
+    }).toPass({ timeout: 30_000 });
     await page.keyboard.press('Enter');
     await pane.getByLabel('Your question').fill('what is that?');
     await pane.getByLabel('Your question').press('Enter');
