@@ -26,12 +26,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import {
-  frameForPdfPage,
-  pageTextStreamId,
-  type Anchor,
-  type IndexedDocument,
-} from '@papertree/anchoring';
+import { pageTextStreamId, type Anchor, type IndexedDocument } from '@papertree/anchoring';
 
 import { useHighlightClick, useImageSelection, useSelectionToolbar } from '@/features/reader';
 import { MAX_ANCHORS_PER_HIGHLIGHT } from '@/lib/api/highlights';
@@ -40,7 +35,9 @@ import { type DocumentHandle, type DocumentRef } from './documentHandle';
 import { figureMats, type MatRegion } from './figureRegions';
 import { FLASH_SCROLL_MS, prefersReducedMotion } from './flash';
 import { HighlightOverlay, type FlashPaint } from './HighlightOverlay';
+import { PdfErrorState } from './PdfErrorState';
 import { usePdfDocument } from './PdfDocumentProvider';
+import { pageTextSourceOf } from './pageTextSource';
 import type { TextLayerInfo } from './PdfPage';
 import { paintItemsOf } from './paintItems';
 import { stampTextLayer } from './stampTextLayer';
@@ -175,25 +172,7 @@ export function SourcePane(props: SourcePaneProps) {
   const onTextLayer = useCallback(
     (info: TextLayerInfo) => {
       const userUnit = doc?.pages.find((p) => p.index === info.pageIndex)?.user_unit ?? 1;
-      pages.current.set(info.pageIndex, {
-        frame: frameForPdfPage({ view: info.page.view, rotate: info.page.rotate, userUnit }),
-        items: info.items.map((item) => {
-          const style = item.fontName === undefined ? undefined : info.styles[item.fontName];
-          return {
-            str: item.str,
-            transform: item.transform,
-            width: item.width,
-            height: item.height,
-            ...(item.hasEOL === undefined ? {} : { hasEOL: item.hasEOL }),
-            ...(style?.ascent === undefined ? {} : { ascent: style.ascent }),
-            ...(style?.descent === undefined ? {} : { descent: style.descent }),
-            // The family the text layer sets this span in: the capture measures glyph advances in it.
-            ...(typeof style?.fontFamily === 'string' && style.fontFamily !== ''
-              ? { fontFamily: style.fontFamily }
-              : {}),
-          };
-        }),
-      });
+      pages.current.set(info.pageIndex, pageTextSourceOf(info, userUnit));
       const blocks = doc?.byPage.get(info.pageIndex) ?? [];
       if (blocks.length === 0) return;
       stampTextLayer({
@@ -326,36 +305,7 @@ export function SourcePane(props: SourcePaneProps) {
   });
 
   if (pdf.error !== null && pdf.error !== undefined) {
-    return (
-      <div className="pt-state" role="alert">
-        {pdf.errorKind === 'engine' ? (
-          <>
-            <h2 className="pt-state__title">The reader could not start its PDF engine</h2>
-            <p className="pt-state__body">
-              Reload the page; if it keeps happening, the server is missing a file.
-            </p>
-          </>
-        ) : (
-          <>
-            <h2 className="pt-state__title">This PDF could not be opened</h2>
-            <p className="pt-state__body">
-              The file reached the reader, but it could not be read as a PDF. Trying again usually
-              fixes a download that dropped part-way; if it keeps happening, the file itself may be
-              damaged.
-            </p>
-          </>
-        )}
-        <button
-          type="button"
-          className="pt-btn pt-btn--outline"
-          // pdf.js remembers a worker that failed to start for the life of the page, so re-running
-          // the load in place would fail the same way; an engine failure needs a fresh page.
-          onClick={pdf.errorKind === 'engine' ? () => window.location.reload() : pdf.reload}
-        >
-          Try again
-        </button>
-      </div>
-    );
+    return <PdfErrorState errorKind={pdf.errorKind} reload={pdf.reload} />;
   }
 
   const ready = pdf.pdf !== null && pdf.pdf !== undefined && (pdf.numPages ?? 0) > 0;

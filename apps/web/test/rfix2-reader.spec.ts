@@ -18,7 +18,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { planFigures } from '../src/components/reader/guidedFigures';
 import { HOLD_SCROLL_MS, holdScroll, releaseScrollHold } from '../src/components/reader/scrollHold';
-import { initialBlockFor, topBlockAt } from '../src/app/paper/[id]/read/ReaderWorkspace';
+import { initialBlockFor, topBlockAt } from '../src/features/reader';
 
 function root(): string {
   let dir = resolve(process.cwd());
