@@ -1,6 +1,6 @@
 /*
  * The phone library (#199, frame 08a, `08a-phone-library-390.dc.html`; DESIGN.md §10): books lying
- * flat in a stack per row, the view tabs across the screen, the catalogue card as a bottom sheet,
+ * flat in a stack per row, the view tabs across the screen,
  * and no key hints for a finger. The furniture values are the shelf's (library.css), so the
  * lamp-lit scheme (09a) changes only the room: cloth, gilt, kraft, walnut and labels stay as by day.
  */
@@ -271,56 +271,6 @@
     inset 0 0 0 2px var(--pt-paper-label),
     inset 0 0 0 3.5px var(--pt-focus),
     6px 6px 12px -4px rgb(48 30 16 / 55%);
-}
-
-/* ── the catalogue card as a bottom sheet, over the stacks ───────────────────────────────── */
-
-.pt-shelfband--flat .pt-shelfband__band {
-  min-block-size: 0;
-  margin: 0;
-}
-
-/* Doubled class: the same weight as `.pt-catalogue` would leave the winner to stylesheet order. */
-.pt-catalogue.pt-catalogue--sheet {
-  position: fixed;
-  inset-inline: 0;
-  bottom: 0;
-  z-index: 30;
-  inline-size: auto;
-  max-block-size: min(70vh, 480px);
-  margin: 0;
-  overflow-y: auto;
-  padding: 24px var(--pt-gutter-phone) calc(16px + env(safe-area-inset-bottom));
-  background: var(--pt-e3-fill);
-  border: 0;
-  border-block-start: 1px solid var(--pt-rule);
-  border-radius: var(--pt-radius-sheet) var(--pt-radius-sheet) 0 0;
-  box-shadow:
-    0 -12px 28px -12px var(--pt-spine-cast),
-    var(--pt-e3-edge);
-}
-
-.pt-catalogue__grip {
-  position: absolute;
-  top: 8px;
-  left: calc(50% - 18px);
-  inline-size: 36px;
-  block-size: 4px;
-  background: var(--pt-control-border);
-  border-radius: 2px;
-}
-
-/* The sheet is modal (useModalSheet): a scrim over the inert page, a tap on it puts the book back. */
-.pt-catalogue__scrim {
-  position: fixed;
-  inset: 0;
-  z-index: 29;
-  background: var(--pt-spine-cast);
-}
-
-/* Room under the last stack while the sheet is up: its measured height (`--pt-sheet-room`). */
-.pt-shelfband--sheet {
-  padding-block-end: var(--pt-sheet-room, 300px);
 }
 
 /* ── the phone's page: tabs across the screen, no "/" hint, no keys for a finger ─────────── */

@@ -44,7 +44,7 @@ re-render. Dark is `filter: invert(1) hue-rotate(180deg)` (lightness flips, hue 
 screened onto the page; Sepia is a multiply. pdf.js's `pageColors` was weighed and not used (it re-renders every
 page, and recolours vector figures); the argument is in `PageMats.tsx`. Because the filter inverts figures too,
 `figureRegions` (the IR's `figure` and `image` boxes, outermost only; a scanned page is one page-sized region) are
-drawn back from the same canvas, whose pixels the filter never touches, on a `--pt-pdf-mat` with 10 px of margin
+drawn back from the same canvas, whose pixels the filter never touches, on a `--pt-pdf-mat` with up to 10 px of margin, never over other text: `figureMats` grows the box to hold the figure's own label blocks and stops each side's margin short of a caption or body text
 (`PageMats`; none on a light page). **Guided** sets its sheet from `--pt-guided-*`, re-declaring the room's ink tokens
 inside the sheet so everything in it follows the page, and puts figure and equation crops on the mat. Nothing eases a
 colour (a fade races a scheme change; #200). What is painted ON the page uses page tokens: the flash ring, the

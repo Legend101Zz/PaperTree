@@ -5,7 +5,7 @@
  *
  * It is the web's tolerant twin of the agent's `PlateReader`. The agent has already dropped lines
  * it could not read before the answer is final, so this keeps the rule simple: a line that does
- * not parse, or does not fit, costs that line and nothing else, and a fence with no part is no
+ * not parse, or does not fit, costs that line and nothing else, and a fence with fewer than two parts is no
  * figure at all (the caller draws nothing: raw NDJSON never reaches the screen).
  *
  * Letters are A–L in the order the part lines arrive. An `after` or `link` letter that does not
@@ -39,7 +39,7 @@ const letterOf = (value: unknown): string =>
  * The figure a diagram fence holds.
  *
  * @param body The text between the fences: one JSON object per line.
- * @returns The figure, or null when no part could be read (nothing to draw).
+ * @returns The figure, or null when fewer than two parts could be read (nothing to draw).
  * @example
  * parseDiagramFence('{"t":"part","label":"Input","kind":"input","after":[],"cite":null}');
  * // { title: null, parts: [{ letter: 'A', label: 'Input', … }], links: [] }
@@ -109,5 +109,6 @@ export function parseDiagramFence(body: string): InlineFigure | null {
       links.push({ source: from, target: to, label: label === '' ? null : label });
     }
   }
-  return parts.length === 0 ? null : { title, parts, links };
+  // One box explains nothing: the agent drops such a fence, and an older stored answer may hold one.
+  return parts.length < 2 ? null : { title, parts, links };
 }

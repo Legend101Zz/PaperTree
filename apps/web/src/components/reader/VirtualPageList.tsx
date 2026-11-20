@@ -41,6 +41,8 @@ import {
 
 import type { BBox } from '@papertree/document-ir';
 
+import type { MatRegion } from './figureRegions';
+
 import { PdfPage, type TextLayerInfo } from './PdfPage';
 import { pageUnitSize, usePdfDocument, type PdfPageMeta } from './PdfDocumentProvider';
 import { tweenScroll } from './flash';
@@ -473,7 +475,7 @@ export interface VirtualPageListProps {
   /** The highlight overlay for a page, rendered into `PdfPage`'s overlay slot. */
   readonly renderOverlay?: (pageIndex: number, meta: PdfPageMeta) => ReactNode;
   /** A page's figure and image boxes, kept in their own colours on a dark or sepia page. */
-  readonly figureRegionsOf?: (pageIndex: number) => readonly BBox[] | undefined;
+  readonly figureRegionsOf?: (pageIndex: number) => readonly MatRegion[] | undefined;
   /** Forwarded to every mounted `PdfPage`. The reader shell stamps the IR attributes from it. */
   readonly onTextLayer?: (info: TextLayerInfo) => void;
   /**

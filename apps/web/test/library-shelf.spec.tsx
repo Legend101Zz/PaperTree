@@ -1,6 +1,6 @@
 /**
  * The shelf (#195): one tab stop with arrow navigation, spine names, search that dims and never
- * reorders, the catalogue card's open state, and axe on the whole shelf.
+ * reorders, the paper tag on hover, and axe on the whole shelf.
  */
 import axe from 'axe-core';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
@@ -58,20 +58,14 @@ const PAPERS: readonly ShelfPaper[] = [
 
 function renderShelf(overrides: Partial<Parameters<typeof Shelf>[0]> = {}) {
   const onActivate = vi.fn();
-  // The card the open spine controls; the library renders the real one (CatalogueCard).
   const view = render(
-    <>
-      <Shelf
-        papers={PAPERS}
-        arrangement="topic"
-        matches={null}
-        openId={null}
-        cardId="card"
-        onActivate={onActivate}
-        {...overrides}
-      />
-      <section id="card" aria-label="Catalogue card" />
-    </>,
+    <Shelf
+      papers={PAPERS}
+      arrangement="topic"
+      matches={null}
+      onActivate={onActivate}
+      {...overrides}
+    />,
   );
   const spines = () =>
     within(screen.getByRole('toolbar', { name: 'Shelf' })).getAllByRole('button');
@@ -144,16 +138,15 @@ describe('spines', () => {
     expect(screen.getByRole('group', { name: 'Unshelved, 4 papers' })).toBeTruthy();
   });
 
-  it('call back on activation and say which one is open', () => {
-    const { onActivate } = renderShelf({ openId: 'ppr_flash' });
+  it('call back with their own paper on a click, whichever one it is, and open a dialog', () => {
+    const { onActivate } = renderShelf();
+    fireEvent.click(screen.getByRole('button', { name: /^FlashAttention/ }));
+    expect(onActivate).toHaveBeenLastCalledWith('ppr_flash');
     fireEvent.click(screen.getByRole('button', { name: /^Attention/ }));
-    expect(onActivate).toHaveBeenCalledWith('ppr_att');
-    const open = screen.getByRole('button', { name: /^FlashAttention/ });
-    expect(open.getAttribute('aria-expanded')).toBe('true');
-    expect(open.getAttribute('aria-controls')).toBe('card');
-    expect(screen.getByRole('button', { name: /^Attention/ }).getAttribute('aria-expanded')).toBe(
-      'false',
-    );
+    expect(onActivate).toHaveBeenLastCalledWith('ppr_att');
+    for (const spine of screen.getAllByRole('button')) {
+      expect(spine.getAttribute('aria-haspopup')).toBe('dialog');
+    }
   });
 });
 
@@ -166,17 +159,7 @@ describe('search lights the shelf in place', () => {
     const matches = matchPapers(PAPERS, 'atten');
     expect(matches?.size).toBe(2);
     rerender(
-      <>
-        <Shelf
-          papers={PAPERS}
-          arrangement="topic"
-          matches={matches}
-          openId={null}
-          cardId="card"
-          onActivate={onActivate}
-        />
-        <section id="card" aria-label="Catalogue card" />
-      </>,
+      <Shelf papers={PAPERS} arrangement="topic" matches={matches} onActivate={onActivate} />,
     );
     expect(spines().map((s) => s.dataset['paperId'])).toEqual(order);
     expect(
@@ -188,7 +171,7 @@ describe('search lights the shelf in place', () => {
 
 describe('axe', () => {
   it('finds no violations on the shelf (layout-bound rules need a browser; see a11y.spec)', async () => {
-    const { container } = renderShelf({ openId: 'ppr_att' });
+    const { container } = renderShelf();
     const results = await axe.run(container, {
       runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'] },
       rules: { 'color-contrast': { enabled: false }, 'target-size': { enabled: false } },

@@ -16,12 +16,24 @@
  * The second is chosen: live, and it keeps vector figures intact. The copy is a `drawImage` of a
  * box out of the canvas that is already there, so it costs a blit per figure, not a render.
  *
+ * THE MAT NEVER COVERS OTHER TEXT. It is opaque, so its padding is only as wide as the free space
+ * round the figure (`MatRegion.gaps`, from `figureMats`): a caption that starts 4 pt under the
+ * figure stops the bottom padding at 4 pt, and a figure's own labels are inside the box, drawn
+ * whole. The stylesheet takes the smaller of `--pt-pdf-mat-pad` and the gap per side.
+ *
+ * SEPIA KEEPS THE MAT. The sepia canvas multiplies, so figure colours do survive it (a white
+ * ground becomes the cream), but the design (P4 step 4, and V3-37: "figures keep their colours on
+ * a mat", with `--pt-pdf-mat` #FBF5E6 and its edge for sepia) sets a figure on a lighter plate on
+ * sepia too, and a multiply would tint every figure by the cream. The same mat, the same rule.
+ *
  * Nothing is measured: boxes are IR points times `irScale`, like the highlight overlay; the canvas
  * is read at its own backing-store resolution so a Retina page stays sharp.
  */
-import { useLayoutEffect, useRef } from 'react';
+import { useLayoutEffect, useRef, type CSSProperties } from 'react';
 
 import type { BBox } from '@papertree/document-ir';
+
+import type { MatRegion } from './figureRegions';
 
 /** Props for `PageMats`. */
 export interface PageMatsProps {
@@ -29,8 +41,8 @@ export interface PageMatsProps {
   readonly source: HTMLCanvasElement | null;
   /** Bumped each time the canvas finishes painting, so the copies are redrawn from the new pixels. */
   readonly paints: number;
-  /** Figure and image boxes in IR points, y down (`figureRegions`). */
-  readonly regions: readonly BBox[];
+  /** Figure mats in IR points, y down (`figureMats`): the pixels to keep and the padding each side may have. */
+  readonly regions: readonly MatRegion[];
   /** IR points to CSS pixels: `zoom × userUnit`. */
   readonly irScale: number;
   /** The page's CSS box, the canvas's. */
@@ -66,7 +78,7 @@ function copyRegion(
  * (the caller does not mount it).
  *
  * @example
- * <PageMats source={canvas} paints={paints} regions={figureRegions(blocks)} irScale={1.25} cssWidth={612} cssHeight={792} />
+ * <PageMats source={canvas} paints={paints} regions={figureMats(blocks)} irScale={1.25} cssWidth={612} cssHeight={792} />
  */
 export function PageMats({
   source,
@@ -80,17 +92,17 @@ export function PageMats({
 
   useLayoutEffect(() => {
     if (source === null) return;
-    regions.forEach((box, index) => {
+    regions.forEach((region, index) => {
       const target = targets.current[index];
       if (target !== null && target !== undefined) {
-        copyRegion(source, target, box, irScale, cssWidth, cssHeight);
+        copyRegion(source, target, region.box, irScale, cssWidth, cssHeight);
       }
     });
   }, [source, paints, regions, irScale, cssWidth, cssHeight]);
 
   return (
     <div className="papertree-mats" aria-hidden="true" data-papertree-mats="">
-      {regions.map((box, index) => (
+      {regions.map(({ box, gaps }, index) => (
         <div
           // eslint-disable-next-line react/no-array-index-key -- boxes have no ids; order is the id
           key={index}
@@ -101,6 +113,13 @@ export function PageMats({
             top: `${box[1] * irScale}px`,
             width: `${(box[2] - box[0]) * irScale}px`,
             height: `${(box[3] - box[1]) * irScale}px`,
+            // the free padding per side, which the stylesheet caps at the token (top right bottom left)
+            ...({
+              '--pt-mat-gap-t': `${gaps[0] * irScale}px`,
+              '--pt-mat-gap-r': `${gaps[1] * irScale}px`,
+              '--pt-mat-gap-b': `${gaps[2] * irScale}px`,
+              '--pt-mat-gap-l': `${gaps[3] * irScale}px`,
+            } as CSSProperties),
           }}
         >
           <canvas

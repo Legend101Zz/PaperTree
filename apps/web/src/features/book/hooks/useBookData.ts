@@ -1,8 +1,9 @@
 /**
  * useBookData — what the opened book fetches when it opens (#200): the figures the parser found,
- * the abstract, the summary's state, the owner's display name; and the two writes, the plate and
- * the name. UI → these hooks → `bookApi` / `summaryApi` / `authApi` → services/api → SQLite. A
- * plate change re-reads the library (`['papers']`), whose row carries the plate the covers draw.
+ * the abstract, the summary's state, the owner's display name; and the writes, the plate, the
+ * name, and the paper's own name (Rename on the spread, v0.3 #337). UI → these hooks → `bookApi` /
+ * `summaryApi` / `authApi` / `papersApi` → services/api → SQLite. A plate change or a rename
+ * re-reads the library (`['papers']`), whose row carries the plate and the title the shelf draws.
  */
 'use client';
 
@@ -10,12 +11,12 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useState } from 'react';
 
 import { getSessionToken } from '@/lib/api/client';
-import { authApi } from '@/lib/api/papers';
+import { authApi, papersApi } from '@/lib/api/papers';
 import { summaryApi } from '@/lib/api/summary';
 
 import { bookApi, bookKeys } from '../api/bookApi';
 
-import type { Me } from '@/lib/api/types';
+import type { LibraryPaper, Me } from '@/lib/api/types';
 import type { Anchor } from '@papertree/anchoring';
 
 /** The library list's cache key (`features/library/hooks/useLibrary`). */
@@ -26,13 +27,14 @@ export const ME_KEY = ['me'] as const;
 export const NAME_DECLINED_PREFIX = 'papertree/book/name-declined/';
 
 /**
- * The figures, the abstract and the summary's state of one paper, fetched when the book opens.
+ * The figures, the abstract, the summary's state and the "At a glance" sheet of one paper, fetched
+ * when the book opens.
  * The summary is `GET /papers/{id}/summary` itself (the current prompt version, `ready` or
  * `partial`), not the library row's looser `has_summary` (#200 review S4).
  *
  * @param paperId - The paper.
- * @param enabled - False until the spread is shown (the pull-out needs none of them).
- * @returns The three queries.
+ * @param enabled - False until the spread is shown (the flight off the shelf needs none of them).
+ * @returns The four queries.
  */
 export function useBookFacts(paperId: string, enabled: boolean) {
   const figures = useQuery({
@@ -52,7 +54,36 @@ export function useBookFacts(paperId: string, enabled: boolean) {
     queryFn: () => summaryApi.get(paperId),
     enabled,
   });
-  return { figures, abstract, summary };
+  const glance = useGlance(paperId, enabled);
+  return { figures, abstract, summary, glance };
+}
+
+/** How often a sheet that is still being made is asked for again, and for how many asks. */
+const GLANCE_POLL_MS = 3000;
+const GLANCE_POLL_MAX = 40;
+
+/**
+ * The "At a glance" sheet of one paper (`GET /papers/{id}/glance`). The sheet is made in the
+ * background when the paper is added, so the spread usually finds it made; while the answer is
+ * `making` it asks again every few seconds (at most about two minutes of asking) and the sheet
+ * appears in place. `none` (nothing is coming) and a failed request draw nothing.
+ *
+ * @param paperId - The paper.
+ * @param enabled - False until the spread is shown and the paper is read in.
+ * @returns The query.
+ */
+export function useGlance(paperId: string, enabled: boolean) {
+  return useQuery({
+    queryKey: bookKeys.glance(paperId),
+    queryFn: () => bookApi.glance(paperId),
+    enabled,
+    staleTime: 60_000,
+    retry: false,
+    refetchInterval: (query) =>
+      query.state.data?.state === 'making' && query.state.dataUpdateCount < GLANCE_POLL_MAX
+        ? GLANCE_POLL_MS
+        : false,
+  });
 }
 
 /** A session token is stored; a storage that throws (blocked site data) reads as none. */
@@ -149,4 +180,28 @@ export function usePlateChoice(paperId: string) {
   });
   const clear = useMutation({ mutationFn: () => bookApi.clearPlate(paperId), onSuccess: refresh });
   return { choose, clear };
+}
+
+/**
+ * Renaming the paper from its spread: `PATCH /papers/{id}`. The answer is the library row with the
+ * new `title`, which goes straight into the list the shelf draws from (so the spine and the title
+ * change together), and the list is re-read after.
+ *
+ * @param paperId - The paper.
+ * @returns The mutation; `mutate(title)` rejects with the server's error (422 for a blank title).
+ */
+export function useRenamePaper(paperId: string) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (title: string) => papersApi.rename(paperId, title),
+    onSuccess: (row: LibraryPaper) => {
+      client.setQueryData<readonly LibraryPaper[]>(PAPERS_KEY, (old) =>
+        (old ?? []).map((existing) => (existing.paper_id === row.paper_id ? row : existing)),
+      );
+      // Not returned: the mutation settles (and the field closes) when the PATCH is answered, not
+      // when the list has been re-read. A returned promise is awaited before the caller's own
+      // `onSuccess`, which kept the rename field, and so Esc's "cancel", alive for a whole refetch.
+      void client.invalidateQueries({ queryKey: PAPERS_KEY });
+    },
+  });
 }

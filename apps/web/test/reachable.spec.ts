@@ -288,7 +288,7 @@ describe('reader/reachable.spec — nothing ships that no route can reach', () =
       ['components/reader/stampTextLayer.ts', '#58'],
       // #195: the card grid and the list view went; the shelf replaced both.
       ['features/library/components/Shelf.tsx', '#195'],
-      ['features/library/components/CatalogueCard.tsx', '#195'],
+      ['features/library/components/SpineTag.tsx', '#337'],
       ['features/library/components/UploadRow.tsx', '#195'],
       ['features/library/components/AddPapers.tsx', '#195'],
       ['components/library/SystemStates.tsx', '#59'],

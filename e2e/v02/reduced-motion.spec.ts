@@ -1,6 +1,6 @@
 /**
  * S8 (#218): every moment of frame 11 with `prefers-reduced-motion: reduce`, on the real stack with
- * the FAUX agent at 1440: pull out, open, put back, Read, the citation flash, Dive in, Back to the
+ * the FAUX agent at 1440: take out and open, put back, Read, the citation flash, Dive in, Back to the
  * paper, and the board's thread. Each one must COMPLETE (its end state
  * is asserted), and no animation it starts may run longer than DESIGN.md §6's reduced column: one
  * 120 ms cross-fade at most, and none at all for the flash ("the ring and wash appear, clear on the
@@ -101,30 +101,30 @@ test.describe('S8: reduced motion, every moment (faux agent)', () => {
       true,
     );
 
-    // ── the book: pull out, open, put back, and Read ──
+    // ── the book: take out and open, put back, and Read ──
     await page.goto('/dashboard');
     const book = page.locator(`[aria-label="Your shelf"] button[data-paper-id="${paperId}"]`);
     await expect(book).toBeVisible({ timeout: 60_000 });
-    // The library's own arrival (covers, the header) is not one of frame 11's moments: drop it.
+    // The library's own arrival (spines, the header) is not one of frame 11's moments: drop it.
     await takeAnimations(page);
     const spread = page.locator('[role="dialog"][data-book-stage]');
     await book.focus();
     await page.keyboard.press('Enter');
-    await expect(spread).toHaveAttribute('data-book-stage', 'pulled');
-    expectWithin('pull out', await takeAnimations(page));
-    await page.keyboard.press('Enter');
+    // One cross-fade of 120 ms, then the spread: no cover flies, no spine turns.
     await expect(spread).toHaveAttribute('data-book-stage', 'open');
-    await expect(spread.getByRole('button', { name: /^Read / })).toBeFocused();
-    expectWithin('open', await takeAnimations(page));
+    await expect(
+      spread.getByRole('button', { name: /^(Read|Continue at p\. \d+) / }),
+    ).toBeFocused();
+    expectWithin('take out and open', await takeAnimations(page));
     await page.keyboard.press('Escape');
     await expect(spread).toHaveCount(0);
     await expect(book).toBeFocused();
     expectWithin('put back', await takeAnimations(page));
     await page.keyboard.press('Enter');
-    await expect(spread).toHaveAttribute('data-book-stage', 'pulled');
-    await page.keyboard.press('Enter');
-    await expect(spread.getByRole('button', { name: /^Read / })).toBeFocused();
-    // A second pull out and open, already held to the bound above: drop them, so "Read" is alone.
+    await expect(
+      spread.getByRole('button', { name: /^(Read|Continue at p\. \d+) / }),
+    ).toBeFocused();
+    // A second take-out, already held to the bound above: drop it, so "Read" is alone.
     await takeAnimations(page);
     await page.keyboard.press('Enter');
     await page.waitForURL(`**/paper/${paperId}/read**`);

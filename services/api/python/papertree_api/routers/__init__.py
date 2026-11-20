@@ -10,6 +10,7 @@
     usage       §2.5 GET /usage                        S5
     boards      §2.7 canvas                            S7  (501 stubs)
     topics      /topics, /papers/{id}/topic            #193 (v0.2 library)
+    glance      /papers/{id}/glance                    v0.3 #337 (the spread's At a glance)
     book        /papers/{id}/figures · plate · abstract   #200 (v0.2, the opened book)
     internal    §4 the agent's paper tools             S5
 

@@ -509,6 +509,7 @@ v0.2 additions (#192, migration 0006). All six are always sent:
 | POST `/papers` | multipart `file` | 202 `{paper_id, job_id, created: bool, paper: LibraryPaper}` | 400 `empty_upload`, 413 `payload_too_large` (`PAPERTREE_MAX_UPLOAD_MB`, default 100), 415 `unsupported_media_type` (bytes not starting with `%PDF-`). `page_count` comes from one PyMuPDF open, 0.19–0.58 ms (MEASURED). If the latest job for these bytes is `dead_letter`, a **new** job is created. The idempotency key is `parse:{source_hash}:{paper_id}:g{generation}:a{attempt_seq}`. |
 | GET `/papers` | – | 200 `LibraryPaper[]`, newest first | – |
 | GET `/papers/{id}` | – | 200 `LibraryPaper` | 404 `not_found` |
+| GET `/papers/{id}/glance` | – | 200 `{state: "ready", glance}` once the sheet is made; **202** `{state: "making", glance: null}` while a run is writing it (ask again); 200 `{state: "none", glance: null}` when none is coming (no agent configured, the daily cap, a failed run, a paper not read in yet). See the dated note below. | 401; 404 `not_found` (not the caller's paper) |
 | PUT `/papers/{id}/reading-state` | `{last_page: int >= 0, mode?: 'source'\|'guided'\|'split'}` (v0.2, #192) | 204. Sets `opened_at` and `updated_at`, raises `furthest_page`, finishes per the rule. | 401; 404 `not_found` (not the caller's paper); 422 `validation_failed` (negative page, or `last_page >= page_count` when the count is known) |
 | DELETE `/papers/{id}` | – | 204. Deletes the DB rows (the `delete_paper` cascade) plus `uploads/<id>.pdf`, `assets/<id>/` and staging. | 404 |
 | POST `/papers/{id}/retry` | – | 202 `{job_id, generation}`: the same generation, a new `attempt_seq` | 409 `not_failed` if the latest job is not `dead_letter` |
@@ -526,6 +527,10 @@ v0.2 additions (#192, migration 0006). All six are always sent:
   - Salvage (S2) makes an invalid IR `status: partial`, not a dead-letter.
   - `assemble.py` takes the generation from the payload instead of the hard-coded `1`.
   - `parsed_at` is the real UTC time.
+
+*Dated note, 2026-11-20 (v0.3 #337, the spread's "At a glance"):* a new run kind `glance`, a new table `paper_glance` and one new route. The sheet is **made when the paper is added and cached**: a library read (`GET /papers`) starts, in the background and at most two per read, the run for each paper that is read in and has none (`glance.start_missing`); `GET /papers/{id}/glance` starts one too if it finds neither a sheet nor a run. Nothing waits for the model, and a paper has one run per generation (a failed or bad one is not asked again, except after `agent_unavailable`, with a 60 s cooldown). The run is checked against the daily cap like every run and is counted in `GET /usage` (`by_kind.glance`).
+
+`Glance` (`contracts/api/glance.schema.json`): `{gist, problem, idea, how, results, limits, read_first, words, model, generation}`. `gist` is at most 20 words; `problem`, `idea`, `how` and `limits` are `{text, page}` with `text` at most 30 words; `results` is `{numbers: [{value, measures}] (at most 2), note (at most 30 words, or null), page}`; `read_first` names sections (at most 30 words); `words` is exactly five `{term, gloss}`. Maths is `$…$`. `page` is the 1-based page of the passage the block cites, for the quiet `p. 3 ›` link, or `null` when the model cited no passage (a handle it was never given resolves to `null`: the model cannot point at a page it made up). A text over its cap is trimmed on a word boundary with "…" (a `$…$` span is part of one word and is never cut); a list over its cap is cut; a missing or extra key, a value or term over its bound or fewer than five terms is no sheet. There is no "Stands on", no "verified" and no page mark at rest. No regenerate yet.
 
 ### 2.3 Signed asset URLs
 
@@ -693,6 +698,9 @@ Headers: `X-PaperTree-Agent-Secret`, `X-Request-Id`, `Content-Type: application/
   | explain | 45 s | 20 s | 8 | 4096 |
   | ask | 60 s | 20 s | 8 | 4096 |
   | summary | 90 s | 45 s | 12 (the prompt asks for at most 3, only when a section is missing from the digest) | 6144 |
+  | glance | 60 s | 30 s | 0 (no tools) | 3072 |
+
+  *Dated note, 2026-11-20 (v0.3 #337):* `kind: "glance"` / `prompt_version: "glance-v1"` is the spread's "At a glance" sheet. `seed` is the summary's digest (required), `question` starts with `Write this paper's at-a-glance sheet.`, there are no tools, and the answer is ONE JSON object (`services/agent/src/glance.ts`) whose blocks cite digest handles by name (`"cite": "b3"` or `null`), not in `[bN]` markers. The agent ends a run whose answer does not fit with `status: error`, `internal` (text kept), never a retry; the API checks the answer again and stores the capped sheet (`paper_glance`, migration 0013, which also widens `ai_runs.kind`).
 
   *Dated note, 2026-10-15 (W2API item 6):* the summary's `idle_ms` was 20 s. One of the v0.1 panel's eight live summaries (two running at once) ended `timeout` at 20.15 s with no token: MiniMax-M3 was thinking over the digest before its first text. It is now 45 s; the 90 s deadline is unchanged and still bounds the run, so a model that never speaks still ends `timeout`. The API's read timeout follows (`idle_ms + 5 s`). Explain and ask keep 20 s: their first-text latencies in the panel were 5-15 s.
 
@@ -902,8 +910,8 @@ The following is fixed in S0 so that no two slices edit the same file:
 | Variable | Process | Default | Notes |
 |---|---|---|---|
 | `PAPERTREE_MODEL` | agent | per kind: `MiniMax-M3.1-Flash` for every kind (ADR-003 Revision 2026-11-19; before that explain, diagram, topic on Flash and ask, summary on `MiniMax-M3`) | one model for every kind; `MiniMax-M3` or `MiniMax-M3.1-Flash`; an unknown id refuses to boot |
-| `PAPERTREE_MODEL_EXPLAIN` / `_ASK` / `_SUMMARY` / `_DIAGRAM` / `_TOPIC` | agent | `PAPERTREE_MODEL` | the model for one kind |
-| `PAPERTREE_MODEL_EFFORT` (+ `_EXPLAIN` / `_ASK` / `_SUMMARY` / `_DIAGRAM` / `_TOPIC`) | agent | per kind: explain, diagram, topic `low`; ask, summary `medium` | Flash only: `low`, `medium`, `high`; M3 reports no effort |
+| `PAPERTREE_MODEL_EXPLAIN` / `_ASK` / `_SUMMARY` / `_DIAGRAM` / `_TOPIC` / `_GLANCE` | agent | `PAPERTREE_MODEL` | the model for one kind |
+| `PAPERTREE_MODEL_EFFORT` (+ `_EFFORT_EXPLAIN` / `_ASK` / `_SUMMARY` / `_DIAGRAM` / `_TOPIC` / `_GLANCE`) | agent | per kind: explain, diagram, topic, glance `low`; ask, summary `medium` | Flash only: `low`, `medium`, `high`; M3 reports no effort |
 | `PAPERTREE_AGENT_LOG_LEVEL` | agent | `info` | `debug` adds raw provider error text; never keys or tokens |
 | `PAPERTREE_AGENT_FAUX` | agent | unset | `1` = the scripted test model (tests only; the key is not read) |
 | `NEXT_PUBLIC_PAPERTREE_DESIGN_SYSTEM` | web, at build time | off in a production build | `on` serves the `/design-system` developer page from a production build; `next dev` always serves it |

@@ -67,6 +67,7 @@ import {
 } from './contract.ts';
 import { tidyAnswer } from './answer.ts';
 import { DIAGRAM_TOOLS, holdsDiagramLine, PlateReader } from './diagram.ts';
+import { parseGlanceAnswer } from './glance.ts';
 import { parseTopicAnswer, parseTopicInput } from './topic.ts';
 import type { FauxBrain, FauxModel } from './faux.ts';
 import type { ModelChoice } from './models.ts';
@@ -226,6 +227,8 @@ class Run {
   private readonly plate: PlateReader | null;
   /** A topic run's verdict on its own answer (null for every other kind, or before the end). */
   private topicValid: boolean | null = null;
+  /** A glance run's verdict on its own answer (null for every other kind, or before the end). */
+  private glanceValid: boolean | null = null;
   private toolCalls = 0;
   /** The cap was hit: the session is being stopped so the final, answer-only turn can follow. */
   private budgetTurnPending = false;
@@ -432,6 +435,7 @@ class Run {
       return 'Reading the selected passage';
     if (this.request.kind === 'summary') return "Reading the paper's key passages";
     if (this.request.kind === 'topic') return 'Reading the title and abstract';
+    if (this.request.kind === 'glance') return 'Reading the digest of the paper';
     return undefined;
   }
 
@@ -644,7 +648,7 @@ class Run {
         maxRetries: limits.max_retries,
         systemPrompt: systemPrompt(request),
         // A topic is chosen from what the request holds: the model gets no tool at all.
-        tools: request.kind === 'topic' ? [] : tools,
+        tools: request.kind === 'topic' || request.kind === 'glance' ? [] : tools,
         sessionId: this.sessionId,
         entries: (request.history?.entries ?? []) as SessionEntry[],
         ...(deps.providerTimeoutMs === undefined
@@ -713,6 +717,7 @@ class Run {
       markers: done.markers,
       ...(this.plate === null ? {} : { parts: this.plate.parts }),
       ...(this.topicValid === null ? {} : { topic_valid: this.topicValid }),
+      ...(this.glanceValid === null ? {} : { glance_valid: this.glanceValid }),
       unseen_markers: parseMarkers(done.final_text).filter((m) => !done.handles_seen.includes(m)),
       first_text_ms: done.first_text_ms,
       first_token_ms: this.firstTokenMs,
@@ -804,6 +809,15 @@ class Run {
       const verdict = parseTopicAnswer(text, parseTopicInput(this.request.question)?.topics ?? []);
       this.topicValid = verdict.ok;
       if (!verdict.ok) {
+        status = 'error';
+        error = runError('internal', false);
+      }
+    }
+    if (this.request.kind === 'glance' && status === 'complete') {
+      // A bad sheet is "no glance", not a retry: the run ends as an error whose text the API still
+      // stores (final_text), and the API checks the answer again on its side (glance.ts).
+      this.glanceValid = parseGlanceAnswer(text).ok;
+      if (!this.glanceValid) {
         status = 'error';
         error = runError('internal', false);
       }

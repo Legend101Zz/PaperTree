@@ -3,9 +3,9 @@
  *
  *   1. the "could not confirm your session" notice RETRIES (2 s, 5 s, 15 s), clears itself when a
  *      check succeeds, and after the last try says so and offers "Try again";
- *   2. a failed card says ONE sentence (no second, near-identical one for a screen reader);
- *   3. after a garbage upload there is no upload row above the paper's own "Could not read" card;
- *      (since #195 the card is the spine's catalogue card, opened by a click on the spine)
+ *   2. a failed paper's spine says ONE thing (no generic sentence next to its name; the one-
+ *      sentence reason was the catalogue card's, which v0.3 #337 removed);
+ *   3. after a garbage upload there is no upload row above the paper's own "could not read" spine;
  *   4. Cancel re-reads GET /papers and says it was added when it was.
  *
  * Screenshots go to PAPERTREE_E2E_SHOTS and are looked at by the author.
@@ -28,7 +28,7 @@ const VIEWPORTS = [
 
 test.use({ actionTimeout: 20_000 });
 
-test('a garbage upload leaves ONE failed card, one sentence, no lingering upload row', async ({
+test('a garbage upload leaves ONE failed spine, no generic sentence, no lingering upload row', async ({
   browser,
   stack,
 }, testInfo) => {
@@ -50,25 +50,20 @@ test('a garbage upload leaves ONE failed card, one sentence, no lingering upload
       await page.goto('/dashboard');
       await expect(page.getByRole('heading', { name: 'Your library' })).toBeVisible();
       await page.locator('[data-add-papers] input[type=file]').setInputFiles(GARBAGE);
-      // #195: the paper is a spine on the shelf, and its catalogue card (a click on the spine)
-      // holds the reason and Retry. The assertions are the card grid's, on the spine and card.
+      // The paper is a spine on the shelf; its name says it could not be read.
       const spine = page.locator('button[data-paper-id^="ppr_"]').first();
       await expect(spine).toHaveAttribute('data-processing-state', 'failed', { timeout: 120_000 });
       // The transient row is gone as soon as the server row is in the list: one place to look.
       await expect(page.locator('[data-testid=upload-queue] li')).toHaveCount(0);
       await expect(page.getByText('Uploaded - queued for reading')).toHaveCount(0);
-      await spine.click();
-      const card = page.locator('[data-card-paper-id^="ppr_"]');
-      // One sentence: the reason; the generic state sentence is not in the card at all (the
-      // screen-reader text included), nor in the spine's name.
-      expect(await card.textContent()).not.toContain(GENERIC);
+      // One thing: the generic state sentence is not in the spine's name, and there is no card.
+      expect(await spine.getAttribute('aria-label')).toMatch(/could not read$/);
       expect(await spine.getAttribute('aria-label')).not.toContain(GENERIC);
-      await expect(card.locator('[data-failure-reason]')).toHaveCount(1);
-      await expect(card.getByRole('button', { name: /Retry/ })).toBeVisible();
+      await expect(page.locator('[data-card-paper-id]')).toHaveCount(0);
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(vp.width);
-      // Sample papers (the e2e stack turns them on) sit above the reader's own: bring the card up.
-      await card.scrollIntoViewIfNeeded();
-      await page.screenshot({ path: shot(`w2-02-03-failed-card-${vp.name}-${theme}.png`) });
+      // Sample papers (the e2e stack turns them on) sit above the reader's own: bring it up.
+      await spine.scrollIntoViewIfNeeded();
+      await page.screenshot({ path: shot(`w2-02-03-failed-spine-${vp.name}-${theme}.png`) });
       await context.close();
     }
   }

@@ -111,10 +111,10 @@ def test_a_database_already_at_0011_still_gets_0010(tmp_path: Path) -> None:
     try:
         before = {t: conn.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0] for t in _COUNTED}
         result = migrate(conn, MIGRATIONS_DIR)
-        # 10, then every version above 11 that exists (a later slice's migration also lands here).
-        assert result.applied == (10, *(v for v in HEAD_VERSIONS if v > 11))
+        # 0010, and any migration numbered above the 0011 this database was built to.
+        assert result.applied == tuple(v for v in HEAD_VERSIONS if v == 10 or v > 11)
         assert result.head == HEAD_VERSIONS
-        # 0010 itself needs no backup; a later rebuilding migration (0015) still gets its own.
+        # 0010 itself needs no backup; a later rebuilding migration (0013, 0015) still gets its own.
         assert 10 not in BACKUP_BEFORE_VERSIONS
         assert sorted(b.name.rsplit(".pre-", 1)[-1] for b in result.backups) == [
             f"{v:04d}.bak" for v in sorted(BACKUP_BEFORE_VERSIONS & set(result.applied))

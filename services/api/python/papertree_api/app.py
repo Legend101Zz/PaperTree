@@ -25,6 +25,7 @@ from .routers import (
     auth,
     boards,
     book,
+    glance,
     health,
     highlights,
     internal,
@@ -124,6 +125,7 @@ def create_app(
     app.include_router(boards.router)
     app.include_router(notebooks.router)
     app.include_router(topics.router)
+    app.include_router(glance.router)
     app.include_router(book.router)
     app.include_router(internal.router)
     return app

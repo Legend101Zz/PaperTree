@@ -1,8 +1,7 @@
 /**
  * library/model/phone — the library at phone width (#199, frame 08a, DESIGN.md §10). Pure: what a
- * phone draws instead of the desktop shelf (books lying flat in a stack per row, Reading now always
- * above them, the catalogue card as a bottom sheet) and each flat book's picture, so the phone
- * layout is tested without a DOM. Lengths and offsets are decoration, never data.
+ * phone draws instead of the desktop shelf (books lying flat in a stack per row) and each flat
+ * book's picture, so the phone layout is tested without a DOM. Lengths and offsets are decoration, never data.
  */
 import { bookFace, fnv1a, shelfStep, spineState, spineTitle, type BookFace } from './shelf';
 import { shelfLayout, type ShelfLayout } from './states';
@@ -21,28 +20,17 @@ export const PHONE_QUERY = `(max-width: ${String(PHONE_MAX_WIDTH)}px)`;
 /** What the shelf draws: the desktop's three layouts, or books lying flat (the phone). */
 export type LibraryShelf = ShelfLayout | 'flat';
 
-/** How the library is laid out for a width. */
-export interface LibraryPlan {
-  readonly shelf: LibraryShelf;
-  /** Reading now stands above the shelf. */
-  readonly readingNow: boolean;
-  /** Where a taken-down book's catalogue card opens: the band above the shelf, or a bottom sheet. */
-  readonly card: 'band' | 'sheet';
-}
-
 /**
- * The library's layout. A phone always lays its books flat, at any count: the face-out covers of
- * a short library would be one to a plank there. Flat books carry no Continue, so Reading now
- * stands above them even when the desktop would draw covers (which carry Continue themselves).
+ * The library's shelf for a width. A phone always lays its books flat, at any count; a desktop
+ * stands spines on planks, in rows that scroll sideways at scale. Reading now stands above all of
+ * them (owner decision D).
  *
  * @param count - Papers on the shelf (never after a search, which dims in place).
  * @param phone - The viewport is at most `PHONE_MAX_WIDTH` wide.
- * @returns The shelf, whether Reading now shows, and where the card opens.
+ * @returns The shelf to draw.
  */
-export function libraryPlan(count: number, phone: boolean): LibraryPlan {
-  if (phone) return { shelf: 'flat', readingNow: true, card: 'sheet' };
-  const shelf = shelfLayout(count);
-  return { shelf, readingNow: shelf !== 'face-out', card: 'band' };
+export function libraryShelf(count: number, phone: boolean): LibraryShelf {
+  return phone ? 'flat' : shelfLayout(count);
 }
 
 /**

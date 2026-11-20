@@ -1,12 +1,11 @@
 /**
  * S2d (#195) on the real stack: the shelf's search lights matches in place ("2 of N", nothing
- * reorders, Esc clears), the keyboard walks the shelf (one tab stop, ←/→), Enter takes a book down
- * into its catalogue card with focus on Read, Esc puts it back with focus on its spine, and a PDF
- * dropped anywhere on the page is uploaded. Shots go to the test's output folder.
+ * reorders, Esc clears), the keyboard walks the shelf (one tab stop, ←/→), Space takes a parsed
+ * book off the shelf and opens it with focus on Read (v0.3 #337: no catalogue card), Esc puts it
+ * back with focus on its spine, and a PDF dropped anywhere on the page is uploaded. Shots go to
+ * the test's output folder.
  *
- * Since #196 a shelf of up to twelve papers stands face-out: the books are covers with Continue or
- * Open under each, inside the same toolbar, so the books are counted by `data-paper-id`. The
- * keyboard model and every assertion below are unchanged.
+ * The shelf is spines at every size (v0.3), so the books are counted by `data-paper-id`.
  */
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
@@ -37,8 +36,12 @@ test('search lights the shelf, the keyboard walks it, a drop anywhere uploads', 
   );
   const shot = (name: string) => shotPath(name, testInfo.outputPath('shots'));
   const token = await register(stack.apiUrl, `e2e-s2d-${String(Date.now())}@papertree.test`);
-  for (const pdf of PAPERS)
-    await waitParsed(stack.apiUrl, token, await upload(stack.apiUrl, token, pdf));
+  const mine: string[] = [];
+  for (const pdf of PAPERS) {
+    const id = await upload(stack.apiUrl, token, pdf);
+    await waitParsed(stack.apiUrl, token, id);
+    mine.push(id);
+  }
 
   await page.setViewportSize({ width: 1440, height: 900 });
   await tokenInit(page, token);
@@ -73,24 +76,25 @@ test('search lights the shelf, the keyboard walks it, a drop anywhere uploads', 
   await expect(search).toHaveValue('');
   await expect(shelf.locator('[data-match]')).toHaveCount(0);
 
-  // The books are one tab stop (the rest are -1); ← → along the shelf; Space takes it down into
-  // its card (Enter takes an opened book OUT since #200: e2e/v02/book.spec.ts); Esc puts it back.
-  // A face-out shelf's caption buttons (Open, Continue) are their own tab stops.
+  // The books are one tab stop (the rest are -1); ← → along the shelf; Space takes one of ours
+  // (parsed: a sample is read, not opened) off the shelf and opens it; Esc puts it back.
   await expect(spines.and(page.locator('[tabindex="0"]'))).toHaveCount(1);
   await expect(spines.and(page.locator('[tabindex="-1"]'))).toHaveCount(total - 1);
   await spines.first().focus();
   await page.keyboard.press('ArrowRight');
-  const second = spines.nth(1);
-  await expect(second).toBeFocused();
+  await expect(spines.nth(1)).toBeFocused();
+  const book = shelf.locator(`button[data-paper-id="${mine[0] ?? ''}"]`);
+  await book.focus();
   await page.keyboard.press('Space');
-  const card = page.locator('[data-card-paper-id]');
-  await expect(card).toBeVisible();
-  await expect(second).toHaveAttribute('aria-expanded', 'true');
-  await expect(card.getByRole('button', { name: /^Read / })).toBeFocused();
-  await page.screenshot({ path: shot('s2d-card-1440.png') });
+  const opened = page.locator('[role="dialog"][data-book-stage="open"]');
+  await expect(opened).toBeVisible();
+  await expect(page.locator('[data-card-paper-id]')).toHaveCount(0);
+  await expect(book).toHaveAttribute('data-pulled', 'true');
+  await expect(opened.getByRole('button', { name: /^(Read|Continue at p\. \d+) / })).toBeFocused();
+  await page.screenshot({ path: shot('s2d-book-open-1440.png') });
   await page.keyboard.press('Escape');
-  await expect(card).toHaveCount(0);
-  await expect(second).toBeFocused();
+  await expect(opened).toHaveCount(0);
+  await expect(book).toBeFocused();
 
   // A PDF dropped anywhere goes up through the library's upload path, and its spine appears.
   const posted = page.waitForResponse(

@@ -122,6 +122,8 @@ class LibraryRow:
     #: The figure the owner chose as the cover, found in the promoted generation; None for the
     #: typographic cover, and also when the chosen figure is not in this parse (#200).
     plate: PlateFigure | None = None
+    #: The name the owner gave the paper (0012, v0.3 #337); wins over ``title`` and the filename.
+    custom_title: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -214,11 +216,14 @@ SELECT po.paper_id, po.source_hash, po.original_filename, po.byte_size, po.creat
        rs.last_page AS rs_last_page, rs.furthest_page AS rs_furthest_page, rs.mode AS rs_mode,
        rs.opened_at AS rs_opened_at, rs.updated_at AS rs_updated_at,
        rs.finished_at AS rs_finished_at,
+       pti.title AS custom_title,
        tp.topic_id AS tp_topic_id, tp.name AS tp_name, tp.cloth AS tp_cloth,
        pt.source AS tp_source, pt.source_detail AS tp_source_detail
   FROM paper_owners po
   LEFT JOIN reading_state rs
          ON rs.owner_id = po.owner_id AND rs.paper_id = po.paper_id
+  LEFT JOIN paper_title pti
+         ON pti.owner_id = po.owner_id AND pti.paper_id = po.paper_id
   LEFT JOIN paper_topics pt
          ON pt.owner_id = po.owner_id AND pt.paper_id = po.paper_id AND pt.status = 'accepted'
   LEFT JOIN topics tp
@@ -451,6 +456,7 @@ def _library_row(row: Row) -> LibraryRow:
         thread_count=int(row["thread_count"]),
         has_summary=bool(row["has_summary"]),
         notebook_count=int(row["notebook_count"]),
+        custom_title=row["custom_title"],
         plate=(
             None
             if row["plate_block_id"] is None

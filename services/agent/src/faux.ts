@@ -679,6 +679,67 @@ function topicBad(): FauxStep {
     );
 }
 
+// ── glance runs (v0.3 #337): ONE JSON object, no tools ────────────────────────────────────────
+
+/** The one sheet the faux model writes for every paper (the e2e specs read these words). */
+export const FAUX_GLANCE = {
+  gist: 'A canned glance for the tests: one sentence, the same for every paper.',
+  problem: 'The faux problem: a deterministic sheet, so that a test can read it back.',
+  idea: 'The faux idea: let $f(x) = x^2$ stand for the maths, typeset once.',
+  how: 'The faux method: no model is called, and the sheet is fixed text.',
+  resultsNote: 'Also: nothing else is measured.',
+  limits: 'The faux limit: it says the same of every paper.',
+  readFirst: '§1 and Figure 1, then §3; skip the appendix on a first read.',
+  numbers: [
+    { value: '0.42%', measures: 'faux error, MNIST' },
+    { value: '0.22M', measures: 'faux parameters' },
+  ],
+  words: [
+    { term: 'ODE', gloss: 'an equation for how a quantity changes' },
+    { term: 'Euler method', gloss: 'the simplest way to step an ODE' },
+    { term: 'adjoint method', gloss: 'gradients by solving backwards' },
+    { term: 'normalizing flow', gloss: 'a model built from invertible steps' },
+    { term: 'Lipschitz', gloss: 'a bound on how fast a function can change' },
+  ],
+} as const;
+
+/** The faux sheet, citing the first digest passages (null when the digest is empty). */
+function glanceTurn(context: FauxContext, text: string): FauxTurn {
+  return {
+    thinking: 'Write the sheet from the digest.',
+    text: chunks(text, 24),
+    usage: estimate(context, text),
+  };
+}
+
+function glanceFromSeed(): FauxStep {
+  return (context) => {
+    const handles = seedPassages(context.systemPrompt).map((p) => p.handle);
+    const first = handles[0] ?? null;
+    const second = handles[1] ?? first;
+    const sheet = {
+      gist: FAUX_GLANCE.gist,
+      problem: { text: FAUX_GLANCE.problem, cite: first },
+      idea: { text: FAUX_GLANCE.idea, cite: first },
+      how: { text: FAUX_GLANCE.how, cite: second },
+      results: {
+        numbers: FAUX_GLANCE.numbers.map((n) => ({ ...n })),
+        note: FAUX_GLANCE.resultsNote,
+        cite: second,
+      },
+      limits: { text: FAUX_GLANCE.limits, cite: second },
+      read_first: FAUX_GLANCE.readFirst,
+      words: FAUX_GLANCE.words.map((w) => ({ ...w })),
+    };
+    return glanceTurn(context, JSON.stringify(sheet));
+  };
+}
+
+/** `[faux:glance-bad]`: prose, not the JSON object, so the run ends `error` and there is no glance. */
+function glanceBad(): FauxStep {
+  return (context) => glanceTurn(context, '(faux) No glance is written for this paper.');
+}
+
 const SCENARIO = /\[faux:([a-z0-9-]+)\]/;
 
 /** Named scenarios for e2e error paths, selected by `[faux:<name>]` in the question. */
@@ -739,6 +800,8 @@ function scenario(name: string, request: RunRequest): readonly FauxStep[] | null
           };
         },
       ];
+    case 'glance-bad':
+      return [glanceBad()];
     case 'topic-existing':
       return [topicExisting(request)];
     case 'topic-new':
@@ -765,6 +828,7 @@ export const defaultBrain: FauxBrain = (request) => {
   // No marker: the faux model offers NOTHING. The e2e stack runs this agent, and an invented AI
   // offer would race the arXiv rule's own ("Suggested ... from arXiv") on the same Unshelved row.
   if (request.kind === 'topic') return [topicDeclines()];
+  if (request.kind === 'glance') return [glanceFromSeed()];
   if (request.kind === 'summary') {
     return [
       { thinking: 'Read the outline first.', toolCalls: [{ name: 'get_outline', arguments: {} }] },

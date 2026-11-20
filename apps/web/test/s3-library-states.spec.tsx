@@ -1,11 +1,12 @@
 /**
  * S3 — the library renders what `GET /papers` (S1's `LibraryPaper`) says, and polls only while it
- * must. One test per defect #141 names: every card read "Queued", was titled with its `ppr_` id,
- * showed "0 pages", had no Retry; a settled library kept asking; a StrictMode mount froze the
- * upload row on "Waiting to upload"; sample cards and audio claims were visible by default.
+ * must. One test per defect #141 names: every row read "Queued", was titled with its `ppr_` id;
+ * a settled library kept asking; a StrictMode mount froze the upload row on "Waiting to upload";
+ * sample cards and audio claims were visible by default.
  *
- * Since #195 the papers are spines on the shelf and a paper's details live in its catalogue card
- * (a click on the spine), so each assertion now reads the spine or the card; none was dropped.
+ * Since #195 the papers are spines on the shelf, so each assertion reads the spine (its name and
+ * state). Since v0.3 (#337) there is no catalogue card: a click opens the book, and Retry and
+ * Remove are the Table's (library-table.spec.tsx, library-table-edges.spec.tsx).
  */
 import { StrictMode, type ReactNode } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -14,7 +15,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { LibraryView, POLL_INTERVAL_MS, pollInterval } from '@/features/library';
 import { ApiError, type LibraryPaper } from '@/lib/api/types';
-import { NetworkError } from '@/lib/api/client';
 
 import { UploadHarness } from './library-cases';
 
@@ -34,6 +34,13 @@ vi.mock('@/lib/api/papers', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/api/papers')>()),
   papersApi: api,
 }));
+// The opened book reads its figures, abstract and summary; this spec only needs it to open.
+vi.mock('@/features/book/api/bookApi', async (importOriginal) =>
+  (await import('./api-stubs')).withEmptyBook(await importOriginal()),
+);
+vi.mock('@/lib/api/summary', async (importOriginal) =>
+  (await import('./api-stubs')).withNoSummary(await importOriginal()),
+);
 // The library reads `GET /topics` for its stats line; this spec is not about topics (#310).
 vi.mock('@/lib/api/topics', async (importOriginal) =>
   (await import('./api-stubs')).withNoTopics(await importOriginal()),
@@ -89,17 +96,10 @@ function renderLibrary(ui: ReactNode = <LibraryView />) {
   return render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
 }
 
-/** Take the (first, or named) book down: its catalogue card opens. Returns the spine and the card. */
-async function openCard(name: RegExp = /./) {
+/** The (first, or named) spine on the shelf. */
+async function spineOf(name: RegExp = /./): Promise<HTMLElement> {
   const shelf = await screen.findByRole('toolbar', { name: 'Shelf' });
-  const spine = within(shelf).getAllByRole('button', { name })[0] as HTMLElement;
-  fireEvent.click(spine);
-  const card = await waitFor(() => {
-    const found = document.querySelector<HTMLElement>('[data-card-paper-id]');
-    if (found === null) throw new Error('no catalogue card');
-    return found;
-  });
-  return { spine, card };
+  return within(shelf).getAllByRole('button', { name })[0] as HTMLElement;
 }
 
 beforeEach(() => {
@@ -113,190 +113,69 @@ afterEach(() => {
 });
 
 describe('library rows from the API (S1 shape)', () => {
-  it('shows the server title and page count, never the ppr_ id, and a ready paper is not Queued', async () => {
+  it('shows the server title, never the ppr_ id, and a ready paper is not Queued', async () => {
     api.list.mockResolvedValue([row()]);
     renderLibrary();
 
-    const { spine, card } = await openCard(/You Only Look Once/);
+    const spine = await spineOf(/You Only Look Once/);
     expect(spine.getAttribute('data-processing-state')).toBe('complete');
     expect(spine.getAttribute('aria-label')).toBe(
       'You Only Look Once: Unified, Real-Time Object Detection, Redmon and Divvala, not started',
     );
-    expect(card.textContent).toMatch(/10 pages/);
-    expect(within(card).getByText('Not started')).toBeTruthy();
-    expect(`${card.textContent ?? ''}${spine.textContent ?? ''}`).not.toMatch(/ppr_/);
-    expect(card.textContent).not.toMatch(/Queued/);
+    expect(spine.textContent).not.toMatch(/ppr_/);
+    expect(spine.getAttribute('aria-label')).not.toMatch(/Queued/);
   });
 
-  it('queued reads Queued', async () => {
+  it('queued reads as waiting to be read', async () => {
     api.list.mockResolvedValue([row({ processing: 'queued', job: job({ state: 'pending' }) })]);
     renderLibrary();
-    const { spine, card } = await openCard();
+    const spine = await spineOf();
     expect(spine.getAttribute('data-processing-state')).toBe('pending');
     expect(spine.getAttribute('data-spine-state')).toBe('queued');
-    expect(within(card).getByText('Queued')).toBeTruthy();
+    expect(spine.getAttribute('aria-label')).toMatch(/waiting to be read$/);
   });
 
-  it('reading shows the step in words, from job.done and job.step', async () => {
+  it('reading is a kraft wrap that says it is being read', async () => {
     api.list.mockResolvedValue([
       row({ processing: 'reading', job: job({ done: 1, step: 'persist' }) }),
     ]);
     renderLibrary();
-    const { spine, card } = await openCard();
+    const spine = await spineOf();
     expect(spine.getAttribute('data-processing-state')).toBe('parsing');
-    expect(within(card).getByText('Saving what was read - step 2 of 3')).toBeTruthy();
-    expect(within(card).getByRole('progressbar')).toBeTruthy();
+    expect(spine.getAttribute('aria-label')).toMatch(/being read$/);
+    expect(spine.textContent).toContain('being read');
   });
 
-  it('step 1 is "Reading the PDF - step 1 of 3"', async () => {
-    api.list.mockResolvedValue([row({ processing: 'reading', job: job() })]);
+  it('partial says plainly that it was partly read, and still opens as a book', async () => {
+    api.list.mockResolvedValue([row({ paper_id: 'ppr_P', processing: 'partial' })]);
     renderLibrary();
-    const { card } = await openCard();
-    expect(await within(card).findByText('Reading the PDF - step 1 of 3')).toBeTruthy();
+    const spine = await spineOf();
+    expect(spine.getAttribute('aria-label')).toMatch(/partly read$/);
+    fireEvent.click(spine);
+    expect(await screen.findByRole('dialog')).toBeTruthy();
+    expect(push).not.toHaveBeenCalled();
   });
 
-  it('partial says plainly that some parts could not be read', async () => {
-    api.list.mockResolvedValue([row({ processing: 'partial' })]);
-    renderLibrary();
-    const { card } = await openCard();
-    expect(within(card).getByText('Partly read')).toBeTruthy();
-    expect(card.textContent).toMatch(/some parts of this paper could not be read/i);
-  });
-
-  it('failed shows a readable reason and Retry, which calls POST retry for that paper', async () => {
+  it('failed is a torn label, and a click opens its spread with Retry and Remove, not the reader', async () => {
     api.list.mockResolvedValue([
       row({
-        paper_id: 'ppr_FAILED',
+        paper_id: 'ppr_X',
         processing: 'failed',
         job: job({ state: 'dead_letter', error_code: 'pdf_unreadable', done: 0 }),
       }),
     ]);
-    api.retry.mockResolvedValue({ job_id: 'job_2', generation: 1 });
     renderLibrary();
-
-    const { spine, card } = await openCard();
+    const spine = await spineOf();
     expect(spine.getAttribute('data-spine-state')).toBe('failed');
-    expect(card.textContent).toMatch(/could not be read as a PDF/);
-    expect(card.textContent).not.toMatch(/pdf_unreadable|dead_letter/);
-    fireEvent.click(within(card).getByRole('button', { name: /Retry/ }), { detail: 0 });
-    await waitFor(() => expect(api.retry).toHaveBeenCalledWith('ppr_FAILED'));
-  });
-
-  it('a double press on Retry sends one request, and the button says it is busy meanwhile', async () => {
-    api.list.mockResolvedValue([row({ processing: 'failed', job: job({ state: 'dead_letter' }) })]);
-    let settle: (value: unknown) => void = () => undefined;
-    api.retry.mockReturnValue(new Promise((resolve) => (settle = resolve)));
-    renderLibrary();
-    const { card } = await openCard();
-    const retry = within(card).getByRole('button', { name: /Retry/ });
-    fireEvent.click(retry, { detail: 1 });
-    fireEvent.click(retry, { detail: 2 });
-    expect(api.retry).toHaveBeenCalledTimes(1);
-    await waitFor(() => expect(retry.getAttribute('aria-disabled')).toBe('true'));
-    await act(async () => settle({ job_id: 'job_2', generation: 2 }));
-    expect(api.retry).toHaveBeenCalledTimes(1);
-    expect(within(card).queryByRole('alert')).toBeNull();
-  });
-
-  it('a 409 "nothing to retry" (a retry got there first) is not an error: the list is asked again', async () => {
-    api.list.mockResolvedValue([row({ processing: 'failed', job: job({ state: 'dead_letter' }) })]);
-    api.retry.mockRejectedValue(
-      new ApiError(
-        409,
-        'not_failed',
-        "the paper's latest parse has not failed; nothing to retry",
-        false,
-      ),
-    );
-    renderLibrary();
-    const { card } = await openCard();
-    const asked = api.list.mock.calls.length;
-    fireEvent.click(within(card).getByRole('button', { name: /Retry/ }), { detail: 0 });
-    await waitFor(() => expect(api.list.mock.calls.length).toBeGreaterThan(asked));
-    expect(within(card).queryByRole('alert')).toBeNull();
-    expect(card.textContent).not.toMatch(/nothing to retry/);
-  });
-
-  it('a failed Retry is a sentence, not raw JSON', async () => {
-    api.list.mockResolvedValue([row({ processing: 'failed', job: job({ state: 'dead_letter' }) })]);
-    api.retry.mockRejectedValue(new NetworkError('x'));
-    renderLibrary();
-    const { card } = await openCard();
-    fireEvent.click(within(card).getByRole('button', { name: /Retry/ }), { detail: 0 });
-    const alert = await within(card).findByRole('alert');
-    expect(alert.textContent).toMatch(/could not be reached/i);
-  });
-
-  it('Read opens /paper/<id>/read for any paper, including a failed one', async () => {
-    api.list.mockResolvedValue([
-      row({ paper_id: 'ppr_X', processing: 'failed', job: job({ state: 'dead_letter' }) }),
-    ]);
-    renderLibrary();
-    const { card } = await openCard();
-    fireEvent.click(
-      within(card).getByRole('button', {
-        name: 'Read You Only Look Once: Unified, Real-Time Object Detection',
-      }),
-    );
-    expect(push).toHaveBeenCalledWith('/paper/ppr_X/read');
-  });
-
-  it('Delete confirms inline (no window.confirm), then calls DELETE and removes the book', async () => {
-    const confirm = vi.spyOn(window, 'confirm');
-    api.list.mockResolvedValue([row({ paper_id: 'ppr_D' })]);
-    api.remove.mockResolvedValue(undefined);
-    renderLibrary();
-
-    const { card } = await openCard();
-    fireEvent.click(within(card).getByRole('button', { name: /Delete/ }), { detail: 0 });
-    expect(api.remove).not.toHaveBeenCalled();
-    const group = within(card).getByRole('group', { name: /Confirm deleting/ });
-    fireEvent.click(within(group).getByRole('button', { name: 'Delete paper' }), { detail: 0 });
-
-    await waitFor(() => expect(api.remove).toHaveBeenCalledWith('ppr_D'));
-    await waitFor(() => expect(document.querySelector('[data-paper-id="ppr_D"]')).toBeNull());
-    expect(screen.queryByRole('region', { name: /You Only Look Once/ })).toBeNull();
-    expect(confirm).not.toHaveBeenCalled();
-  });
-
-  it('an armed Delete stays with its book: the next book taken down opens unarmed', async () => {
-    api.list.mockResolvedValue([
-      row({ paper_id: 'ppr_A', title: 'Alpha' }),
-      row({ paper_id: 'ppr_B', title: 'Beta', created_at: '2026-10-16T10:00:00+00:00' }),
-    ]);
-    renderLibrary();
-    const shelf = await screen.findByRole('toolbar', { name: 'Shelf' });
-    const cardOf = (id: string) =>
-      waitFor(() => {
-        const found = document.querySelector<HTMLElement>(`[data-card-paper-id="${id}"]`);
-        if (found === null) throw new Error(`no card for ${id}`);
-        return found;
-      });
-    fireEvent.click(within(shelf).getByRole('button', { name: /^Alpha/ }));
-    const alpha = await cardOf('ppr_A');
-    fireEvent.click(within(alpha).getByRole('button', { name: 'Delete Alpha' }), { detail: 0 });
-    expect(within(alpha).getByRole('group', { name: 'Confirm deleting Alpha' })).toBeTruthy();
-
-    fireEvent.click(within(shelf).getByRole('button', { name: /^Beta/ }));
-    const beta = await cardOf('ppr_B');
-    expect(within(beta).queryByRole('group', { name: /Confirm deleting/ })).toBeNull();
-    expect(within(beta).getByRole('button', { name: 'Delete Beta' })).toBeTruthy();
-    expect(api.remove).not.toHaveBeenCalled();
-  });
-
-  it('Keep it leaves the paper alone', async () => {
-    api.list.mockResolvedValue([row()]);
-    renderLibrary();
-    const { card } = await openCard();
-    fireEvent.click(within(card).getByRole('button', { name: /Delete/ }), { detail: 0 });
-    expect(document.activeElement?.textContent).toBe('Keep it');
-    fireEvent.click(within(card).getByRole('button', { name: 'Keep it' }), { detail: 0 });
-    expect(api.remove).not.toHaveBeenCalled();
-    expect(within(card).queryByRole('group')).toBeNull();
-    // Focus goes back to the Delete that opened the confirmation, never to the page.
-    await waitFor(() =>
-      expect(document.activeElement).toBe(within(card).getByRole('button', { name: /^Delete/ })),
-    );
+    expect(spine.getAttribute('aria-label')).toMatch(/could not read$/);
+    fireEvent.click(spine);
+    // The spread opens for a failed paper too (v0.3 #337): its reason, Retry and Remove; no Read.
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByRole('button', { name: /^Retry/ })).toBeTruthy();
+    expect(within(dialog).getByRole('button', { name: /^Remove/ })).toBeTruthy();
+    expect(within(dialog).queryByRole('button', { name: /^Read/ })).toBeNull();
+    expect(document.querySelector('[data-card-paper-id]')).toBeNull();
+    expect(push).not.toHaveBeenCalled();
   });
 });
 
@@ -334,15 +213,14 @@ describe('polling', () => {
       .mockResolvedValue([row({ processing: 'ready' })]);
     renderLibrary();
 
-    // The open card follows its paper through every poll, as the spine does.
-    const { spine, card } = await openCard();
-    expect(await within(card).findByText('Queued')).toBeTruthy();
+    // The spine follows its paper through every poll.
+    const spine = await spineOf();
+    expect(spine.getAttribute('data-spine-state')).toBe('queued');
     await act(() => vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS + 100));
-    expect(await within(card).findByText('Reading the PDF - step 1 of 3')).toBeTruthy();
-    expect(spine.getAttribute('data-spine-state')).toBe('parsing');
+    await waitFor(() => expect(spine.getAttribute('data-spine-state')).toBe('parsing'));
     await act(() => vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS + 100));
-    expect(await within(card).findByText('Not started')).toBeTruthy();
-    expect(spine.getAttribute('data-spine-state')).toBe('ready');
+    await waitFor(() => expect(spine.getAttribute('data-spine-state')).toBe('ready'));
+    expect(spine.getAttribute('aria-label')).toMatch(/not started$/);
     expect(api.list).toHaveBeenCalledTimes(3);
   });
 
