@@ -252,8 +252,9 @@ test('the canvas screens, both sizes, both themes', async ({ browser, stack }, t
       const tools = await boxes(bar);
       // #214: Select, Add note, Add frame, Thread, Fit all, Zoom out, Zoom in, More board tools; on
       // a phone Select and the zoom are in More, so the bar is one row beside "Board". #215 adds
-      // Undo and Redo after Thread (in More on a phone).
-      expect(tools).toHaveLength(vp.mobile ? 5 : 10);
+      // Undo and Redo after Thread (in More on a phone). v0.3 adds the branching board's Tidy, Fold
+      // and Outline after Thread: three more on a wide screen, in More on a phone.
+      expect(tools).toHaveLength(vp.mobile ? 5 : 13);
       for (const t of tools) {
         expect(t.h).toBeGreaterThanOrEqual(40);
         expect(t.w).toBeGreaterThanOrEqual(40);
@@ -264,7 +265,7 @@ test('the canvas screens, both sizes, both themes', async ({ browser, stack }, t
       // v0.1's controls (the zoom, Group, Ungroup, Delete) are still >= 40 px targets, in More.
       await bar.getByRole('button', { name: 'More board tools' }).click();
       const menu = await boxes(fullPage.getByRole('group', { name: 'More board tools' }));
-      expect(menu).toHaveLength(vp.mobile ? 8 : 3);
+      expect(menu).toHaveLength(vp.mobile ? 11 : 3);
       for (const m of menu) expect(m.h).toBeGreaterThanOrEqual(40);
       await fullPage.keyboard.press('Escape');
 

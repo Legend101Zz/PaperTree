@@ -4,9 +4,10 @@
  * board/components/BoardToolbar — frame 06's tools: Select, Add note, Add frame, Thread (L), Undo and
  * Redo (named by the step they take back, #215), Fit all and the zoom (− 100% +), with a "More board
  * tools" menu that keeps v0.1's Frame selected cards, Remove frame and Delete within reach. Below
- * 1100 px the words fold to icons (the names stay); on a phone Select, the zoom, Undo and Redo move
- * into the menu, so the bar is one row beside the title (the v0.1 defect at 390, GAP-A3 §3). A tool
- * that cannot act now says why (`title`) and stays focusable.
+ * 1100 px the words fold to icons (the names stay); on a phone Select, the zoom, Undo, Redo and the
+ * branch tools (Tidy, Fold, Outline) move into the menu, so the bar is one row beside the title
+ * (the v0.1 defect at 390, GAP-A3 §3). A tool that cannot act now says why (`title`) and stays
+ * focusable.
  */
 import { useStore } from '@xyflow/react';
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
@@ -178,7 +179,7 @@ export function BoardToolbar(props: BoardToolbarProps): ReactNode {
       <Tool tool={addNote} />
       <Tool tool={addFrame} />
       <Tool tool={threadButton} />
-      {props.branch === undefined ? null : (
+      {props.branch === undefined || !wide ? null : (
         <>
           <Tool tool={props.branch.tidy} />
           <Tool tool={props.branch.fold} />
@@ -201,8 +202,24 @@ export function BoardToolbar(props: BoardToolbarProps): ReactNode {
           <Tool tool={zoomIn} icon />
         </>
       ) : null}
-      {/* A phone's bar holds five tools in one row; Undo and Redo open its menu. */}
-      <MoreMenu tools={wide ? more : [undo, redo, select, zoomOut, zoomIn, ...more]} />
+      {/* A phone's bar holds five tools in one row; the branch tools, Undo and Redo open its menu. */}
+      <MoreMenu
+        tools={
+          wide
+            ? more
+            : [
+                ...(props.branch === undefined
+                  ? []
+                  : [props.branch.tidy, props.branch.fold, props.branch.outline]),
+                undo,
+                redo,
+                select,
+                zoomOut,
+                zoomIn,
+                ...more,
+              ]
+        }
+      />
     </div>
   );
 }

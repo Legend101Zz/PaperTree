@@ -9,8 +9,10 @@ import {
   pointsFor,
   register,
   reveal,
+  setMessageText,
   shotPath,
   upload,
+  userId,
   waitParsed,
   yoloPdf,
 } from '../s4/support';
@@ -83,12 +85,19 @@ test.describe('S9-4: a stopped answer never shows raw citation markers', () => {
     await page.screenshot({ path: shot('s9-stopped-answer-1440.png') });
 
     // ── a STORED partial: the same text a cancelled run leaves, on a canvas card ──
-    // "Send to board" makes an explanation card from the first (complete) answer; its stored body
-    // is then replaced by the partial text, and the card is read back from the API.
+    // "Send to board" makes an explanation card from the first (complete) answer. Since v0.3 a
+    // board answer card shows its message's stored final text (the card's own `body` is only the
+    // fallback), so the partial text is written onto that message, the way a cancelled run leaves
+    // it, and the card is read back from the API.
     await panel.getByRole('button', { name: 'Send to board' }).first().click();
     type Board = {
       board: { board_id: string };
-      nodes: { node_id: string; kind: string; version: number }[];
+      nodes: {
+        node_id: string;
+        kind: string;
+        version: number;
+        source_message_id: string | null;
+      }[];
     };
     const readBoard = async (): Promise<Board> =>
       (await api(stack.apiUrl, token, 'GET', `/papers/${paperId}/board`)).json as Board;
@@ -100,14 +109,13 @@ test.describe('S9-4: a stopped answer never shows raw citation markers', () => {
     const nodes = await readBoard();
     const card = nodes.nodes.find((n) => n.kind === 'explanation');
     expect(card).toBeDefined();
-    const patched = await api(
-      stack.apiUrl,
-      token,
-      'PATCH',
-      `/boards/${nodes.board.board_id}/nodes/${card!.node_id}`,
-      { version: card!.version, body: PARTIAL },
+    expect(card!.source_message_id).not.toBeNull();
+    setMessageText(
+      stack.dataRoot,
+      await userId(stack.apiUrl, token),
+      card!.source_message_id as string,
+      PARTIAL,
     );
-    expect(patched.status, JSON.stringify(patched.json)).toBe(200);
     await page.goto(`/paper/${paperId}/board`);
     const node = page.locator(`.react-flow__node[data-id="${card!.node_id}"]`);
     await expect(node).toBeVisible();
