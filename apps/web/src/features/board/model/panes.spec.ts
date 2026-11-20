@@ -5,7 +5,9 @@ import {
   MENU_MARGIN,
   footprintHeight,
   placeMenu,
+  REVEAL_MARGIN,
   shiftInto,
+  viewToReveal,
   viewToCentre,
 } from './panes';
 
@@ -55,6 +57,31 @@ describe('viewToCentre: the arrival (#342)', () => {
   it('lines the top up under a margin when the pair is taller than the pane', () => {
     const view = viewToCentre([{ x: 0, y: 50, w: 300, h: 900 }], PANE, 1);
     expect(view.y).toBe(MENU_MARGIN * 3 - 50);
+  });
+});
+
+describe('viewToReveal: an ask box that opened out of view', () => {
+  const view = { x: 0, y: 0, zoom: 1 };
+
+  it('is null for a box wholly in view', () => {
+    expect(viewToReveal({ x: 100, y: 100, w: 300, h: 100 }, view, PANE)).toBeNull();
+  });
+
+  it('pans up, by the least, for a box below the fold, and keeps the zoom', () => {
+    const next = viewToReveal({ x: 100, y: 450, w: 300, h: 120 }, view, PANE);
+    expect(next).toEqual({ x: 0, y: -(450 + 120 - (500 - REVEAL_MARGIN)), zoom: 1 });
+  });
+
+  it('pans sideways for a box beside the card that lies off to the right', () => {
+    const next = viewToReveal({ x: 600, y: 100, w: 300, h: 100 }, view, PANE);
+    expect(next).toEqual({ x: -(900 - (700 - REVEAL_MARGIN)), y: 0, zoom: 1 });
+  });
+
+  it('reads the box through the zoom and the pan', () => {
+    // at 50% and panned 200 px left, a box at board x 800..1100 is at 200..350 px: in view
+    expect(
+      viewToReveal({ x: 800, y: 100, w: 300, h: 100 }, { x: -200, y: 0, zoom: 0.5 }, PANE),
+    ).toBeNull();
   });
 });
 

@@ -66,6 +66,41 @@ describe('the branching board', () => {
     expect(screen.getByText('Tidy').closest('button')!.getAttribute('aria-disabled')).toBe('true');
   });
 
+  it('draws no thread legend and no brass pins on a tree, and the key under the stage only once there is a v0.2 thread', async () => {
+    const { container } = render(<BoardView paperId="ppr_1" />);
+    await drawn();
+    expect(screen.queryByRole('region', { name: 'Legend' })).toBeNull();
+    expect(container.querySelectorAll('.pt-pin:not(.pt-pin-fallback)')).toHaveLength(0);
+    cleanup();
+
+    vi.mocked(boardsApi.get).mockResolvedValue({
+      board: BOARD,
+      nodes: [
+        node({ id: 'x', kind: 'note', x: 0, y: 0, body: 'one' }),
+        node({ id: 'y', kind: 'note', x: 400, y: 0, body: 'two' }),
+      ],
+      edges: [
+        {
+          edge_id: 'ce_1',
+          board_id: 'brd_1',
+          from_node_id: 'x',
+          to_node_id: 'y',
+          kind: 'supports',
+          label: null,
+          from_port: 'claim_out',
+          to_port: 'evidence_in',
+          created_at: '',
+        },
+      ],
+    });
+    const threaded = render(<BoardView paperId="ppr_1" />);
+    await screen.findByTestId('rf__node-x');
+    const legend = screen.getByRole('region', { name: 'Legend' });
+    // under the stage, in the flow, never inside it (so never over a card, the minimap or an ask box)
+    expect(threaded.getByTestId('canvas-stage').contains(legend)).toBe(false);
+    expect(legend.parentElement).toBe(threaded.getByTestId('canvas-stage').parentElement);
+  });
+
   it('Outline opens the study doc; Export Markdown its sheet; Escape closes them in that order', async () => {
     render(<BoardView paperId="ppr_1" />);
     await drawn();

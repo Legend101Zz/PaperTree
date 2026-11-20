@@ -31,6 +31,7 @@ const flowStub = vi.hoisted(() => ({
       Promise.resolve(true),
   ),
   getZoom: vi.fn(() => 1),
+  getViewport: vi.fn(() => ({ x: 0, y: 0, zoom: 1 })),
 }));
 
 vi.mock('@xyflow/react', async (importOriginal) => ({
@@ -708,6 +709,42 @@ describe('Escape', () => {
     expect(result.current.branch.control.ui.draft).toBeNull();
     expect(press()).toBe(true); // the path focus
     expect(press()).toBe(false); // nothing left: the page may use it
+  });
+});
+
+describe('an ask box that opens out of view pans the board to it', () => {
+  // The stage is 1000 x 800 px; the lowest card ends at y 700, so its Follow up box lies below the fold.
+  const low = () => [
+    node({ id: 'p', x: 40, y: 560, body: 'Residual learning.' }),
+    node({ id: 'a', parent: 'p', branch: 'right', question: 'why?', finalText: TEXT }),
+  ];
+
+  it('pans up by the least it must, so the whole box is on screen, and keeps the zoom', async () => {
+    const { result } = await mount(low());
+    measure(result, ['p', 'a'], 200);
+    flowStub.setViewport.mockClear();
+    act(() => result.current.branch.control.openAsk('a'));
+    measure(result, [DRAFT_ID], 120);
+    await waitFor(() => expect(flowStub.setViewport).toHaveBeenCalledTimes(1));
+    const [view] = flowStub.setViewport.mock.calls[0] as unknown as [
+      { x: number; y: number; zoom: number },
+    ];
+    const box = card(result, DRAFT_ID);
+    expect(box.y + box.h).toBeGreaterThan(800); // it was cut off
+    expect(view.zoom).toBe(1);
+    // its bottom now sits inside the pane with the margin, and its top is still in view
+    expect(box.y + box.h + view.y).toBeLessThanOrEqual(800 - 16);
+    expect(box.y + view.y).toBeGreaterThanOrEqual(16);
+  });
+
+  it('does not pan for a box that is in view already', async () => {
+    const { result } = await mount(tree());
+    measure(result, ['p', 'a', 'b', 'n']);
+    flowStub.setViewport.mockClear();
+    act(() => result.current.branch.control.openAsk('b'));
+    measure(result, [DRAFT_ID], 120);
+    await Promise.resolve();
+    expect(flowStub.setViewport).not.toHaveBeenCalled();
   });
 });
 

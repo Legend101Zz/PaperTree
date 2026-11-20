@@ -8,7 +8,8 @@
  *   past the cap the BODY scrolls inside, with a fade and "N characters · scrolls inside" so the
  *   scrolling is never a surprise;
  * - it is dragged by its top strip only, so the words below stay selectable (span branches);
- * - every card has an Ask edge, a round button on its right side;
+ * - every card has an Ask edge, a round button on its right side, and no brass pins (those are the
+ *   loose v0.2 cards' ports, never a branch's);
  * - clicking it focuses its path.
  *
  * It tells the layout how tall its text is (a ResizeObserver, no polling), and nothing else about
@@ -18,7 +19,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 
 import { rootOnVisiblePage } from '../../model/edge';
 import { useBranch } from '../BranchContext';
-import { CardPins } from '../CardPins';
+import { FallbackHandles } from '../CardPins';
 
 import type { CanvasNode } from '@/lib/api/types';
 
@@ -161,7 +162,9 @@ export function BranchCard({
           />
         </svg>
       </button>
-      <CardPins nodeId={id} kind={kind} />
+      {/* No brass pins: a branch is joined by the tree's own lines. A stored v0.2 thread that
+          touches this card still draws, on the hidden handles. */}
+      <FallbackHandles />
     </div>
   );
 }

@@ -63,20 +63,26 @@ test('cards, pins and a thread that persists with its ports', async ({ browser, 
       ...extra,
     });
   const note = await mk('note', 0, { body: 'Depth is the whole question here.' });
-  const passage = await mk('excerpt', 520, {
+  // Two loose notes take the thread: a branching card (the passage) has no brass pins since v0.3.
+  const second = await mk('note', 520, {
+    body: 'Deeper neural networks are more difficult to train.',
+  });
+  const passage = await mk('excerpt', 1040, {
     body: 'Deeper neural networks are more difficult to train.',
     source_anchor: capture.anchor,
   });
   expect(note.status, JSON.stringify(note.json)).toBe(201);
+  expect(second.status, JSON.stringify(second.json)).toBe(201);
   expect(passage.status, JSON.stringify(passage.json)).toBe(201);
   const noteId = (note.json as { node: { node_id: string } }).node.node_id;
+  const secondId = (second.json as { node: { node_id: string } }).node.node_id;
   const passageId = (passage.json as { node: { node_id: string } }).node.node_id;
 
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
   const page = await context.newPage();
   await tokenInit(page, token);
   await page.goto(`/paper/${paperId}/board`);
-  await expect(page.locator('.react-flow__node')).toHaveCount(2);
+  await expect(page.locator('.react-flow__node')).toHaveCount(3);
   await page.waitForTimeout(1000);
 
   // The passage card: the paper's words, in the paper's voice, under its page tab.
@@ -84,15 +90,16 @@ test('cards, pins and a thread that persists with its ports', async ({ browser, 
   // v0.3: the page is a button on the card's top strip (it opens the paper on those words).
   await expect(card.locator('.pt-tc__src')).toHaveText(/^p\. \d+$/);
   await expect(card.locator('blockquote[data-voice="paper"]')).toContainText('Deeper neural');
-  await expect(card.getByRole('button', { name: 'evidence in' })).toBeVisible();
-  await expect(page.getByRole('region', { name: 'Legend' })).toContainText(
-    'Drag from a brass pin to make a thread.',
-  );
+  // v0.3: a branching card has no brass pins, and the key to threads is drawn only once the board
+  // has one (under the stage, never over the cards).
+  await expect(card.getByRole('button', { name: 'evidence in' })).toHaveCount(0);
+  await expect(card.locator('.pt-pin:not(.pt-pin-fallback)')).toHaveCount(0);
+  await expect(page.getByRole('region', { name: 'Legend' })).toHaveCount(0);
 
   // A drop on a pin that cannot take the thread (the passage's own brass pin) is refused.
   const claimOut = `.react-flow__node[data-id="${noteId}"] [data-handleid="claim_out"]`;
-  const evidenceIn = `.react-flow__node[data-id="${passageId}"] [data-handleid="evidence_in"]`;
-  const wrong = `.react-flow__node[data-id="${passageId}"] [data-handleid="claim_out"]`;
+  const evidenceIn = `.react-flow__node[data-id="${secondId}"] [data-handleid="evidence_in"]`;
+  const wrong = `.react-flow__node[data-id="${secondId}"] [data-handleid="claim_out"]`;
   const calls = recordApi(page, stack.apiUrl);
   await dragTo(page, await centre(page, claimOut), await centre(page, wrong));
   await page.mouse.up();
@@ -118,7 +125,7 @@ test('cards, pins and a thread that persists with its ports', async ({ browser, 
     .toEqual([
       expect.objectContaining({
         from_node_id: noteId,
-        to_node_id: passageId,
+        to_node_id: secondId,
         kind: 'contradicts',
         from_port: 'claim_out',
         to_port: 'evidence_in',
@@ -127,7 +134,7 @@ test('cards, pins and a thread that persists with its ports', async ({ browser, 
 
   // Reload: the same thread between the same pins.
   await page.reload();
-  await expect(page.locator('.react-flow__node')).toHaveCount(2);
+  await expect(page.locator('.react-flow__node')).toHaveCount(3);
   await expect(page.locator('.react-flow__edge g.pt-thread')).toHaveAttribute(
     'data-cue',
     'dashed with crosses',
@@ -136,13 +143,16 @@ test('cards, pins and a thread that persists with its ports', async ({ browser, 
   await expect(edge).toHaveAttribute('data-id', /^ce_/);
   await page.screenshot({ path: shot('b02-thread-after-reload-1440.png') });
 
-  // The legend is a key, not a control: a click on it reaches the board and deselects.
+  // With a thread on the board the key is there, under the stage: it never overlaps the cards.
+  const legend = page.getByRole('region', { name: 'Legend' });
+  await expect(legend).toContainText('Drag from a brass pin to make a thread.');
+  const key = (await legend.boundingBox())!;
+  const stageBox = (await page.getByTestId('canvas-stage').boundingBox())!;
+  expect(key.y).toBeGreaterThanOrEqual(stageBox.y + stageBox.height - 1);
   await clickEdge(page);
   const linkBar = page.getByRole('group', { name: 'Selected link' });
   await expect(linkBar).toBeVisible();
-  const legend = await page.getByRole('region', { name: 'Legend' }).boundingBox();
-  expect(legend).not.toBeNull();
-  await page.mouse.click(legend!.x + legend!.width - 40, legend!.y + legend!.height / 2);
+  await page.mouse.click(stageBox.x + stageBox.width - 24, stageBox.y + 24); // the empty board
   await expect(linkBar).toBeHidden();
   await context.close();
 });

@@ -66,6 +66,16 @@ import './threads.css';
 import './legend.css';
 import './chrome.css';
 
+/**
+ * Whether the board shows the thread key: only when it holds v0.2 threads (between loose cards).
+ * A tree of passages, answers and notes has no pins and no threads, so it has nothing to key.
+ *
+ * @param threads How many threads the board has.
+ */
+export function showLegend(threads: number): boolean {
+  return threads > 0;
+}
+
 /** The legend never changes with the board, so a drag does not redraw it. */
 const ThreadLegend = memo(Legend);
 
@@ -442,7 +452,7 @@ function Board({ paperId }: { readonly paperId: string }) {
                       </ReactFlow>
                     </GlanceProvider>
                   </LinkingProvider>
-                  {empty ? <EmptyBoard paperId={paperId} /> : <ThreadLegend glance={glance} />}
+                  {empty ? <EmptyBoard paperId={paperId} /> : null}
                   {link.request === null ? null : (
                     <LinkAsLayer
                       request={link.request}
@@ -455,6 +465,12 @@ function Board({ paperId }: { readonly paperId: string }) {
                 </>
               )}
             </div>
+            {/* v0.2 threads join loose cards only; the key to them is drawn under the stage, in the
+                flow, and only when the board has one. It never lies over the cards, the minimap or an
+                ask box. */}
+            {ready && !empty && showLegend(ctl.edges.length) ? (
+              <ThreadLegend glance={glance} />
+            ) : null}
             {branch.control.ui.outline ? (
               <OutlineView
                 tree={branch.view.tree}

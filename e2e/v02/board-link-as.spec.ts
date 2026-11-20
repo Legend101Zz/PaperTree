@@ -2,7 +2,8 @@
  * v0.2 S6c (#213): "Link as" on the real stack — prototype steps 12–14 ("a thread from a brass pin
  * → Link as → supports").
  *
- * 1. A thread dragged from a note's brass claim-out pin to a passage's open evidence-in pin: the
+ * 1. A thread dragged from a note's brass claim-out pin to another loose note's open evidence-in pin
+ *    (the branching cards, passages and answers, have no pins since v0.3): the
  *    picker settles in (not a dialog), names both ends, and key 2 inks it as "contradicts" with that
  *    kind's cue; focus goes back to the pin; the Undo toast says "Linked as contradicts."; after a
  *    reload it is still there with both pins.
@@ -11,9 +12,6 @@
  *    card they land on; Enter, then key 1: saved as "supports" from the note's claim-out pin, focus
  *    back on the note; Undo takes it back.
  */
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
-
 import { expect, test } from '../harness/test';
 import { api, getBoard, seedPaper, shotPath, tokenInit } from '../s7/support';
 
@@ -31,23 +29,6 @@ test('Link as: drag then key 2, and a keyboard-only supports', async ({ browser,
   test.setTimeout(300_000);
   const shot = (name: string) => shotPath(name, info.outputPath('shots'));
   const { token, paperId } = await seedPaper(stack.apiUrl, 'link-as');
-  const capture = JSON.parse(
-    readFileSync(
-      join(
-        __dirname,
-        '..',
-        '..',
-        'packages',
-        'db',
-        'python',
-        'tests',
-        'data',
-        'capture_anchor_resnet.json',
-      ),
-      'utf8',
-    ),
-  ) as { anchor: { doc: { paperId: string } } };
-  capture.anchor.doc.paperId = paperId;
   const mk = async (kind: string, x: number, y: number, extra: Record<string, unknown>) => {
     const made = await api(stack.apiUrl, token, 'POST', `/papers/${paperId}/board/nodes`, {
       node_id: `cn_${crypto.randomUUID()}`,
@@ -62,9 +43,8 @@ test('Link as: drag then key 2, and a keyboard-only supports', async ({ browser,
     return (made.json as { node: { node_id: string } }).node.node_id;
   };
   const noteA = await mk('note', 0, 0, { body: 'Depth is the question.' });
-  const passage = await mk('excerpt', 560, 120, {
+  const passage = await mk('note', 560, 120, {
     body: 'Deeper neural networks are more difficult to train.',
-    source_anchor: capture.anchor,
   });
   const noteB = await mk('note', 0, 320, { body: 'Residual blocks train.' });
 
@@ -92,7 +72,7 @@ test('Link as: drag then key 2, and a keyboard-only supports', async ({ browser,
   const picker = page.getByRole('group', { name: /link as/i });
   await expect(picker).toBeVisible();
   await expect(page.getByRole('dialog')).toHaveCount(0); // a picker on the board, not a modal
-  await expect(picker).toContainText('Note ‘Depth is the question.’ → Passage p.');
+  await expect(picker).toContainText('Note ‘Depth is the question.’ → Note ‘Deeper');
   await expect(picker.getByRole('option')).toHaveCount(7);
   await expect(page.getByTestId('thread-preview')).toHaveCount(1);
   await page.screenshot({ path: shot('l01-link-as-open-1440.png') });
@@ -170,7 +150,7 @@ test('Link as: drag then key 2, and a keyboard-only supports', async ({ browser,
   expect([stillA?.x, stillA?.y]).toEqual([0, 0]);
   await page.keyboard.press('Enter');
   await expect(picker).toBeVisible();
-  await expect(picker).toContainText('Note ‘Residual blocks train.’ → Passage p.');
+  await expect(picker).toContainText('Note ‘Residual blocks train.’ → Note ‘Deeper');
   await page.screenshot({ path: shot('l02-link-as-keyboard-1440.png') });
   await page.keyboard.press('1');
   await expect(picker).toBeHidden();

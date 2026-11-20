@@ -374,7 +374,10 @@ test.describe('S8: the prototype flow, 14 steps, at 1440 and 390, both schemes (
       });
       const card = (id: string) => page.locator(`.react-flow__node[data-id="${id}"]`);
       const claimOut = card(plateCard).locator('[data-handleid="claim_out"]');
-      const evidenceIn = card(passageCard).locator('[data-handleid="evidence_in"]');
+      // v0.3: the passage (a branching card) has no brass pins; the thread lands on the notebook
+      // page's card, a loose card whose open pin takes it.
+      const notebookCard = `cn_${pageId.slice(3)}`;
+      const evidenceIn = card(notebookCard).locator('[data-handleid="evidence_in"]');
 
       await step('the board', async () => {
         const sent = page.waitForResponse(
@@ -436,7 +439,7 @@ test.describe('S8: the prototype flow, 14 steps, at 1440 and 390, both schemes (
 
       await step('Link as', async () => {
         await expect(page.getByRole('dialog')).toHaveCount(0); // a picker on the board, not a modal
-        await expect(picker).toContainText(`Diagram ‘${plate.title}’ → Passage p. 1`);
+        await expect(picker).toContainText(`Diagram ‘${plate.title}’ →`);
         await expect(picker.getByRole('option')).toHaveCount(7);
       });
 
@@ -465,7 +468,7 @@ test.describe('S8: the prototype flow, 14 steps, at 1440 and 390, both schemes (
           .toEqual([
             expect.objectContaining({
               from_node_id: plateCard,
-              to_node_id: passageCard,
+              to_node_id: notebookCard,
               kind: 'supports',
               from_port: 'claim_out',
               to_port: 'evidence_in',
