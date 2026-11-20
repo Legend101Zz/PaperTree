@@ -113,7 +113,7 @@ test.describe('v0.3 #348 - select an image and ask about it', () => {
     expect(names.slice(0, 4)).toEqual(['Explain', 'Ask…', 'Send to board', 'Note']);
 
     const created = threadCreate(page);
-    await page.getByRole('button', { name: 'Explain', exact: true }).first().click();
+    await page.locator(BAR).getByRole('button', { name: 'Explain', exact: true }).click();
     const body = (await created).postDataJSON() as ThreadBody;
     expect(body.kind).toBe('image');
     expect(body.anchor.targetKind).toBe('figure');
@@ -218,7 +218,26 @@ test.describe('v0.3 #348 - select an image and ask about it', () => {
     // The answer grows to the right of the picture.
     expect((await answer.boundingBox())!.x).toBeGreaterThan((await card.boundingBox())!.x + 100);
 
-    await answer.locator('.pt-tc__answer p').first().dblclick();
+    // Double-click a real word. The paragraph's own centre can land on punctuation, which selects
+    // one character, and a one-character selection opens no menu.
+    const wordAt = await answer
+      .locator('.pt-tc__answer p')
+      .first()
+      .evaluate((p) => {
+        const walker = document.createTreeWalker(p, NodeFilter.SHOW_TEXT);
+        for (let n = walker.nextNode(); n !== null; n = walker.nextNode()) {
+          const m = /[A-Za-z]{4,}/.exec(n.textContent ?? '');
+          if (m === null) continue;
+          const range = document.createRange();
+          range.setStart(n, m.index);
+          range.setEnd(n, m.index + m[0].length);
+          const r = range.getBoundingClientRect();
+          return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+        }
+        return null;
+      });
+    expect(wordAt).not.toBeNull();
+    await page.mouse.dblclick(wordAt!.x, wordAt!.y);
     await expect(pane.getByRole('menu', { name: 'On the selected words' })).toBeVisible();
     await page.keyboard.press('Enter');
     await pane.getByLabel('Your question').fill('what is that?');
@@ -260,7 +279,7 @@ test.describe('v0.3 #348 - select an image and ask about it', () => {
     expect(await page.evaluate(() => window.getSelection()?.toString() ?? '')).toContain('Deeper');
 
     const created = threadCreate(page);
-    await page.getByRole('button', { name: 'Explain', exact: true }).first().click();
+    await page.locator(BAR).getByRole('button', { name: 'Explain', exact: true }).click();
     const body = (await created).postDataJSON() as ThreadBody;
     expect(body.kind).toBe('image');
     expect(body.with_text_anchor?.targetKind).toBe('text');

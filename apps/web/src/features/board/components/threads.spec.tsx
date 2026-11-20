@@ -170,7 +170,12 @@ describe('the brass port pins', () => {
     expect(screen.queryByRole('button', { name: 'claim out' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'evidence in' })).toBeNull();
     expect(container.querySelectorAll('.pt-pin:not(.pt-pin-fallback)')).toHaveLength(0);
-    expect(container.querySelectorAll('.pt-pin-fallback')).toHaveLength(2);
+    // Hidden, never a control: the two handles its stored pins name (claim_out, evidence_in) so a
+    // thread made with the toolbar's Thread is drawn, and the any_out / any_in fallback pair.
+    const ids = [...container.querySelectorAll('.pt-pin-fallback')].map((h) =>
+      h.getAttribute('data-handleid'),
+    );
+    expect(ids.sort()).toEqual(['any_in', 'any_out', 'claim_out', 'evidence_in']);
   });
 
   it('are named buttons with the pin ids the server knows', () => {

@@ -359,6 +359,22 @@ interface OwnedStart {
   readonly anchor: Caret;
 }
 
+/**
+ * Whether a press belongs to the picture tool, not to text: Alt is the area tool's drag, and the
+ * pages carry `data-pt-areatool` on the scroller while the tool is armed (`useImagePick`). Such a
+ * press must not be given a text anchor here: this module's pointerup would otherwise build a
+ * selection from the press to the text nearest the release, and the reader's own pointerup would
+ * read it and drop the rectangle just drawn (the picture is replaced by the words).
+ *
+ * @param event The press.
+ * @returns True when the area tool has it.
+ */
+export function pressIsAreaTool(event: Pick<PointerEvent, 'altKey' | 'target'>): boolean {
+  if (event.altKey) return true;
+  const target = event.target instanceof Element ? event.target : null;
+  return target?.closest('[data-pt-areatool]') != null;
+}
+
 function enableGlobalListeners(): void {
   if (globalAbort !== null) return;
   const controller = new AbortController();
@@ -411,6 +427,11 @@ function enableGlobalListeners(): void {
       pointerDown = true;
       dragging = false;
       owned = null;
+      if (pressIsAreaTool(event)) {
+        // The picture tool's drag: nothing here may snap, anchor or extend a text selection.
+        downAt = null;
+        return;
+      }
       const target = event.target instanceof Element ? event.target : null;
       const inLayer = target?.closest('.papertree-text-layer') ?? null;
       const primary = inLayer !== null && event.button === 0 && event.pointerType !== 'touch';
