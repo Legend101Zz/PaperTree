@@ -101,6 +101,49 @@ describe('the branching board', () => {
     expect(legend.parentElement).toBe(threaded.getByTestId('canvas-stage').parentElement);
   });
 
+  it('a thread between two branching cards draws, on the hidden handles their own pins name', async () => {
+    // The toolbar's Thread stores claim_out / evidence_in; a branch has no brass pins, but xyflow
+    // draws a thread only between handles that exist, so the card must carry them, hidden.
+    vi.mocked(boardsApi.get).mockResolvedValue({
+      board: BOARD,
+      nodes: [
+        node({ id: 'p', x: 0, y: 0, body: 'Residual learning.' }),
+        node({
+          id: 'a',
+          parent: 'p',
+          question: 'Why does adding x help?',
+          finalText: '## TL;DR\nIt gives the block an easy default.',
+        }),
+      ],
+      edges: [
+        {
+          edge_id: 'ce_1',
+          board_id: 'brd_1',
+          from_node_id: 'p',
+          to_node_id: 'a',
+          kind: 'supports',
+          label: null,
+          from_port: 'claim_out',
+          to_port: 'evidence_in',
+          created_at: '',
+        },
+      ],
+    });
+    const { container } = render(<BoardView paperId="ppr_1" />);
+    await drawn();
+    // No brass pin is drawn or offered on a card (the key's own swatches are not cards) ...
+    expect(
+      container.querySelectorAll('.react-flow__node .pt-pin:not(.pt-pin-fallback)'),
+    ).toHaveLength(0);
+    expect(screen.queryByRole('button', { name: 'evidence in' })).toBeNull();
+    // ... but the handles its stored pins name are there (jsdom measures nothing, so the drawn
+    // thread itself is the e2e's: canvas-journey step 5).
+    const passage = screen.getByTestId('rf__node-p');
+    const answer = screen.getByTestId('rf__node-a');
+    expect(passage.querySelector('[data-handleid="claim_out"]')).not.toBeNull();
+    expect(answer.querySelector('[data-handleid="evidence_in"]')).not.toBeNull();
+  });
+
   it('Outline opens the study doc; Export Markdown its sheet; Escape closes them in that order', async () => {
     render(<BoardView paperId="ppr_1" />);
     await drawn();

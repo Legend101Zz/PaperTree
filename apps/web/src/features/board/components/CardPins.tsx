@@ -76,6 +76,36 @@ export function FallbackHandles(): ReactNode {
 }
 
 /**
+ * The handles a branching card (passage, answer, note) carries: the ones a stored thread's own
+ * pins name, hidden (not drawn, not connectable, not focusable, not announced), plus the fallback
+ * pair. A branch has no brass pins, but a thread joined to it (made with the toolbar's Thread, or
+ * stored before v0.3) is saved with `claim_out` / `evidence_in` and xyflow draws a thread only
+ * between handles that exist, so those ids must be here or the thread is silently not drawn.
+ *
+ * @param props The card's kind.
+ * @param props.kind The kind of card.
+ */
+export function HiddenPins({ kind }: { readonly kind: CanvasNode['kind'] }): ReactNode {
+  const pins: readonly Port[] = [...PIN_TABLE[kind].into, ...PIN_TABLE[kind].out];
+  return (
+    <>
+      {pins.map((port) => (
+        <Handle
+          key={port}
+          id={port}
+          type={isOutPort(port) ? 'source' : 'target'}
+          position={POSITION[PIN_SIDE[port]]}
+          isConnectable={false}
+          className="pt-pin-fallback"
+          aria-hidden="true"
+        />
+      ))}
+      <FallbackHandles />
+    </>
+  );
+}
+
+/**
  * A glance's pins (#215): drawn where the card's pins are, so its threads stay attached, but not
  * targets: below the low-zoom switch a pin is a few pixels on screen, and the board's rule is to
  * zoom in to draw a thread (threads.css). L on a focused card still starts one by keyboard.
