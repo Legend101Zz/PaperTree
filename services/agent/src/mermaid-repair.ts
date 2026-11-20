@@ -5,10 +5,14 @@
  *   tidyMermaidText   cosmetic and always on, before the safety check: `<br>` becomes a space (the
  *                     safety check refuses raw HTML, and a `<br>` in a mindmap root made two roots),
  *                     literal quotes leave a `title` (they were drawn), and a wide `flowchart LR`
- *                     of more than four nodes becomes `flowchart TD` (28 of 91 were too wide to read)
+ *                     of more than four nodes becomes `flowchart TD` (28 of 91 were too wide to read);
+ *                     literal quotes leave mindmap nodes, timeline text and state labels (those
+ *                     types DRAW the quotes), and quadrant points are moved off the quadrant titles
+ *                     and off each other (see `tidyQuadrantPoints`)
  *   repairMermaid     structural, run only once the real parse has failed: two flowchart statements
  *                     on one line are split, node text holding ()[]{} is quoted where the type reads
- *                     those as shape syntax (flowchart, mindmap), a mindmap whose second line is not
+ *                     those as shape syntax (flowchart; a mindmap node becomes `id("text")`, never
+ *                     a quoted bare node), a mindmap whose second line is not
  *                     indented under the root is indented under it
  *   figureLimits      the size caps the prompt states (nodes, participants, periods, points,
  *                     depth), counted here: an over-cap figure is treated as a parse failure
@@ -89,6 +93,29 @@ export function tidyMermaidText(body: string): Repaired {
     if (changed) applied.push('title-quotes');
   }
   text = lines.join('\n');
+  if (type === 'mindmap') {
+    const next = mindmapUnquote(lines);
+    if (next !== null) {
+      lines.splice(0, lines.length, ...next);
+      text = lines.join('\n');
+      applied.push('mindmap-unquote');
+    }
+  } else if (type === 'timeline' || type === 'stateDiagram' || type === 'stateDiagram-v2') {
+    const name = type === 'timeline' ? 'timeline-quotes' : 'state-quotes';
+    const next = type === 'timeline' ? timelineUnquote(lines) : stateUnquote(lines);
+    if (next !== null) {
+      lines.splice(0, lines.length, ...next);
+      text = lines.join('\n');
+      applied.push(name);
+    }
+  } else if (type === 'quadrantChart') {
+    const next = tidyQuadrantPoints(lines);
+    if (next.moved > 0) {
+      lines.splice(0, lines.length, ...next.lines);
+      text = lines.join('\n');
+      applied.push('quadrant-spread');
+    }
+  }
   if (isFlow(type)) {
     const first = headerIndex(lines);
     const header = (lines[first] ?? '').trim();
@@ -258,6 +285,10 @@ const SHAPED =
 const SHAPED_PLAIN =
   /^[\w-]+(?:\(\(|\[\[|\(|\[|\{\{|\{|\)\)|\))[^"()[\]{}]*(?:\)\)|\]\]|\)|\]|\}\}|\()$/;
 
+/** A node that is only its id and ONE quoted shape (the id may hold spaces, as `Core idea["…"]`). */
+const QUOTED_SHAPE =
+  /^[^"]*(?:\(\(\(|\(\(|\(|\[\[|\[|\{\{|\{|\)\)|\))"[^"]*"(?:\)\)\)|\)\)|\)|\]\]|\]|\}\}|\}|\(\(|\()$/;
+
 function indentOf(line: string): number {
   return (/^ */.exec(line)?.[0] ?? '').length;
 }
@@ -265,6 +296,140 @@ function indentOf(line: string): number {
 function isMindmapNode(line: string): boolean {
   const t = line.trim();
   return t !== '' && !t.startsWith('%%') && !t.startsWith('::');
+}
+
+/**
+ * A mindmap node whose text holds ()[]{} is written `nId("text")`: the parser reads the quoted
+ * text of a shape as the label WITHOUT the quotes (checked on mermaid 12.2.0: descr is `Learn
+ * F(x) = H(x) - x`, type rounded-rect), whereas a bare `"text"` node, or an `id["…"]` repaired
+ * to a bare one, keeps the quotes as characters of the label. Plain text needs no wrapper.
+ */
+function safeMindmapText(text: string, id: string): string {
+  const plain = text.replace(/"/g, "'").trim();
+  return /[()[\]{}]/.test(plain) ? `${id}("${plain}")` : plain;
+}
+
+/** Literal quotes out of mindmap nodes (a bare `"text"`, or a quote inside plain text). */
+function mindmapUnquote(lines: readonly string[]): string[] | null {
+  const first = headerIndex([...lines]);
+  const out = [...lines];
+  let changed = false;
+  for (const [i, line] of lines.entries()) {
+    if (i <= first || !isMindmapNode(line) || !/["]/.test(line)) continue;
+    const text = line.trim();
+    if (QUOTED_SHAPE.test(text)) {
+      // `id["text"]`: the quotes are syntax. Only a label we wrapped in apostrophes ourselves
+      // (`id["'text'"]`, the old repair) loses them.
+      const wrapped = /"'([^"']*)'"/.exec(line);
+      if (wrapped !== null) {
+        out[i] = line.replace(wrapped[0], `"${wrapped[1] ?? ''}"`);
+        changed = true;
+      }
+      continue;
+    }
+    const indent = /^ */.exec(line)?.[0] ?? '';
+    out[i] = indent + safeMindmapText(text.replace(/"/g, ''), `n${String(i)}`);
+    changed = true;
+  }
+  return changed ? out : null;
+}
+
+/** Timeline text is drawn as written, so quotes (and backticks) in it would be drawn too. */
+function timelineUnquote(lines: readonly string[]): string[] | null {
+  const first = headerIndex([...lines]);
+  let changed = false;
+  const out = lines.map((line, i) => {
+    if (i <= first || /^\s*%%/.test(line) || !/["`]/.test(line)) return line;
+    changed = true;
+    return line.replace(/["`]/g, '');
+  });
+  return changed ? out : null;
+}
+
+/** A state transition label (`A --> B : "go"`) or note text is drawn with its quotes. */
+function stateUnquote(lines: readonly string[]): string[] | null {
+  const first = headerIndex([...lines]);
+  let changed = false;
+  const out = lines.map((line, i) => {
+    if (i <= first || !line.includes('"')) return line;
+    const m = /^(\s*(?:note\b[^:]*|[^:"]*-->[^:"]*)):(.*)$/.exec(line);
+    if (m === null || !(m[2] ?? '').includes('"')) return line;
+    changed = true;
+    return `${m[1] ?? ''}:${(m[2] ?? '').replace(/"/g, '')}`;
+  });
+  return changed ? out : null;
+}
+
+// ---- quadrant points ---------------------------------------------------------------------------
+
+/** The band under y = 0.5 where the lower quadrants' titles are drawn (0.40 to 0.52). */
+const TITLE_BAND = { low: 0.4, high: 0.52 } as const;
+/** Points above this meet the upper quadrants' titles (they sit near y = 0.95 to 1). */
+const TOP_LIMIT = 0.85;
+const EDGE = 0.05;
+/** Two labels closer than this on BOTH axes overprint. */
+const MIN_GAP = 0.07;
+
+const POINT =
+  /^(\s*)(?!(?:title|x-axis|y-axis|quadrant-[\w-]+)\b)(.+?)(\s*:\s*)\[\s*(-?\d*\.?\d+)\s*,\s*(-?\d*\.?\d+)\s*\](\s*)$/;
+
+const inBand = (y: number): boolean => y >= TITLE_BAND.low - 1e-9 && y <= TITLE_BAND.high + 1e-9;
+const round2 = (n: number): number => Math.round(n * 100) / 100;
+const clamp = (n: number, lo: number, hi: number): number => Math.min(hi, Math.max(lo, n));
+
+/**
+ * Quadrant titles are drawn at the top of each quadrant, so a point there is printed over the
+ * title (25 of 85 round-1 to 3 points did). Always on: a point's y leaves 0.40 to 0.52 for 0.36
+ * or 0.56 (the nearer) and 0.88 and up for 0.85, x stays within 0.05 to 0.95; then points closer
+ * than 0.07 on both axes are pushed apart vertically (nearest free y, never back into a band).
+ * `moved` counts the points whose written position changed. Lines it cannot read are untouched.
+ */
+export function tidyQuadrantPoints(lines: readonly string[]): {
+  lines: string[];
+  moved: number;
+} {
+  const out = [...lines];
+  const placed: Array<{ x: number; y: number }> = [];
+  let moved = 0;
+  const free = (x: number, y: number): boolean =>
+    y >= EDGE - 1e-9 &&
+    y <= TOP_LIMIT + 1e-9 &&
+    !inBand(y) &&
+    placed.every((p) => Math.abs(p.x - x) >= MIN_GAP - 1e-9 || Math.abs(p.y - y) >= MIN_GAP - 1e-9);
+  for (const [i, line] of lines.entries()) {
+    const m = POINT.exec(line);
+    if (m === null) continue;
+    const x0 = Number(m[4]);
+    const y0 = Number(m[5]);
+    if (!Number.isFinite(x0) || !Number.isFinite(y0)) continue;
+    const x = round2(clamp(x0, EDGE, 1 - EDGE));
+    let y = y0;
+    if (inBand(y)) y = Math.abs(y - 0.36) <= Math.abs(y - 0.56) ? 0.36 : 0.56;
+    y = round2(clamp(y, EDGE, TOP_LIMIT));
+    if (!free(x, y)) {
+      let best = y;
+      for (let step = 1; step <= 80; step++) {
+        const up = round2(y + step / 100);
+        const down = round2(y - step / 100);
+        if (free(x, up)) {
+          best = up;
+          break;
+        }
+        if (free(x, down)) {
+          best = down;
+          break;
+        }
+      }
+      y = best;
+    }
+    placed.push({ x, y });
+    if (Math.abs(x - x0) > 1e-9 || Math.abs(y - y0) > 1e-9) {
+      out[i] =
+        `${m[1] ?? ''}${m[2] ?? ''}${m[3] ?? ''}[${x.toFixed(2)}, ${y.toFixed(2)}]${m[6] ?? ''}`;
+      moved++;
+    }
+  }
+  return { lines: out, moved };
 }
 
 function mindmapRepair(lines: string[], applied: string[]): string[] {
@@ -291,7 +456,7 @@ function mindmapRepair(lines: string[], applied: string[]): string[] {
     const text = line.trim();
     if (!/[()[\]{}]/.test(text) || SHAPED.test(text) || SHAPED_PLAIN.test(text)) continue;
     const indent = /^ */.exec(line)?.[0] ?? '';
-    out[i] = `${indent}n${i}["${text.replace(/"/g, "'")}"]`;
+    out[i] = indent + safeMindmapText(text, `n${String(i)}`);
     quoted = true;
   }
   if (quoted) applied.push('mindmap-quote-text');

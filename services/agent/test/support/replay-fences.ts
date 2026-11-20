@@ -13,6 +13,7 @@ import { readFileSync } from 'node:fs';
 import { settleFigure } from '../../src/figure.ts';
 import { mermaidParser } from '../../src/mermaid-parse.ts';
 import { figureLimits, repairMermaid, tidyMermaidText } from '../../src/mermaid-repair.ts';
+import { mermaidTypeOf } from '../../src/mermaid.ts';
 
 const file = process.argv[2];
 if (file === undefined) throw new Error('usage: replay-fences.ts <fences.jsonl>');
@@ -29,12 +30,28 @@ let tidy = 0;
 let repaired = 0;
 let overCap = 0;
 const paths: Record<string, number> = {};
+let mindmapNodesChanged = 0;
+let quadrantPointsMoved = 0;
+let quotesLeft = 0;
+/** Lines of `after` that differ from the same line of `before` (the tidy never adds or drops lines). */
+const changedLines = (before: string, after: string): number => {
+  const a = before.split('\n');
+  const b = after.split('\n');
+  return b.filter((line, i) => line !== a[i]).length;
+};
 for (const body of fences) {
   if (await ok(body)) raw++;
   const t = tidyMermaidText(body).body;
   const parsesTidy = await ok(t);
   if (parsesTidy) tidy++;
   const final = parsesTidy ? t : repairMermaid(t).body;
+  const type = mermaidTypeOf(body);
+  // The "nodes changed" of a mindmap and the "points moved" of a quadrant are the cosmetics' own
+  // (the structural repair only runs on a fence that failed to parse; it is counted separately).
+  if (type === 'mindmap')
+    mindmapNodesChanged += changedLines(body.replace(/\s*<\s*br\s*\/?\s*>\s*/gi, ' '), t);
+  if (type === 'quadrantChart') quadrantPointsMoved += changedLines(body, t);
+  if (type === 'mindmap' && final.split('\n').some((l) => /^\s*"/.test(l))) quotesLeft++;
   if (parsesTidy || (await ok(final))) repaired++;
   if (figureLimits(final).length > 0) overCap++;
   const out = await settleFigure(`## How it works\n\`\`\`mermaid\n${body}\n\`\`\`\n`, false, true, {
@@ -49,5 +66,8 @@ console.log(`parse after deterministic fix:  ${String(repaired)}`);
 console.log(
   `of those, over a size cap:      ${String(overCap)} (a live run asks the model to simplify)`,
 );
+console.log(`mindmap nodes changed by the tidy:  ${String(mindmapNodesChanged)}`);
+console.log(`quadrant points moved:           ${String(quadrantPointsMoved)}`);
+console.log(`mindmaps still with a bare quoted node: ${String(quotesLeft)}`);
 console.log('figure step, no model:', paths);
 await mermaidParser.close();

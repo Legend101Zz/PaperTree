@@ -88,4 +88,31 @@ describe('MermaidDiagram size', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Show the diagram smaller' }));
     expect(figure.style.getPropertyValue('--pt-mmd-w')).toBe(`${String(Math.round(3290 * 0.7))}px`);
   });
+
+  it('the "larger" control sits in a caption row under the drawing, outside the scroll box', async () => {
+    draw.width = 3290;
+    const figure = await drawn();
+    const scroller = figure.querySelector<HTMLElement>('.pt-mmd__scroll') as HTMLElement;
+    const button = screen.getByRole('button', { name: 'Show the diagram larger' });
+    expect(scroller.contains(button)).toBe(false);
+    expect(button.closest('.pt-mmd__caption')).not.toBeNull();
+    expect(scroller.contains(button.closest('.pt-mmd__caption'))).toBe(false);
+    // The row follows the drawing in the document: under it, never over it.
+    expect(
+      scroller.compareDocumentPosition(button) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(screen.getAllByRole('button')).toHaveLength(1);
+    expect(button.textContent).toBe('larger');
+  });
+
+  it('Esc on the control puts a large figure back', async () => {
+    draw.width = 3290;
+    const figure = await drawn();
+    const button = screen.getByRole('button', { name: 'Show the diagram larger' });
+    fireEvent.click(button);
+    expect(button.getAttribute('aria-expanded')).toBe('true');
+    expect(button.textContent).toBe('smaller');
+    fireEvent.keyDown(button, { key: 'Escape' });
+    expect(figure.getAttribute('data-large')).toBe('false');
+  });
 });

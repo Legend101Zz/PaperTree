@@ -8,18 +8,26 @@
   padding: 6px;
 }
 
+/* The size control: a quiet caption row under the drawing, right-aligned, never over it. */
+.pt-mmd__caption {
+  display: flex;
+  justify-content: flex-end;
+  padding-block-start: 2px;
+}
+
 .pt-mmd__btn {
-  position: relative;
-  display: block;
-  inline-size: 100%;
   margin: 0;
-  padding: 0;
+  padding: 0 4px;
   border: 0;
   background: none;
-  color: inherit;
-  font: inherit;
-  text-align: center;
+  color: var(--pt-ink-muted);
+  font: 13px var(--pt-font-ui);
+  line-height: 1.4;
   cursor: zoom-in;
+}
+
+.pt-mmd__btn:hover {
+  color: var(--pt-ink);
 }
 
 .pt-mmd__btn:focus-visible {
@@ -50,7 +58,12 @@
   overscroll-behavior: contain;
 }
 
-.pt-mmd__scroll .pt-mmd__btn {
+.pt-mmd__stage {
+  position: relative;
+  display: block;
+}
+
+.pt-mmd__scroll .pt-mmd__svg {
   inline-size: max-content;
   min-inline-size: 100%;
 }
@@ -70,8 +83,8 @@
 /* A fade at the edge the drawing scrolls toward, gone once the end is reached or it all fits. */
 .pt-mmd__fade {
   position: absolute;
-  inset-block: 6px;
-  inset-inline-end: 6px;
+  inset-block: 0;
+  inset-inline-end: 0;
   inline-size: 28px;
   pointer-events: none;
   background: linear-gradient(to right, transparent, var(--pt-page));
@@ -81,19 +94,6 @@
 
 .pt-mmd[data-scrolls='true'] .pt-mmd__fade {
   opacity: 1;
-}
-
-.pt-mmd__hint {
-  position: absolute;
-  inset-block-end: 0;
-  inset-inline-end: 0;
-  z-index: 1;
-  pointer-events: none;
-  padding: 0 4px;
-  font: 13px var(--pt-font-ui);
-  line-height: 1.4;
-  color: var(--pt-ink-muted);
-  background: var(--pt-page);
 }
 
 /* Mermaid draws no motion of its own; make sure a diagram never animates for a reader who asked not to. */

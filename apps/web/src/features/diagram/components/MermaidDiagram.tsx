@@ -17,8 +17,10 @@
  *    `MIN_SCALE` (`../mermaid/scale`): a wider drawing keeps that scale and scrolls sideways inside
  *    the figure, with a fade at the edge it scrolls toward; its height is capped like a board card
  *    (`--pt-card-cap`, 60vh) and scrolls inside. One click shows it at its natural size; click,
- *    Enter/Space or Esc puts it back (the Explain image head's pattern, `ImageHead`). The figure's
- *    accessible name is its type and first labels; the drawing itself is hidden from assistive tech.
+ *    Enter/Space or Esc puts it back (the Explain image head's pattern, `ImageHead`). The control
+ *    is a small right-aligned caption row UNDER the drawing, never over it (it covered the last
+ *    x-axis label, the scrollbar end, a participant). The figure's accessible name is its type and
+ *    first labels; the drawing itself is hidden from assistive tech.
  */
 import {
   useEffect,
@@ -158,14 +160,25 @@ export function MermaidDiagram({ body, closed }: MermaidDiagramProps): ReactNode
       aria-label={mermaidName(body)}
       style={{ '--pt-mmd-w': `${String(fit.width)}px` } as CSSProperties}
     >
-      <span
-        ref={box}
-        className="pt-mmd__scroll"
-        onScroll={(event) => {
-          const el = event.currentTarget;
-          setAtEnd(el.scrollLeft + el.clientWidth >= el.scrollWidth - 2);
-        }}
-      >
+      <span className="pt-mmd__stage">
+        <span
+          ref={box}
+          className="pt-mmd__scroll"
+          onScroll={(event) => {
+            const el = event.currentTarget;
+            setAtEnd(el.scrollLeft + el.clientWidth >= el.scrollWidth - 2);
+          }}
+        >
+          <span
+            className="pt-mmd__svg"
+            aria-hidden="true"
+            // Mermaid's own output, sanitised by `securityLevel: 'strict'` (DOMPurify) before it is returned.
+            dangerouslySetInnerHTML={{ __html: drawn.svg }}
+          />
+        </span>
+        <span className="pt-mmd__fade" aria-hidden="true" />
+      </span>
+      <span className="pt-mmd__caption">
         <button
           type="button"
           className="pt-mmd__btn"
@@ -180,18 +193,9 @@ export function MermaidDiagram({ body, closed }: MermaidDiagramProps): ReactNode
             setLarge(false);
           }}
         >
-          <span
-            className="pt-mmd__svg"
-            aria-hidden="true"
-            // Mermaid's own output, sanitised by `securityLevel: 'strict'` (DOMPurify) before it is returned.
-            dangerouslySetInnerHTML={{ __html: drawn.svg }}
-          />
+          {large ? 'smaller' : 'larger'}
         </button>
       </span>
-      <span className="pt-mmd__hint" aria-hidden="true">
-        {large ? 'smaller' : 'larger'}
-      </span>
-      <span className="pt-mmd__fade" aria-hidden="true" />
     </figure>
   );
 }

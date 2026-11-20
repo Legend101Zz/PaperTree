@@ -16,6 +16,7 @@ import {
   flowNodeIds,
   repairMermaid,
   tidyMermaidText,
+  tidyQuadrantPoints,
 } from '../src/mermaid-repair.ts';
 import { INLINE_DIAGRAM } from '../src/prompts.ts';
 
@@ -25,6 +26,11 @@ import {
   MINDMAP_PARENTHESES,
   MINDMAP_SECOND_ROOT,
 } from './support/r1-failing-fences.ts';
+import {
+  MINDMAP_QUOTED_NODES_ODE,
+  MINDMAP_QUOTED_NODES_TRANSFORMER,
+  QUADRANT_ON_TITLE,
+} from './support/r3-look-fences.ts';
 
 const parser = new MermaidParser();
 after(() => parser.close());
@@ -74,10 +80,11 @@ describe('the round-1 failures are real failures, and each repair makes them par
     assert.ok(await parses(r.body));
   });
 
-  test('a mindmap node with parentheses in its text is quoted (#90: `Learn F(x) = H(x) - x`)', async () => {
+  test('a mindmap node with parentheses in its text becomes `id("text")`, shape syntax (#90: `Learn F(x) = H(x) - x`)', async () => {
     const r = repairMermaid(MINDMAP_PARENTHESES);
     assert.deepEqual(r.applied, ['mindmap-quote-text']);
-    assert.match(r.body, /\["Learn F\(x\) = H\(x\) - x"\]/);
+    assert.match(r.body, /^ {6}n\d+\("Learn F\(x\) = H\(x\) - x"\)$/m);
+    assert.doesNotMatch(r.body, /^\s*"/m, 'no bare quoted node');
     assert.match(r.body, /^ {4}Problem\["Degradation problem"\]$/m, 'shaped nodes are left alone');
     assert.ok(await parses(r.body));
   });
@@ -93,6 +100,133 @@ describe('the round-1 failures are real failures, and each repair makes them par
     }
     const good = 'flowchart TD\n  a["Input"] -->|"F(x)"| b["Sum"]\n  b --> c(("Out"))';
     assert.deepEqual(repairMermaid(good), { body: good, applied: [] });
+  });
+});
+
+describe('literal quotes are not left in the text a figure draws (round 3 look defects)', () => {
+  test('a bare quoted mindmap node loses its quotes (9 real nodes of the Transformer mindmap)', async () => {
+    const r = tidyMermaidText(MINDMAP_QUOTED_NODES_TRANSFORMER);
+    assert.deepEqual(r.applied, ['mindmap-unquote']);
+    assert.match(r.body, /^ {4}Encoder and decoder stacks$/m);
+    assert.match(r.body, /^ {6}Scaled dot-product$/m);
+    assert.match(r.body, /^ {2}root\["Transformer"\]$/m, 'a quoted shape keeps its own quotes');
+    assert.doesNotMatch(r.body, /^\s*"/m);
+    assert.ok(await parses(r.body));
+  });
+
+  test('the ODE mindmap: bare nodes unquoted, the apostrophe-wrapped label made plain', async () => {
+    const r = tidyMermaidText(MINDMAP_QUOTED_NODES_ODE);
+    assert.match(r.body, /^ {6}n7\["a\(tN\) = dL\/dz at tN"\]$/m);
+    assert.match(r.body, /^ {6}da\/dt = -a df\/dz$/m);
+    assert.doesNotMatch(r.body, /^\s*"/m);
+    assert.doesNotMatch(r.body, /'/);
+    assert.ok(await parses(r.body));
+  });
+
+  test('a bare quoted node whose text holds brackets becomes `id("text")` and parses', async () => {
+    const body = 'mindmap\n  root((R))\n    "Boundary a(tN) = dL/dz"\n      "Plain child"';
+    const r = tidyMermaidText(body);
+    assert.equal(
+      r.body,
+      'mindmap\n  root((R))\n    n2("Boundary a(tN) = dL/dz")\n      Plain child',
+    );
+    assert.ok(await parses(r.body));
+    assert.deepEqual(tidyMermaidText(r.body), { body: r.body, applied: [] }, 'idempotent');
+  });
+
+  test('a mindmap with no stray quotes is returned unchanged', () => {
+    const body = 'mindmap\n  root(("A"))\n    B["C (x)"]\n      D';
+    assert.deepEqual(tidyMermaidText(body), { body, applied: [] });
+  });
+
+  test('timeline text and state labels lose literal quotes', async () => {
+    const tl = tidyMermaidText('timeline\n  title "T"\n  section "Early"\n  2000 : "first" : two');
+    assert.equal(tl.body, 'timeline\n  title T\n  section Early\n  2000 : first : two');
+    assert.ok(tl.applied.includes('timeline-quotes'));
+    const st = tidyMermaidText(
+      'stateDiagram-v2\n  state "Idle (x)" as A\n  [*] --> A\n  A --> B : "go now"',
+    );
+    assert.equal(
+      st.body,
+      'stateDiagram-v2\n  state "Idle (x)" as A\n  [*] --> A\n  A --> B : go now',
+    );
+    assert.deepEqual(st.applied, ['state-quotes']);
+    assert.ok(await parses(tl.body));
+    assert.ok(await parses(st.body));
+  });
+});
+
+const pointsOf = (body: string): Array<[string, number, number]> =>
+  [...body.matchAll(/^\s*"?([^":]+?)"?\s*:\s*\[\s*([\d.]+)\s*,\s*([\d.]+)\s*\]\s*$/gm)].map((m) => [
+    m[1] ?? '',
+    Number(m[2]),
+    Number(m[3]),
+  ]);
+
+describe('quadrant points stay off the quadrant titles and off each other', () => {
+  test('the real fence: "Restricted self-attention" at y = 0.5 leaves the lower title band', async () => {
+    const r = tidyMermaidText(QUADRANT_ON_TITLE);
+    assert.deepEqual(r.applied, ['quadrant-spread']);
+    const by = new Map(pointsOf(r.body).map(([n, x, y]) => [n, { x, y }]));
+    assert.deepEqual(by.get('Restricted self-attention'), { x: 0.25, y: 0.56 });
+    assert.deepEqual(by.get('Self-attention'), { x: 0.1, y: 0.1 }, 'a clear point is untouched');
+    assert.deepEqual(by.get('Convolutional'), { x: 0.3, y: 0.35 });
+    assert.deepEqual(by.get('Recurrent'), { x: 0.85, y: 0.85 });
+    assert.ok(await parses(r.body));
+    assert.deepEqual(tidyMermaidText(r.body), { body: r.body, applied: [] }, 'idempotent');
+  });
+
+  test('band edges, the top rows and the sides', () => {
+    const lines = [
+      'quadrantChart',
+      '  A: [0.5, 0.40]',
+      '  B: [0.2, 0.52]',
+      '  C: [0.8, 0.45]',
+      '  D: [0.6, 0.96]',
+      '  E: [0.99, 0.2]',
+      '  F: [0.01, 0.7]',
+      '  G: [0.3, 0.53]',
+    ];
+    const { lines: out, moved } = tidyQuadrantPoints(lines);
+    assert.deepEqual(out, [
+      'quadrantChart',
+      '  A: [0.50, 0.36]',
+      '  B: [0.20, 0.56]',
+      '  C: [0.80, 0.36]',
+      '  D: [0.60, 0.85]',
+      '  E: [0.95, 0.20]',
+      '  F: [0.05, 0.70]',
+      '  G: [0.3, 0.53]',
+    ]);
+    assert.equal(moved, 6);
+  });
+
+  test('close points are spread on y, never into a title band, until no two overprint', () => {
+    const lines = [
+      'quadrantChart',
+      ...Array.from({ length: 5 }, (_, i) => `  P${String(i)}: [0.30, 0.${String(30 + i)}]`),
+    ];
+    const { lines: out } = tidyQuadrantPoints(lines);
+    const pts = pointsOf(out.join('\n'));
+    assert.equal(pts.length, 5);
+    for (const [, , y] of pts) assert.ok(y < 0.4 || y > 0.52, `y ${String(y)} is in the band`);
+    for (const [i, a] of pts.entries())
+      for (const b of pts.slice(i + 1))
+        assert.ok(
+          Math.abs(a[1] - b[1]) >= 0.0699 || Math.abs(a[2] - b[2]) >= 0.0699,
+          `${a[0]} ${b[0]}`,
+        );
+  });
+
+  test('a point already clear, and lines it cannot read, are left byte for byte', () => {
+    const lines = [
+      'quadrantChart',
+      '  title "T: [0.5, 0.5]"',
+      '  x-axis L --> H',
+      '  "A": [0.2, 0.2]',
+      '  point: BERT[0.88, 0.50]',
+    ];
+    assert.deepEqual(tidyQuadrantPoints(lines), { lines, moved: 0 });
   });
 });
 
