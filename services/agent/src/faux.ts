@@ -123,10 +123,15 @@ export interface FauxModel {
   load(sessionId: string, steps: readonly FauxStep[]): void;
   /** Model requests seen per session (a test's "the model was called N times"). */
   requests(sessionId: string): number;
-  /** What the model was given on each request, per session (system prompt and message roles). */
-  seen(
-    sessionId: string,
-  ): ReadonlyArray<{ readonly systemPrompt: string; readonly roles: string[] }>;
+  /**
+   * What the model was given on each request, per session (system prompt, message roles and how
+   * many pictures the messages held: the image tests assert the crop really reached the model).
+   */
+  seen(sessionId: string): ReadonlyArray<{
+    readonly systemPrompt: string;
+    readonly roles: string[];
+    readonly images: number;
+  }>;
   /** Drop a session's leftover script (the observations are kept, for the last OBSERVED_KEPT sessions). */
   forget(sessionId: string): void;
 }
@@ -134,10 +139,24 @@ export interface FauxModel {
 /** How many sessions' request counts and observations are kept (bounded, for a long-lived faux server). */
 const OBSERVED_KEPT = 500;
 
+/** How many `image` parts the user messages of a request hold. */
+function countImages(messages: readonly unknown[]): number {
+  let count = 0;
+  for (const message of messages) {
+    const content = (message as { content?: unknown }).content;
+    if (!Array.isArray(content)) continue;
+    count += content.filter((part) => (part as { type?: unknown } | null)?.type === 'image').length;
+  }
+  return count;
+}
+
 export function createFauxModel(): FauxModel {
   const scripts = new Map<string, FauxStep[]>();
   const counts = new Map<string, number>();
-  const observed = new Map<string, Array<{ systemPrompt: string; roles: string[] }>>();
+  const observed = new Map<
+    string,
+    Array<{ systemPrompt: string; roles: string[]; images: number }>
+  >();
 
   const model: Model<any> = {
     id: 'MiniMax-M3',
@@ -146,7 +165,8 @@ export function createFauxModel(): FauxModel {
     provider: FAUX_PROVIDER,
     baseUrl: 'faux://in-process',
     reasoning: true,
-    input: ['text'],
+    // Like the live models, it takes images: an `image` run in faux mode goes through the same guard.
+    input: ['text', 'image'],
     cost: { input: 0.3, output: 1.2, cacheRead: 0.06, cacheWrite: 0 },
     contextWindow: 1_048_576,
     maxTokens: 512_000,
@@ -166,7 +186,7 @@ export function createFauxModel(): FauxModel {
     const roles = context.messages.map((m) => String((m as { role?: unknown }).role));
     const list = observed.get(key) ?? [];
     observed.delete(key);
-    observed.set(key, [...list, { systemPrompt, roles }]);
+    observed.set(key, [...list, { systemPrompt, roles, images: countImages(context.messages) }]);
     while (observed.size > OBSERVED_KEPT) {
       const oldest = observed.keys().next().value;
       if (oldest === undefined) break;
@@ -403,7 +423,7 @@ function tutorAnswer(request: RunRequest, inPaper: string): string {
     (entry) => (entry as { message?: { role?: string } }).message?.role === 'user',
   ).length;
   const echo =
-    request.kind === 'ask'
+    request.kind === 'ask' || request.kind === 'image'
       ? ` (Faux) Asked: "${words(request.question, request.datamark, 14)}", with ${String(turns)} earlier turn(s) on this path.`
       : '';
   const diagram = [
@@ -463,6 +483,33 @@ function answerFromSeed(request: RunRequest): FauxStep {
     );
     return {
       thinking: 'The seed passages hold the selection.',
+      text: chunks(text),
+      usage: estimate(context, text),
+    };
+  };
+}
+
+/**
+ * An `image` run (v0.3 #348): the tutor shape about the figure, deterministic. It says how many
+ * pictures the model was handed and on which page, and rests "In the paper" on the first passage
+ * the run was given (the caption, when it came with one) by its handle, so an e2e test can tell an
+ * image answer from a text one, and that the crop reached the model.
+ */
+function answerFromImage(request: RunRequest): FauxStep {
+  return (context) => {
+    const shown = countImages(context.messages);
+    const page = request.images?.[0]?.page;
+    const where = page === undefined ? '' : ` on page ${String(page + 1)}`;
+    const first = seedPassages(context.systemPrompt)[0];
+    const inPaper = first
+      ? `The figure's own words say: "${words(first.text, request.datamark, 24)}" [${first.handle}].`
+      : 'No caption came with this figure. (Faux answer.)';
+    const text = tutorAnswer(
+      request,
+      `${inPaper} (Faux) The model was shown ${String(shown)} picture(s) of the figure${where}.`,
+    );
+    return {
+      thinking: 'Look at the figure, then read its caption.',
       text: chunks(text),
       usage: estimate(context, text),
     };
@@ -851,6 +898,7 @@ export const defaultBrain: FauxBrain = (request) => {
     if (steps) return steps;
   }
   if (request.kind === 'diagram') return [diagramFromSeed(request)];
+  if (request.kind === 'image') return [answerFromImage(request)];
   // No marker: the faux model offers NOTHING. The e2e stack runs this agent, and an invented AI
   // offer would race the arXiv rule's own ("Suggested ... from arXiv") on the same Unshelved row.
   if (request.kind === 'topic') return [topicDeclines()];

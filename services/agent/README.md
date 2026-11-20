@@ -13,17 +13,17 @@ pnpm --filter @papertree/agent test:mutants   # every mutant (M5, M6, G1–G13),
 
 ## Configuration (contracts.md §7, the agent's rows)
 
-| Variable                                                                              | Default                                 | Notes                                                                                  |
-| ------------------------------------------------------------------------------------- | --------------------------------------- | -------------------------------------------------------------------------------------- |
-| `PAPERTREE_AGENT_SECRET`                                                              | **required**                            | shared with the API (`X-PaperTree-Agent-Secret`); boot refuses without it              |
-| `PAPERTREE_MINIMAX_API_KEY`                                                           | **required**                            | unless faux mode; read once, then removed from `process.env`; never `MINIMAX_API_KEY`  |
-| `PAPERTREE_AGENT_PORT`                                                                | `8200`                                  | binds `127.0.0.1` only                                                                 |
-| `PAPERTREE_API_INTERNAL_URL`                                                          | `http://127.0.0.1:8000`                 | a run's `tool.base_url` must be on this origin, so a run token is never sent elsewhere |
-| `PAPERTREE_MODEL`                                                                     | see Model policy                        | the model for every kind: `MiniMax-M3` or `MiniMax-M3.1-Flash`                         |
-| `PAPERTREE_MODEL_EXPLAIN` / `_ASK` / `_SUMMARY` / `_DIAGRAM` / `_TOPIC`               | `PAPERTREE_MODEL`                       | the model for one kind                                                                 |
-| `PAPERTREE_MODEL_EFFORT` (+ `_EXPLAIN` / `_ASK` / `_SUMMARY` / `_DIAGRAM` / `_TOPIC`) | per kind (low; medium for ask, summary) | Flash only: `low`, `medium` or `high`; ignored for M3                                  |
-| `PAPERTREE_AGENT_FAUX`                                                                | unset                                   | `1` = the scripted test model (below); the key is not read                             |
-| `PAPERTREE_AGENT_LOG_LEVEL`                                                           | `info`                                  | `debug` adds raw provider error text (§3.3); keys and tokens are never logged          |
+| Variable                                                                                         | Default                                        | Notes                                                                                  |
+| ------------------------------------------------------------------------------------------------ | ---------------------------------------------- | -------------------------------------------------------------------------------------- |
+| `PAPERTREE_AGENT_SECRET`                                                                         | **required**                                   | shared with the API (`X-PaperTree-Agent-Secret`); boot refuses without it              |
+| `PAPERTREE_MINIMAX_API_KEY`                                                                      | **required**                                   | unless faux mode; read once, then removed from `process.env`; never `MINIMAX_API_KEY`  |
+| `PAPERTREE_AGENT_PORT`                                                                           | `8200`                                         | binds `127.0.0.1` only                                                                 |
+| `PAPERTREE_API_INTERNAL_URL`                                                                     | `http://127.0.0.1:8000`                        | a run's `tool.base_url` must be on this origin, so a run token is never sent elsewhere |
+| `PAPERTREE_MODEL`                                                                                | see Model policy                               | the model for every kind: `MiniMax-M3` or `MiniMax-M3.1-Flash`                         |
+| `PAPERTREE_MODEL_EXPLAIN` / `_ASK` / `_SUMMARY` / `_DIAGRAM` / `_TOPIC` / `_IMAGE`               | `PAPERTREE_MODEL`                              | the model for one kind (`_IMAGE` must accept images; boot refuses otherwise)           |
+| `PAPERTREE_MODEL_EFFORT` (+ `_EXPLAIN` / `_ASK` / `_SUMMARY` / `_DIAGRAM` / `_TOPIC` / `_IMAGE`) | per kind (low; medium for ask, summary, image) | Flash only: `low`, `medium` or `high`; ignored for M3                                  |
+| `PAPERTREE_AGENT_FAUX`                                                                           | unset                                          | `1` = the scripted test model (below); the key is not read                             |
+| `PAPERTREE_AGENT_LOG_LEVEL`                                                                      | `info`                                         | `debug` adds raw provider error text (§3.3); keys and tokens are never logged          |
 
 Set by the service itself before any Pi code runs: `PI_OFFLINE=1`, `PI_TELEMETRY=0`,
 `PI_CODING_AGENT_DIR` = a new empty directory it owns (mode 0700, removed at exit), and
@@ -40,8 +40,8 @@ compaction off, cache warming off, telemetry off and the §3.1 retry settings.
 ## Model policy (ADR-003)
 
 `src/models.ts` decides which model answers which kind of run. `PAPERTREE_MODEL` sets one model for
-every kind (`explain`, `ask`, `summary`, `diagram`, `topic`, `glance`); `PAPERTREE_MODEL_<KIND>` overrides one kind; an
-unknown model id or effort refuses to boot, naming the variable. **Shipped defaults** (ADR-003 "Revision 2026-11-19"): Flash for every kind, at effort `low` for `explain`, `diagram`, `topic` and `glance` and `medium` for `ask` and `summary` (`DEFAULT_EFFORTS`); the Wave 5 image ask will join the tables. (A faux agent reports M3 until a `PAPERTREE_MODEL*` variable is set.) `MiniMax-M3` stays selectable as
+every kind (`explain`, `ask`, `summary`, `diagram`, `topic`, `glance`, `image`); `PAPERTREE_MODEL_<KIND>` overrides one kind; an
+unknown model id or effort refuses to boot, naming the variable. **Shipped defaults** (ADR-003 "Revision 2026-11-19"): Flash for every kind, at effort `low` for `explain`, `diagram`, `topic` and `glance` and `medium` for `ask`, `summary` and `image` (`DEFAULT_EFFORTS`; the image ask, v0.3 #348, is shown a crop of a figure and never sent to a model that lacks `image` input). (A faux agent reports M3 until a `PAPERTREE_MODEL*` variable is set.) `MiniMax-M3` stays selectable as
 the fallback: `PAPERTREE_MODEL=MiniMax-M3`.
 
 **MiniMax-M3.1-Flash** (GA; the old `-Preview` id is retired and not accepted) is not in Pi's catalog; the agent registers it as a custom model

@@ -1083,7 +1083,7 @@
           "type": "string"
         },
         "kind": {
-          "enum": ["explain", "ask", "diagram"],
+          "enum": ["explain", "ask", "diagram", "image"],
           "type": "string"
         },
         "title": {
@@ -1142,10 +1142,10 @@
     },
     "ThreadCreate": {
       "additionalProperties": false,
-      "description": "`POST /papers/{id}/threads`. `anchor` is required for `explain` and `diagram`; a diagram's\ndefault question is `DIAGRAM_QUESTION`.",
+      "description": "`POST /papers/{id}/threads`. `anchor` is required for `explain`, `diagram` and `image`; a\ndiagram's default question is `DIAGRAM_QUESTION`, an image's `IMAGE_QUESTION`.\n\nAn `image` thread (v0.3 #348) is about a figure or a free region of a page: its `anchor` is an\nIMAGE anchor (`image_anchor`: targetKind `figure` or `figure_region`, a PageSelector and ONE\nShapeSelector quad, no text quote), the API renders the crop and sends it to the model with the\nfigure's caption and the paragraph that first mentions it. `with_text_anchor` (image only) is\nthe text anchor of a paragraph the reader selected together with the figure (\"figure +\nparagraph together\"): its words go beside the picture.",
       "properties": {
         "kind": {
-          "enum": ["explain", "ask", "diagram"],
+          "enum": ["explain", "ask", "diagram", "image"],
           "type": "string"
         },
         "anchor": {
@@ -1161,6 +1161,9 @@
           "default": "familiar",
           "enum": ["new", "familiar", "expert"],
           "type": "string"
+        },
+        "with_text_anchor": {
+          "$ref": "#/$defs/AnchorV1In"
         }
       },
       "required": ["kind"],

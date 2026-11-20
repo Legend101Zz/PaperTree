@@ -107,7 +107,8 @@ def test_a_0014_database_loses_both_columns_and_keeps_every_row(tmp_path: Path) 
         result = migrate(conn, MIGRATIONS_DIR)
 
         assert 15 in result.applied
-        assert [b.name.rsplit(".pre-", 1)[-1] for b in result.backups] == ["0015.bak"]
+        # 0017 (the image run kind) rebuilds ai_runs and takes its own backup, after 0015's.
+        assert [b.name.rsplit(".pre-", 1)[-1] for b in result.backups] == ["0015.bak", "0017.bak"]
         assert "supported" not in _columns(conn, "ai_citations")
         assert _columns(conn, "ai_diagram_parts") == part_cols
         assert [

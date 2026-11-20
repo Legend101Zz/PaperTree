@@ -175,6 +175,7 @@ def test_the_reserves_are_the_contracts_numbers() -> None:
         "diagram": 0.02,
         "topic": 0.01,
         "glance": 0.02,
+        "image": 0.02,
     }
 
 

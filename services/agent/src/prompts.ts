@@ -1,5 +1,6 @@
 /**
- * The system prompts (explain-v1, ask-v1, summary-v1, diagram-v1, topic-v1, glance-v1) and the user
+ * The system prompts (explain-v1, ask-v1, summary-v1, diagram-v1, topic-v1, glance-v1,
+ * image-v1) and the user
  * turn.
  *
  * The run's grounding material — the paper's name, the datamark, the seed passages — lives in the
@@ -87,6 +88,9 @@ const TASK: Record<PromptVersion, string> = {
   'diagram-v1':
     'The reader selected a passage and wants it explained with a diagram of a few parts, read top ' +
     'to bottom. The first passage below holds the selection.',
+  'image-v1':
+    'The reader selected a figure (a picture, plot, table or diagram of the paper) and wants it ' +
+    'explained like a tutor would. A tight crop of it is attached to their message.',
   'topic-v1':
     'A reader has just added this paper to their library. Choose the one topic (shelf) it belongs ' +
     'under, from the title, the abstract excerpt and the arXiv category you are given and the names ' +
@@ -301,6 +305,28 @@ function answerRules(request: RunRequest): string {
   ].join('\n');
 }
 
+/**
+ * What an `image` answer adds to the tutor shape (v0.3, #348). The picture is a downsampled crop
+ * (the 19 Nov live test: both models invented text they could not read), so the figure's own words
+ * are the ground: the caption and the paragraph that mentions it are passages below, and the
+ * model must never read tiny text off the picture or state a number it cannot see plainly.
+ */
+function imageRules(request: RunRequest): string {
+  const passages = request.seed?.passages.length ?? 0;
+  return [
+    "The picture is attached to the reader's message. Say what it shows, how to read its axes, " +
+      'panels, boxes or arrows, and what the authors want the reader to notice in it.',
+    passages > 0
+      ? "The first passages below are the figure's caption and the paragraph that mentions it " +
+        '(each labelled): they are the ground truth for names, numbers and claims, and the ones ' +
+        'to cite under "## In the paper".'
+      : 'No caption or paragraph came with the picture: describe only what is plainly visible.',
+    'Never try to read small text, tick labels or numbers off the picture. If a label is not ' +
+      'clearly legible say so and use the caption instead; never guess a value, a title or a ' +
+      'legend entry you cannot see.',
+  ].join('\n');
+}
+
 /** One block of the sheet's example: its words and the handle it cites. */
 const exampleBlock = (text: string): string => `{"text":"${text}","cite":"b2"}`;
 
@@ -363,6 +389,8 @@ function rules(request: RunRequest): string {
   if (request.prompt_version === 'glance-v1') return glanceRules(request);
   if (request.prompt_version === 'topic-v1') return topicRules(request);
   if (request.prompt_version === 'diagram-v1') return diagramRules(request);
+  if (request.prompt_version === 'image-v1')
+    return `${answerRules(request)}\n${imageRules(request)}`;
   return readingRules(request);
 }
 
@@ -405,6 +433,16 @@ export function systemPrompt(request: RunRequest): string {
     // The abstract excerpt travels in the user turn (userText); nothing of the seed is a passage.
   } else if ((request.kind === 'summary' || request.kind === 'glance') && seed !== null) {
     parts.push(digestSection(seed.passages, request.kind));
+  } else if (request.kind === 'image' && seed !== null) {
+    const where = flatten(seed.page_label);
+    parts.push(
+      seed.passages.length > 0
+        ? `The figure is on ${where}. Its words, each labelled for what it is:\n\n` +
+            seed.passages
+              .map((passage) => `[${passage.handle}] (${flatten(passage.label)})\n${passage.text}`)
+              .join('\n\n')
+        : `The figure is on ${where}.`,
+    );
   } else if (seed !== null && seed.passages.length > 0) {
     const where = seed.section
       ? `${flatten(seed.page_label)}, in the section ${markInline(seed.section, request.datamark)}`
@@ -446,6 +484,21 @@ export function untrustedQuote(quote: string, datamark: string): string {
  * resolves (contracts.md §2.5).
  */
 export function userText(request: RunRequest): string {
+  if (request.kind === 'image') {
+    // The picture rides on the message itself (`images`); here only where it is from and, on a
+    // first turn, the text the reader selected with it. The caption is a passage (system prompt);
+    // it is repeated here only when there are none, so the model always has the figure's words.
+    const first = request.images?.[0];
+    const page = first?.page === undefined ? '' : ` (page ${String(first.page + 1)})`;
+    const lines = [request.question, `The attached image is the figure I selected${page}.`];
+    if (request.seed !== null && request.seed.passages.length === 0 && first?.caption)
+      lines.push(`Its caption:\n${untrustedQuote(first.caption, request.datamark)}`);
+    if (request.history === null && request.seed !== null && request.seed.quote !== '')
+      lines.push(
+        `The text I selected with it:\n${untrustedQuote(request.seed.quote, request.datamark)}`,
+      );
+    return lines.join('\n\n');
+  }
   if (request.kind === 'topic') {
     const abstract = request.seed?.quote ?? '';
     return abstract === ''

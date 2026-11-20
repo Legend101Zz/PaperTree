@@ -12,14 +12,17 @@ import type { Anchor, AnswerLevel, Message, SseEvent, Thread } from './types';
 const seg = encodeURIComponent;
 
 export interface CreateThreadBody {
-  readonly kind: 'explain' | 'ask' | 'diagram';
-  /** Required for `explain` and `diagram`. */
+  readonly kind: 'explain' | 'ask' | 'diagram' | 'image';
+  /** Required for `explain`, `diagram` and `image` (an image anchor: `figure` or `figure_region`,
+   * a PageSelector and one ShapeSelector quad, no text quote). */
   readonly anchor?: Anchor;
   /** 1..2000; the server defaults it to "Explain this passage." ("Explain with a diagram." for a
-   * diagram). */
+   * diagram, "Explain this figure." for an image). */
   readonly question?: string;
   /** How deep the answer goes; the server's default is `familiar`. */
   readonly level?: AnswerLevel;
+  /** `image` only: the text anchor of a paragraph selected together with the figure. */
+  readonly with_text_anchor?: Anchor;
 }
 
 export interface FollowUpBody {

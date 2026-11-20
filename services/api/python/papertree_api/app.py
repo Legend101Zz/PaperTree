@@ -26,6 +26,7 @@ from .routers import (
     board_asks,
     boards,
     book,
+    crops,
     glance,
     health,
     highlights,
@@ -129,5 +130,6 @@ def create_app(
     app.include_router(topics.router)
     app.include_router(glance.router)
     app.include_router(book.router)
+    app.include_router(crops.router)
     app.include_router(internal.router)
     return app

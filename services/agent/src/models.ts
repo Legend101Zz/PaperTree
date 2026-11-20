@@ -3,8 +3,9 @@
  * and how hard it thinks.
  *
  *   PAPERTREE_MODEL            one model for every kind (unset: DEFAULT_MODELS below)
- *   PAPERTREE_MODEL_EXPLAIN    override for `explain`; likewise _ASK, _SUMMARY, _DIAGRAM, _TOPIC and
- *                              _GLANCE
+ *   PAPERTREE_MODEL_EXPLAIN    override for `explain`; likewise _ASK, _SUMMARY, _DIAGRAM, _TOPIC,
+ *                              _GLANCE and _IMAGE (the image ask, v0.3 #348: it is shown a crop of a figure, so
+ *                              its model MUST accept images: see `acceptsImages`)
  *   PAPERTREE_MODEL_EFFORT     Flash thinking effort (low | medium | high); likewise per kind
  *                              (unset: DEFAULT_EFFORTS below)
  *
@@ -28,7 +29,15 @@ export const FLASH_MODEL_ID = 'MiniMax-M3.1-Flash';
 export const ALLOWED_MODEL_IDS = [M3_MODEL_ID, FLASH_MODEL_ID] as const;
 export type ModelId = (typeof ALLOWED_MODEL_IDS)[number];
 
-export const RUN_KINDS = ['explain', 'ask', 'summary', 'diagram', 'topic', 'glance'] as const;
+export const RUN_KINDS = [
+  'explain',
+  'ask',
+  'summary',
+  'diagram',
+  'topic',
+  'glance',
+  'image',
+] as const;
 export type RunKind = (typeof RUN_KINDS)[number];
 
 export const EFFORTS = ['low', 'medium', 'high'] as const;
@@ -38,7 +47,7 @@ export type Effort = (typeof EFFORTS)[number];
  * The shipped default (ADR-003 "Revision 2026-11-19"): Flash answers every kind. It is GA, smarter
  * and faster than the preview the v0.1 A/B (docs/release/v0.1/MODEL-AB.md) measured, so the v0.1
  * split (M3 for ask and summary) is retired; M3 stays one env var away.
- * The image ask (Wave 5) will join this table and DEFAULT_EFFORTS as its own kind.
+ * The image ask (v0.3 #348) is its own kind: Flash, which accepts images (live check 2026-11-19).
  */
 export const DEFAULT_MODELS: Readonly<Record<RunKind, ModelId>> = {
   explain: FLASH_MODEL_ID,
@@ -46,6 +55,7 @@ export const DEFAULT_MODELS: Readonly<Record<RunKind, ModelId>> = {
   summary: FLASH_MODEL_ID,
   diagram: FLASH_MODEL_ID,
   topic: FLASH_MODEL_ID,
+  image: FLASH_MODEL_ID,
   glance: FLASH_MODEL_ID,
 };
 
@@ -62,6 +72,8 @@ export const DEFAULT_EFFORTS: Readonly<Record<RunKind, Effort>> = {
   diagram: 'low',
   // One short JSON object per upload, no tools.
   topic: 'low',
+  // A picture is read against its caption: both models invented unreadable text on 19 Nov (#348).
+  image: 'medium',
   // One short JSON sheet from the digest, no tools, made once per paper in the background: the
   // gist and the caps are a summary of text already in front of it, so speed and cost win.
   glance: 'low',
@@ -132,6 +144,7 @@ export function readPolicy(env: NodeJS.ProcessEnv): ModelPolicy {
     diagram: choice('diagram'),
     topic: choice('topic'),
     glance: choice('glance'),
+    image: choice('image'),
   };
 }
 
@@ -148,13 +161,21 @@ export function uniformPolicy(id: ModelId, effort: Effort = 'low'): ModelPolicy 
     label: modelLabel(id),
     effort: id === FLASH_MODEL_ID ? effort : null,
   };
-  return { explain: c, ask: c, summary: c, diagram: c, topic: c, glance: c };
+  return { explain: c, ask: c, summary: c, diagram: c, topic: c, glance: c, image: c };
 }
 
 /** The models a policy uses, once each. */
 export function modelsUsed(policy: ModelPolicy): ModelId[] {
   return [...new Set(RUN_KINDS.map((k) => policy[k].id))];
 }
+
+/**
+ * Whether a model takes images as input (its definition lists `image`). A model that does not must
+ * never be sent one: the image run's guard (`run.ts`, `session.ts`) and the boot check (`app.ts`)
+ * both ask this, and fail loudly rather than let the provider drop the picture silently.
+ */
+export const acceptsImages = (model: { readonly input?: readonly string[] }): boolean =>
+  model.input?.includes('image') === true;
 
 const FLASH_DEFINITION = {
   id: FLASH_MODEL_ID,

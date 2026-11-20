@@ -1,0 +1,53 @@
+{
+  "run_id": "run_01K63AE8M4Q2T7V9X3B5N6R0F1",
+  "request_id": "req_01K63AE8M4Q2T7V9X3B5N6R0F2",
+  "kind": "image",
+  "prompt_version": "image-v1",
+  "tool": {
+    "base_url": "http://127.0.0.1:8000/internal/agent/runs/run_01K63AE8M4Q2T7V9X3B5N6R0F1",
+    "token": "fixture_run_token_not_a_secret_000000000000"
+  },
+  "datamark": "^7f3a91c2",
+  "paper": {
+    "title": "Deep Residual Learning for Image Recognition",
+    "page_count": 12,
+    "generation": 1
+  },
+  "seed": {
+    "quote": "",
+    "page_label": "p. 2",
+    "section": null,
+    "passages": [
+      {
+        "handle": "b1",
+        "label": "p. 2 \u00b7 caption \u00b7 the figure's caption",
+        "text": "^7f3a91c2\nFigure 2. Residual learning: a building block.\n^7f3a91c2"
+      },
+      {
+        "handle": "b2",
+        "label": "p. 2 \u00b7 3.2 Identity Mapping by Shortcuts \u00b7 paragraph \u00b7 where the paper first mentions the figure",
+        "text": "^7f3a91c2\nThe formulation of F(x)+x can be realized by feedforward neural networks with shortcut connections (Fig. 2).\n^7f3a91c2"
+      }
+    ]
+  },
+  "question": "Explain this figure.",
+  "history": null,
+  "limits": {
+    "deadline_ms": 75000,
+    "idle_ms": 30000,
+    "max_tool_calls": 4,
+    "max_turns": 5,
+    "max_output_tokens": 4096,
+    "max_retries": 1
+  },
+  "level": "familiar",
+  "check": false,
+  "images": [
+    {
+      "media_type": "image/png",
+      "data_base64": "iVBORw0KGgoAAAANSUhEUgAAAHgAAABQCAIAAABd+SbeAAAACXBIWXMAAA7EAAAOxAGVKw4bAAADO0lEQVR4nO3Z/0sTcRzH8emcJOp27nb4g6jTKTtnsi+WE6fum3Pf7D/op6BfiqIfwhH0Y7EVFPRbP0VQREG/xiAC/SFaEPRTEBFFP9QPQRAJJZa03nR4rHmduc331nw9ef9wux24PTg/d+MMRcSSod4fYL8EaKYAzRSgmQI0U4BmCtBMAZopPeh8Pr/ckK2srHD51Cw96EwmE5eknCw31ARFMZvNsgHVqh2gs7JcXFpqqMk4HIAG9F8DNFOAZgrQTAGaKUAzBWimAM0UoJkCNFOAZmp30K9CoWezs2XzPZVS3l1LJN5Ho5o635LJd5EIoLXbDh0RRVNLi7mtrXQ+LCwo75602x9NT2vq/EilpgVhPZkEtEaa0Kftds3v/zYSOWSx6ADlZPmKywVojXYFfbSv76bbTRsfY7G7Pt/G1nryNBB4PDNDG5/j8YGOji/xOKDL+3for8kkLSmfFhdpezOdPiwI50dHaZvWZVpbngQCymExm+22xwPo8jShpfZ2n8Wizh2vl/Y/9PsFk0k97GUo1GU0Pp+bi9ps50ZG1P0nBgeP9fcDujxN6EVJuuXxqEOmtP/6xMSUIJQeSctxj8nkMZvVexKaa+PjIVHcU+g6PufUf5JZm6Xj8tjYkd7e0j2vw+EWg+HUnwff8/m8ZvOeQtNnlqQ4/7NMUQzq/5/VBvqG232wu1t9Scv0TE/P8YGBTqOxsLVAF3/feNAyvdfQspyt7i9UMg5HhgOabi0OtLb+TKeVlxedzkmLhbgvybKzs1O9faYF+szQEKArhyZTuhgqv/3oGkgn8otgUNlP4meHh5XD6DR/MDUF6J2hdYbu5y44nToHvAmHXV1dm1tnPaArhKZfIrRMb5TcY5QNXRjvT05W/532OzTNVZdLua3ePmuJRPWXQUCzDqABDWhAAxrQgAY0oAENaEADGtCABnTF0PNW67LD0VDjF4Rmg15dXc01ZIVCoamg/8cAzRSgmQI0U4BmCtBMAZopQDMFaKYAzRSgmQI0U4BmCtBMAZopQDMFaKYAzRSgmSJoq3We/1mmIPj3F3Qdn3PqPMksNh90wwZopgDNFKCZAjRTgGYK0EwBmilAM/ULSkvokN/eeTUAAAAASUVORK5CYII=",
+      "caption": "Figure 2. Residual learning: a building block.",
+      "page": 1
+    }
+  ]
+}

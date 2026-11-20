@@ -142,6 +142,9 @@ WHERE: dict[str, tuple[tuple[str, str], ...]] = {
     "NotebookItemPatch": (("api/notebooks", "NotebookItemPatch"),),
     "AgentStatus": (("agent/run-events", "status"),),
     "AgentCite": (("agent/run-events", "PartCite"),),
+    # v0.3 (#348): the picture(s) of an image run.
+    "AgentImage": (("agent/run-request", "#/properties/images/items"),),
+    "AgentRunRequest": (("agent/run-request", "#"),),
 }
 
 
@@ -168,7 +171,7 @@ def test_the_schemas_and_the_model_give_one_answer_on_an_explicit_null(
     example, _ = CASES[model]
     nulled = with_null(model, field)
     for rel, ref in WHERE[model]:
-        pointer = None if ref == "#" else f"#/$defs/{ref}"
+        pointer = None if ref == "#" else ref if ref.startswith("#/") else f"#/$defs/{ref}"
         assert validate(example, _schema(rel), pointer) == [], (rel, ref)
         assert validate(nulled, _schema(rel), pointer), (rel, ref, field)
     cls.model_validate_json(json.dumps(example))
