@@ -16,8 +16,12 @@ import type { BoardBranch, CanvasNode } from '@/lib/api/types';
 /** The id of the ask box in the layout and on the board (never a real card's). */
 export const DRAFT_ID = '__draft__';
 
-/** The handle a tree card is dragged by: its top strip, so the words below stay selectable. */
-export const DRAG_HANDLE = '.pt-tc__strip';
+/**
+ * The handle a tree card is dragged by: its top strip, so the words below stay selectable. A far-off
+ * card (a glance, below the low-zoom switch) has no strip and no words to select, so the glance
+ * itself is the handle: a card on a big board must still drag at the zoom floor.
+ */
+export const DRAG_HANDLE = '.pt-tc__strip, .pt-bc--glance';
 
 /**
  * The ask box as a node the layout can place: an answer-to-be, child of the card it asks from.
