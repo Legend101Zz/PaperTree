@@ -783,9 +783,10 @@ class Run {
   /**
    * The figure step (figure.ts) of an explain, ask or image answer that has a ```mermaid fence:
    * the REAL parse in a worker thread, the deterministic repairs, at most one short model repair
-   * (its usage is the run's), else the fence is dropped. Runs after the stream, before `done`, so
+   * (its usage is the run's), else the fence is KEPT when it parses (over a size cap is soft) or
+   * dropped when it does not. Runs after the stream, before `done`, so
    * pings go on meanwhile; never on an aborted run (that text is what it is). The result is logged
-   * as `agent.figure` (`path`: ok | tidy | deterministic | model | dropped | unchecked).
+   * as `agent.figure` (`path`: ok | tidy | deterministic | model | kept-over-cap | dropped | unchecked).
    */
   private async settleFigure(): Promise<void> {
     const kind = this.request.kind;

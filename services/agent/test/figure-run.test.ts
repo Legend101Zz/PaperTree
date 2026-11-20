@@ -147,12 +147,12 @@ describe('a figure is parsed, repaired or dropped before final_text', () => {
   });
 
   test('an over-cap fence is repaired by asking the model to simplify', async () => {
-    const big = `flowchart TD\n${Array.from({ length: 14 }, (_, i) => `  n${String(i)}["A"] --> n${String(i + 1)}["B"]`).join('\n')}`;
+    const big = `flowchart TD\n${Array.from({ length: 17 }, (_, i) => `  n${String(i)}["A"] --> n${String(i + 1)}["B"]`).join('\n')}`;
     const body = explain([
       { text: [withFence(big)], usage: usage(80) },
       (context) => {
         const last = JSON.stringify(context.messages.at(-1));
-        assert.match(last, /15 nodes; at most 12/);
+        assert.match(last, /18 nodes; at most 16/);
         return {
           text: ['flowchart TD\n  a["Start"] --> b["End"]\n  b --> c["Done"]'],
           usage: usage(12),
@@ -162,6 +162,19 @@ describe('a figure is parsed, repaired or dropped before final_text', () => {
     const done = doneOf((await postRun(agent.url, body)).events);
     assert.match(done['final_text'], /a\["Start"\] --> b\["End"\]/);
     assert.equal(figureLog(body)?.['path'], 'model');
+  });
+
+  test('an over-cap fence whose simplify request fails is KEPT (it parses), path kept-over-cap', async () => {
+    const big = `flowchart TD\n${Array.from({ length: 17 }, (_, i) => `  n${String(i)}["A"] --> n${String(i + 1)}["B"]`).join('\n')}`;
+    const body = explain([
+      { text: [withFence(big)], usage: usage(80) },
+      { stopReason: 'error', errorMessage: '500 faux error' },
+    ]);
+    const done = doneOf((await postRun(agent.url, body)).events);
+    assert.equal(done['status'], 'complete');
+    assert.match(done['final_text'], /n17\["B"\]/, 'the original diagram stays');
+    assert.equal(figureLog(body)?.['path'], 'kept-over-cap');
+    assert.equal(figureLog(body)?.['model_called'], true);
   });
 
   test('diagram: never keeps the fence out and never runs the step', async () => {

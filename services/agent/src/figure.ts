@@ -2,16 +2,20 @@
  * The figure step of an explain / ask / image answer, after the model has written it (v0.3 W6):
  * the owner's rule is that a diagram Flash writes never reaches the reader as a render error, and
  * is readable. `settleFigure` takes the answer text and returns it with its one ```mermaid fence
- * in a state that parses (with the REAL parser, mermaid-parse.ts) and is within the size caps, or
- * without the fence:
+ * in a state that parses (with the REAL parser, mermaid-parse.ts), or without the fence. A fence
+ * that parses is never dropped for its size (v0.3 W6 round 3: the caps are SOFT):
  *
  *   1. ok / tidy       the fence parses and is within the caps (tidy: after the always-on cosmetics)
  *   2. deterministic   `repairMermaid` (mermaid-repair.ts) fixes it with no model call
- *   3. model           ONE short repair request (the fence + the problem), counted in usage
- *   4. dropped         the fence is removed; the answer text stays
+ *   3. model           ONE short model request, counted in usage: a repair when the fence does not
+ *                      parse, a "simplify" when it parses but is over a size cap
+ *   4. kept-over-cap   it parses but is over a cap and the simplify did not come back (error,
+ *                      timeout, still over, no model): the original is kept, the web scales it
+ *   5. dropped         it does not parse after all repairs (or the safety check refused it): the
+ *                      fence is removed; the answer text stays
  *
- * `path` is what a round counts. If the parser itself is unavailable (no worker) and the caps hold,
- * the fence is kept as is (`unchecked`): the web still parses before it draws.
+ * `path` is what a round counts. If the parser itself is unavailable (no worker) the fence is kept
+ * as is (`unchecked`): the web still parses before it draws.
  *
  * The functions here are pure apart from `FigureDeps`, which the run supplies (the worker parse and
  * the model call), so every path is tested with fakes.
@@ -22,7 +26,7 @@ import { FIGURE_CAPS, figureLimits, repairMermaid, tidyMermaidText } from './mer
 import type { ParseVerdict } from './mermaid-parse.ts';
 
 export type FigurePath =
-  'none' | 'ok' | 'tidy' | 'deterministic' | 'model' | 'dropped' | 'unchecked';
+  'none' | 'ok' | 'tidy' | 'deterministic' | 'model' | 'kept-over-cap' | 'dropped' | 'unchecked';
 
 export interface FigureOutcome {
   readonly text: string;
@@ -99,19 +103,25 @@ function extractCode(reply: string): string {
   return (fenced === null ? reply : (fenced[1] ?? '')).trim();
 }
 
-/** A fence the parser and the caps both accept: its problem text, or null. */
-async function problemOf(
-  body: string,
-  deps: FigureDeps,
-  clock: { ms: number },
-): Promise<{ problem: string | null; unchecked: boolean }> {
+interface Verdict {
+  /** The parser's words when the fence does not parse; else null. */
+  readonly invalid: string | null;
+  /** The size caps it breaks (soft); empty when it parses within them. */
+  readonly over: readonly string[];
+  readonly unchecked: boolean;
+}
+
+/** What the parser and the size caps say about a fence. */
+async function judge(body: string, deps: FigureDeps, clock: { ms: number }): Promise<Verdict> {
   const t0 = performance.now();
   const verdict = await deps.parse(body);
   clock.ms += performance.now() - t0;
-  const limits = figureLimits(body);
-  if (verdict.status === 'invalid') return { problem: verdict.error, unchecked: false };
-  if (limits.length > 0) return { problem: limits.join('; '), unchecked: false };
-  return { problem: null, unchecked: verdict.status === 'unavailable' };
+  if (verdict.status === 'invalid') return { invalid: verdict.error, over: [], unchecked: false };
+  return {
+    invalid: null,
+    over: figureLimits(body),
+    unchecked: verdict.status === 'unavailable',
+  };
 }
 
 /**
@@ -136,8 +146,9 @@ export async function settleFigure(
     // Either no figure, or the safety check removed it (no parse, no model: it was unsafe).
     return { ...base, text, path: rawFence === null ? 'none' : 'dropped' };
   }
-  const first = await problemOf(fence.body, deps, clock);
-  if (first.problem === null) {
+  const first = await judge(fence.body, deps, clock);
+  const firstProblem = first.invalid ?? first.over.join('; ');
+  if (first.invalid === null && first.over.length === 0) {
     return {
       ...base,
       text,
@@ -145,51 +156,77 @@ export async function settleFigure(
       path: first.unchecked ? 'unchecked' : rawFence?.body === fence.body ? 'ok' : 'tidy',
     };
   }
-  let body = fence.body;
-  let problem = first.problem;
-  let repairs: string[] = [];
-  const structural = repairMermaid(body);
-  if (structural.applied.length > 0 && cleanMermaidFence(structural.body) !== null) {
-    const again = await problemOf(structural.body, deps, clock);
-    repairs = [...structural.applied];
-    if (again.problem === null) {
-      return {
-        ...base,
-        text: withFence(lines, fence, structural.body),
-        path: 'deterministic',
-        repairs,
-        problem: first.problem,
-        parseMs: clock.ms,
-      };
-    }
-    body = structural.body;
-    problem = again.problem;
+  if (first.unchecked) {
+    // Over a cap and no parser to check a simplified copy with: the original stands.
+    return { ...base, text, path: 'unchecked', problem: firstProblem, parseMs: clock.ms };
   }
+  let body = fence.body;
+  let current = first;
+  let repairs: string[] = [];
+  if (first.invalid !== null) {
+    const structural = repairMermaid(body);
+    if (structural.applied.length > 0 && cleanMermaidFence(structural.body) !== null) {
+      const again = await judge(structural.body, deps, clock);
+      repairs = [...structural.applied];
+      body = structural.body;
+      current = again;
+      if (again.invalid === null && again.over.length === 0) {
+        return {
+          ...base,
+          text: withFence(lines, fence, body),
+          path: 'deterministic',
+          repairs,
+          problem: firstProblem,
+          parseMs: clock.ms,
+        };
+      }
+    }
+  }
+  // One model request at most: a repair (it does not parse) or a simplify (it parses, over a cap).
+  const problem = current.invalid ?? current.over.join('; ');
   let modelCalled = false;
   if (deps.repair !== undefined) {
     modelCalled = true;
     const reply = await deps.repair(repairPrompt(body, problem), REPAIR_SYSTEM).catch(() => null);
     if (reply !== null) {
       const cleaned = cleanMermaidFence(tidyMermaidText(extractCode(reply)).body);
-      if (cleaned !== null && (await problemOf(cleaned, deps, clock)).problem === null) {
-        return {
-          ...base,
-          text: withFence(lines, fence, cleaned),
-          path: 'model',
-          repairs,
-          problem: first.problem,
-          parseMs: clock.ms,
-          modelCalled,
-        };
+      if (cleaned !== null) {
+        const verdict = await judge(cleaned, deps, clock);
+        // A repair is accepted when it parses; a simplify only when it also got within the caps.
+        const accepted =
+          verdict.invalid === null && (current.invalid !== null || verdict.over.length === 0);
+        if (accepted) {
+          return {
+            ...base,
+            text: withFence(lines, fence, cleaned),
+            path: 'model',
+            repairs,
+            problem: firstProblem,
+            parseMs: clock.ms,
+            modelCalled,
+          };
+        }
       }
     }
+  }
+  if (current.invalid === null) {
+    // It parses: over a cap is not an error. Keep it (as the deterministic repairs left it).
+    return {
+      ...base,
+      text: withFence(lines, fence, body),
+      path: 'kept-over-cap',
+      repairs,
+      problem: firstProblem,
+      parseMs: clock.ms,
+      modelCalled,
+    };
   }
   return {
     ...base,
     text: withFence(lines, fence, null),
     path: 'dropped',
     repairs,
-    problem: first.problem,
+    problem: firstProblem,
     parseMs: clock.ms,
     modelCalled,
   };

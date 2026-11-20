@@ -10,6 +10,7 @@ import { after, describe, test } from 'node:test';
 import { CAPS_LINE } from '../src/figure.ts';
 import { MermaidParser } from '../src/mermaid-parse.ts';
 import {
+  FIGURE_ASK,
   FIGURE_CAPS,
   figureLimits,
   flowNodeIds,
@@ -159,17 +160,17 @@ const x = (n: number): string =>
   `xychart-beta\n  x-axis [${Array.from({ length: n }, (_, i) => `y${String(i)}`).join(', ')}]\n  line [${Array.from({ length: n }, (_, i) => String(i)).join(', ')}]`;
 
 describe('the size caps are counted', () => {
-  test('flowchart: 12 nodes pass, 13 do not; subgraph ids and edge labels are not nodes', () => {
+  test('flowchart: 16 nodes pass, 17 do not; subgraph ids and edge labels are not nodes', () => {
     assert.deepEqual(figureLimits(flow(FIGURE_CAPS.flowNodes)), []);
-    assert.match(figureLimits(flow(FIGURE_CAPS.flowNodes + 1))[0] ?? '', /13 nodes; at most 12/);
+    assert.match(figureLimits(flow(FIGURE_CAPS.flowNodes + 1))[0] ?? '', /17 nodes; at most 16/);
     const sub =
       'flowchart TD\n  subgraph s1["Group"]\n    a["A"] -->|"edge words"| b["B"]\n  end\n  c["C"] -- more words --> a';
     assert.deepEqual([...flowNodeIds(sub.split('\n').slice(1))].toSorted(), ['a', 'b', 'c']);
   });
 
   test('mindmap: node count and depth below the root', () => {
-    const wide = `mindmap\n  root((R))\n${Array.from({ length: 12 }, (_, i) => `    N${String(i)}`).join('\n')}`;
-    assert.match(figureLimits(wide)[0] ?? '', /13 nodes; at most 12/);
+    const wide = `mindmap\n  root((R))\n${Array.from({ length: 16 }, (_, i) => `    N${String(i)}`).join('\n')}`;
+    assert.match(figureLimits(wide)[0] ?? '', /17 nodes; at most 16/);
     const ok = 'mindmap\n  root((R))\n    A\n      B\n        C';
     assert.deepEqual(figureLimits(ok), []);
     const deep = `${ok}\n          D`;
@@ -188,11 +189,15 @@ describe('the size caps are counted', () => {
   test('timeline: periods, and events per period (also continuation lines)', () => {
     const six = `timeline\n  title H\n${Array.from({ length: 6 }, (_, i) => `  ${String(2000 + i)} : a : b`).join('\n')}`;
     assert.deepEqual(figureLimits(six), []);
+    assert.deepEqual(figureLimits('timeline\n  2000 : a : b : c'), [], 'three events are fine');
     assert.match(figureLimits(`${six}\n  2010 : c`)[0] ?? '', /7 periods; at most 6/);
-    assert.match(figureLimits('timeline\n  2000 : a : b : c')[0] ?? '', /3 events in one period/);
     assert.match(
-      figureLimits('timeline\n  2000 : a : b\n       : c')[0] ?? '',
-      /3 events in one period/,
+      figureLimits('timeline\n  2000 : a : b : c : d')[0] ?? '',
+      /4 events in one period/,
+    );
+    assert.match(
+      figureLimits('timeline\n  2000 : a : b : c\n       : d')[0] ?? '',
+      /4 events in one period/,
     );
   });
 
@@ -207,8 +212,8 @@ describe('the size caps are counted', () => {
     assert.deepEqual(figureLimits('stateDiagram-v2\n  [*] --> A\n  A --> B'), []);
   });
 
-  test('the prompt tells the model every cap the agent counts', () => {
-    const c = FIGURE_CAPS;
+  test('the prompt keeps asking for the FIGURE_ASK sizes; the soft caps sit at or above them', () => {
+    const c = FIGURE_ASK;
     for (const phrase of [
       `flowchart ${String(c.flowNodes)} nodes`,
       `mindmap one root, ${String(c.mindmapNodes)} nodes, ${String(c.mindmapDepth)} levels`,
@@ -220,6 +225,8 @@ describe('the size caps are counted', () => {
     ]) {
       assert.ok(INLINE_DIAGRAM.includes(phrase), phrase);
     }
-    assert.ok(CAPS_LINE.includes(`${String(c.flowNodes)} nodes`));
+    assert.ok(CAPS_LINE.includes(`${String(FIGURE_CAPS.flowNodes)} nodes`));
+    for (const key of Object.keys(FIGURE_ASK) as (keyof typeof FIGURE_ASK)[])
+      assert.ok(FIGURE_CAPS[key] >= FIGURE_ASK[key], key);
   });
 });

@@ -1,5 +1,5 @@
 /**
- * The figure step (figure.ts, v0.3 W6): ok / tidy / deterministic / model / dropped, with a fake
+ * The figure step (figure.ts, v0.3 W6): ok / tidy / deterministic / model / kept-over-cap / dropped, with a fake
  * parser and model where the path is the point, and the REAL parser and the four real round-1
  * failures where the repair is.
  */
@@ -100,9 +100,22 @@ describe('the paths of a figure', () => {
   });
 });
 
-describe('over a size cap is a parse failure', () => {
-  const big = `flowchart TD\n${Array.from({ length: 14 }, (_, i) => `  n${String(i)}["A"] --> n${String(i + 1)}["B"]`).join('\n')}`;
+const edges = (n: number): string =>
+  `flowchart TD\n${Array.from({ length: n }, (_, i) => `  n${String(i)}["A"] --> n${String(i + 1)}["B"]`).join('\n')}`;
+
+describe('over a size cap is soft: simplify once, else keep', () => {
+  const big = edges(17); // 18 nodes, cap 16
   const small = 'flowchart TD\n  a["Start"] --> b["Middle"]\n  b --> c["End"]';
+
+  test('a diagram a little above what the prompt asks (13 to 16 nodes) is fine as it is', async () => {
+    const out = await settleFigure(answer(edges(15)), false, true, {
+      parse: accept,
+      repair: async () => {
+        throw new Error('no model call expected');
+      },
+    });
+    assert.deepEqual([out.path, out.modelCalled], ['ok', false]);
+  });
 
   test('the model is asked to simplify, with the cap in the request, and its fence is kept', async () => {
     const asked: string[] = [];
@@ -115,48 +128,99 @@ describe('over a size cap is a parse failure', () => {
     });
     assert.equal(out.path, 'model');
     assert.equal(out.modelCalled, true);
-    assert.match(out.problem ?? '', /15 nodes; at most 12/);
-    assert.match(asked[0] ?? '', /15 nodes; at most 12/);
-    assert.match(asked[0] ?? '', /flowchart TD, at most 12 nodes/);
+    assert.match(out.problem ?? '', /18 nodes; at most 16/);
+    assert.match(asked[0] ?? '', /18 nodes; at most 16/);
+    assert.match(asked[0] ?? '', /flowchart TD, at most 16 nodes/);
     assert.equal(asked[1], REPAIR_SYSTEM);
     assert.match(out.text, /a\["Start"\] --> b\["Middle"\]/);
-    assert.doesNotMatch(out.text, /n14/);
+    assert.doesNotMatch(out.text, /n17/);
   });
 
-  test('a reply that is still over the cap, or still unparsable, drops the fence (one request only)', async () => {
-    let calls = 0;
-    const out = await settleFigure(answer(big), false, true, {
-      parse: accept,
-      repair: async () => {
-        calls++;
-        return big;
+  test('a reply still over the cap, a null reply, a throw: the ORIGINAL is kept (one request only)', async () => {
+    const replies: (() => Promise<string | null>)[] = [
+      async () => big,
+      async () => null,
+      async () => {
+        throw new Error('timeout');
       },
-    });
-    assert.equal(out.path, 'dropped');
-    assert.equal(calls, 1, 'one repair request, never a loop');
-    assert.doesNotMatch(out.text, /mermaid/);
-    assert.doesNotMatch(out.text, /\n{3}/);
-    assert.match(out.text, /Section 3 \[b2\]\.$/);
-  });
-
-  test('no repair available (offline replay): dropped', async () => {
-    const out = await settleFigure(answer(big), false, true, { parse: accept });
-    assert.deepEqual([out.path, out.modelCalled], ['dropped', false]);
-  });
-
-  test('the real mindmaps of round 1 parse after repair but are over the caps: they go to the model', async () => {
-    for (const body of [MINDMAP_SECOND_ROOT, MINDMAP_PARENTHESES]) {
-      let prompt = '';
-      const out = await settleFigure(answer(body), false, true, {
-        parse: realParse,
-        repair: async (p) => {
-          prompt = p;
-          return 'mindmap\n  root((Idea))\n    One\n    Two';
+    ];
+    for (const reply of replies) {
+      let calls = 0;
+      const out = await settleFigure(answer(big), false, true, {
+        parse: accept,
+        repair: async () => {
+          calls++;
+          return reply();
         },
       });
-      assert.equal(out.path, 'model', body.slice(0, 30));
-      assert.match(prompt, /nodes; at most 12/);
+      assert.equal(out.path, 'kept-over-cap');
+      assert.equal(out.modelCalled, true);
+      assert.equal(calls, 1, 'one request, never a loop');
+      assert.match(out.text, /n17\["B"\]/);
+      assert.match(out.text, /## In the paper\nSection 3 \[b2\]\.$/);
+      assert.match(out.problem ?? '', /18 nodes; at most 16/);
     }
+  });
+
+  test('no repair available (offline replay): kept, not dropped', async () => {
+    const out = await settleFigure(answer(big), false, true, { parse: accept });
+    assert.deepEqual([out.path, out.modelCalled], ['kept-over-cap', false]);
+    assert.match(out.text, /n17/);
+  });
+
+  test('a timeline with 3 events in a period is within the soft cap; 4 is over it', async () => {
+    const t = (events: string): string => answer(`timeline\n  title H\n  2000 : ${events}`);
+    assert.equal((await settleFigure(t('a : b : c'), false, true, { parse: accept })).path, 'ok');
+    assert.equal(
+      (await settleFigure(t('a : b : c : d'), false, true, { parse: accept })).path,
+      'kept-over-cap',
+    );
+  });
+
+  test('the real mindmaps of round 1 are never dropped (the first now fits the soft cap: no model call)', async () => {
+    for (const body of [MINDMAP_SECOND_ROOT, MINDMAP_PARENTHESES]) {
+      const out = await settleFigure(answer(body), false, true, {
+        parse: realParse,
+        repair: async () => {
+          throw new Error('no model call expected');
+        },
+      });
+      assert.notEqual(out.path, 'dropped', body.slice(0, 30));
+      if (body === MINDMAP_SECOND_ROOT) assert.equal(out.modelCalled, false);
+    }
+  });
+
+  test('a mindmap over 16 nodes: simplified by the model once, else kept', async () => {
+    const wide = `mindmap\n  root((R))\n${Array.from({ length: 17 }, (_, i) => `    N${String(i)}`).join('\n')}`;
+    let prompt = '';
+    const simplified = await settleFigure(answer(wide), false, true, {
+      parse: realParse,
+      repair: async (p) => {
+        prompt = p;
+        return 'mindmap\n  root((Idea))\n    One\n    Two';
+      },
+    });
+    assert.equal(simplified.path, 'model');
+    assert.match(prompt, /18 nodes; at most 16/);
+    const kept = await settleFigure(answer(wide), false, true, { parse: realParse });
+    assert.equal(kept.path, 'kept-over-cap');
+    assert.match(kept.text, /```mermaid\nmindmap/);
+  });
+
+  test('an over-cap fence that is ALSO broken: repaired by the model once; a failed repair drops it', async () => {
+    const broken = `${big}\n  a --> --> b`;
+    const out = await settleFigure(answer(broken), false, true, {
+      parse: async (b) =>
+        b.includes('--> -->') ? { status: 'invalid', error: 'Parse error' } : { status: 'ok' },
+      repair: async () => big,
+    });
+    assert.equal(out.path, 'model', 'a repair that parses is accepted even over a cap');
+    const dropped = await settleFigure(answer(broken), false, true, {
+      parse: async (b) =>
+        b.includes('--> -->') ? { status: 'invalid', error: 'Parse error' } : { status: 'ok' },
+      repair: async () => null,
+    });
+    assert.equal(dropped.path, 'dropped');
   });
 });
 
@@ -201,12 +265,12 @@ describe('the model repair', () => {
 });
 
 describe('when the parser is unavailable', () => {
-  test('a fence within the caps is kept as it is (unchecked); one over a cap is dropped', async () => {
+  test('a fence is kept as it is (unchecked), over a cap or not: it cannot be judged', async () => {
     const kept = await settleFigure(answer(GOOD), false, true, { parse: down });
     assert.equal(kept.path, 'unchecked');
     assert.equal(kept.text, answer(GOOD));
-    const big = `flowchart TD\n${Array.from({ length: 14 }, (_, i) => `  n${String(i)} --> n${String(i + 1)}`).join('\n')}`;
-    assert.equal((await settleFigure(answer(big), false, true, { parse: down })).path, 'dropped');
+    const big = `flowchart TD\n${Array.from({ length: 17 }, (_, i) => `  n${String(i)} --> n${String(i + 1)}`).join('\n')}`;
+    assert.equal((await settleFigure(answer(big), false, true, { parse: down })).path, 'unchecked');
   });
 
   test('a parser that always rejects, with no repair, drops the fence', async () => {

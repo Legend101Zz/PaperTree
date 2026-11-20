@@ -6,7 +6,7 @@
  *
  * Prints, for the whole file: how many fences parse as written, after the cosmetics, and after the
  * deterministic repairs (parse only, caps ignored); then the figure step's own outcome per path
- * (caps on, no model repair: an over-cap fence is `dropped`, which a live run would send to the model).
+ * (caps on, no model repair: an over-cap fence is `kept-over-cap`, which a live run would first send to the model to simplify).
  */
 import { readFileSync } from 'node:fs';
 

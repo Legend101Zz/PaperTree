@@ -17,8 +17,11 @@
  */
 import { mermaidTypeOf } from './mermaid.ts';
 
-/** The caps `INLINE_DIAGRAM` (prompts.ts) tells the model; a test keeps the two in step. */
-export const FIGURE_CAPS = {
+/**
+ * What `INLINE_DIAGRAM` (prompts.ts) asks the model for: the guidance, unchanged. A test keeps the
+ * prompt in step with this.
+ */
+export const FIGURE_ASK = {
   flowNodes: 12,
   mindmapNodes: 12,
   mindmapDepth: 3,
@@ -30,6 +33,21 @@ export const FIGURE_CAPS = {
   chartPoints: 8,
   /** A flowchart of at most this many nodes may stay left-to-right. */
   rowNodes: 4,
+} as const;
+
+/**
+ * The SOFT readability caps (v0.3 W6 round 3). A parseable diagram is not an error: the web scales
+ * it to a readable minimum and scrolls it. Over a cap a fence is sent to ONE model "simplify"
+ * request, and when that fails or times out the original is KEPT (path `kept-over-cap`); only a
+ * fence that does not parse after every repair is dropped. Round 2 had good diagrams above the
+ * asked sizes (flowcharts to ~16 nodes, 3 events in a timeline period, mindmaps to ~16 nodes), so
+ * those caps sit a little above what the prompt asks.
+ */
+export const FIGURE_CAPS = {
+  ...FIGURE_ASK,
+  flowNodes: 16,
+  mindmapNodes: 16,
+  eventsPerPeriod: 3,
 } as const;
 
 export interface Repaired {
@@ -75,7 +93,7 @@ export function tidyMermaidText(body: string): Repaired {
     const first = headerIndex(lines);
     const header = (lines[first] ?? '').trim();
     const wide = /^(flowchart|graph)\s+(LR|RL)$/.exec(header);
-    if (wide !== null && flowNodeIds(lines.slice(first + 1)).size > FIGURE_CAPS.rowNodes) {
+    if (wide !== null && flowNodeIds(lines.slice(first + 1)).size > FIGURE_ASK.rowNodes) {
       lines[first] = `${wide[1]} TD`;
       text = lines.join('\n');
       applied.push('flow-td');
