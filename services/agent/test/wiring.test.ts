@@ -329,6 +329,7 @@ describe('boot refuses to start', () => {
         diagram: 'minimax/MiniMax-M3',
         topic: 'minimax/MiniMax-M3',
         glance: 'minimax/MiniMax-M3',
+        image: 'minimax/MiniMax-M3',
       },
       effort: {
         explain: null,
@@ -337,6 +338,7 @@ describe('boot refuses to start', () => {
         diagram: null,
         topic: null,
         glance: null,
+        image: null,
       },
       cost_basis: { 'MiniMax-M3': 'Pi catalog rates' },
       key_present: false,

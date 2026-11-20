@@ -29,6 +29,7 @@ import {
   validateRunRequest,
 } from './contract.ts';
 import {
+  acceptsImages,
   costBasis,
   FLASH_MODEL_ID,
   type ModelChoice,
@@ -294,7 +295,8 @@ export async function createAgentApp(options: AppOptions): Promise<AgentApp> {
   if (config.faux) {
     faux = createFauxModel();
     modelRuntime.registerNativeProvider(faux.provider);
-    for (const id of modelsUsed(policy)) resolved.set(id, faux.model);
+    for (const id of modelsUsed(policy))
+      resolved.set(id, options.modelOverride ? options.modelOverride(faux.model) : faux.model);
   } else {
     if (config.minimaxKey === undefined) throw new BootError(['no MiniMax key']);
     log.redact(config.minimaxKey);
@@ -314,6 +316,12 @@ export async function createAgentApp(options: AppOptions): Promise<AgentApp> {
     return { model, choice };
   };
   const model = modelFor('explain').model;
+  // The image ask is shown a picture, so ITS model must accept images (#348): refuse to boot with
+  // one that does not (an override such as PAPERTREE_MODEL_IMAGE naming a text-only model).
+  if (!acceptsImages(modelFor('image').model))
+    throw new BootError([
+      `${policy.image.label} does not accept images; the image ask needs one that does`,
+    ]);
 
   const flashModel = resolved.get(FLASH_MODEL_ID);
   const wiring = await wiringProblems(modelRuntime, model, config.faux ? undefined : flashModel);

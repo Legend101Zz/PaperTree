@@ -688,7 +688,7 @@ const OPTIONAL = {
   'highlights.HighlightPatch': ['color', 'note'],
   'highlights.ResolutionsPut': [],
   'highlights.ResolutionPutItem': ['reason', 'upgraded_anchor'],
-  'threads.ThreadCreate': ['anchor', 'question', 'level'],
+  'threads.ThreadCreate': ['anchor', 'question', 'level', 'with_text_anchor'],
   'threads.FollowUp': ['question', 'level', 'relevel_of', 'retry_of', 'redraw_of'],
   'summary.SummaryRequest': ['regenerate'],
   'boards.NodeCreate': [
@@ -972,7 +972,7 @@ const ENUMS = {
   'Message.level': ['new', 'familiar', 'expert', null],
   'ThreadCreate.level': ['new', 'familiar', 'expert'],
   'FollowUp.level': ['new', 'familiar', 'expert'],
-  'Thread.kind': ['explain', 'ask', 'diagram'],
+  'Thread.kind': ['explain', 'ask', 'diagram', 'image'],
   'MessageDiagram.status': ['streaming', 'complete', 'partial', 'stopped', 'error'],
   'DiagramPart.kind': ['input', 'step', 'output', 'concept'],
   'Thread.last_status': ['streaming', 'complete', 'partial', 'error', 'aborted', null],
@@ -1323,6 +1323,7 @@ describe('contracts.spec — lib/api/types.ts against contracts/api (exported fr
         summary: bucket,
         diagram: bucket,
         topic: bucket,
+        image: { ...bucket, runs: 1 },
         glance: bucket,
       },
     };

@@ -53,8 +53,9 @@ describe('readPolicy(): env -> which model answers which kind', () => {
         p.topic.effort,
         p.diagram.effort,
         p.glance.effort,
+        p.image.effort,
       ],
-      ['low', 'medium', 'medium', 'low', 'low', 'low'],
+      ['low', 'medium', 'medium', 'low', 'low', 'low', 'medium'],
     );
     assert.equal(FLASH_MODEL_ID, 'MiniMax-M3.1-Flash');
     assert.equal(p.explain.label, `minimax/${FLASH_MODEL_ID}`);
@@ -64,6 +65,7 @@ describe('readPolicy(): env -> which model answers which kind', () => {
       summary: FLASH_MODEL_ID,
       diagram: FLASH_MODEL_ID,
       topic: FLASH_MODEL_ID,
+      image: FLASH_MODEL_ID,
       glance: FLASH_MODEL_ID,
     });
     assert.deepEqual(DEFAULT_EFFORTS, {
@@ -72,6 +74,7 @@ describe('readPolicy(): env -> which model answers which kind', () => {
       summary: 'medium',
       diagram: 'low',
       topic: 'low',
+      image: 'medium',
       glance: 'low',
     });
   });
@@ -89,7 +92,15 @@ describe('readPolicy(): env -> which model answers which kind', () => {
 
   test('PAPERTREE_MODEL=MiniMax-M3 is the whole-service fallback', () => {
     const p = readPolicy({ PAPERTREE_MODEL: M3_MODEL_ID });
-    for (const kind of ['explain', 'ask', 'summary', 'diagram', 'topic', 'glance'] as const) {
+    for (const kind of [
+      'explain',
+      'ask',
+      'summary',
+      'diagram',
+      'topic',
+      'glance',
+      'image',
+    ] as const) {
       assert.equal(p[kind].id, M3_MODEL_ID);
       assert.equal(p[kind].effort, null);
     }
@@ -273,6 +284,7 @@ describe('Flash on the wire (mock Anthropic server)', () => {
       summary: `minimax/${FLASH_MODEL_ID}`,
       diagram: `minimax/${M3_MODEL_ID}`,
       topic: `minimax/${M3_MODEL_ID}`,
+      image: `minimax/${M3_MODEL_ID}`,
       glance: `minimax/${M3_MODEL_ID}`,
     });
     assert.deepEqual(body['effort'], {
@@ -281,6 +293,7 @@ describe('Flash on the wire (mock Anthropic server)', () => {
       summary: 'medium',
       diagram: null,
       topic: null,
+      image: null,
       glance: null,
     });
     assert.equal(body['cost_basis'][FLASH_MODEL_ID], FLASH_COST_BASIS);

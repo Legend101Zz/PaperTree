@@ -533,7 +533,7 @@ def test_in_flight_runs_counts_only_running_unexpired_runs_of_this_owner(env: En
         expires_at="2026-01-01T00:00:00Z",
     )
     _run(env, b, "run_01K63AE8M4Q2T7V9X3B5N6RIF05", token_sha256="3" * 64)
-    zero = {"ask": 0, "diagram": 0, "explain": 0, "glance": 0, "summary": 0, "topic": 0}
+    zero = {"ask": 0, "diagram": 0, "explain": 0, "glance": 0, "image": 0, "summary": 0, "topic": 0}
     assert env.db.in_flight_runs(a.owner) == {**zero, "explain": 1, "summary": 1}
     assert env.db.in_flight_runs(b.owner) == {**zero, "explain": 1}
 
@@ -562,6 +562,35 @@ def test_cost_and_usage_count_runs_started_since_the_cut(env: Env) -> None:
     assert usage.by_kind["summary"] == UsageBucket(1, 7, 3, 0.25)
     assert usage.by_kind["ask"] == UsageBucket(1, 0, 0, 0.0)
     assert usage.by_kind["explain"] == UsageBucket(0, 0, 0, 0.0)
+
+
+def test_an_image_run_is_recorded_reserved_and_counted_like_any_other(env: Env) -> None:
+    """The image ask (v0.3 #348): a run of kind ``image`` is in-flight while it streams, counts in
+    ``usage_since`` under its own kind and in ``cost_since``, and its thread reads back as ``image``
+    (stored as an ``ask`` thread: 0017 does not rebuild the thread table)."""
+    a = env.alice
+    thread = _thread(env, a, "thr_01K63A9W4XJ7Q2N8R5T0V3Y6ZI")
+    assert env.db.get_thread(a.owner, a.paper_id, thread)["kind"] == "explain"  # type: ignore[index]
+    asked = "thr_01K63A9W4XJ7Q2N8R5T0V3Y6ZJ"
+    env.db.create_thread(
+        a.owner, a.paper_id, thread_id=asked, kind="ask", title="Figure 2", origin_anchor=None
+    )
+    plain = env.db.get_thread(a.owner, a.paper_id, asked)
+    assert plain is not None and plain["kind"] == "ask"  # no image run yet
+    image = _run(env, a, "run_01K63AE8M4Q2T7V9X3B5N6RIM1", thread_id=asked, kind="image")
+    row = env.db.get_thread(a.owner, a.paper_id, asked)
+    assert row is not None and row["kind"] == "image"
+    assert [r["kind"] for r in env.db.list_threads(a.owner, a.paper_id)].count("image") == 1
+    assert env.db.in_flight_runs(a.owner)["image"] == 1
+    env.db.finish_run(
+        a.owner, image, status="done", input_tokens=900, output_tokens=200, cost_usd_est=0.004
+    )
+    assert env.db.in_flight_runs(a.owner)["image"] == 0
+    usage = env.db.usage_since(a.owner, "2000-01-01T00:00:00Z")
+    assert usage.by_kind["image"] == UsageBucket(1, 900, 200, 0.004)
+    assert env.db.cost_since(a.owner, "2000-01-01T00:00:00Z") == pytest.approx(0.004)
+    # Another owner does not see it as theirs.
+    assert env.db.usage_since(env.bob.owner, "2000-01-01T00:00:00Z").by_kind["image"].runs == 0
 
 
 def test_times_are_normalised_to_one_comparable_shape() -> None:

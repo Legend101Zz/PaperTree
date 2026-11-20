@@ -16,7 +16,7 @@
  * The wrapper also owns the disposed guard (must-fix 4: a disposed session sent a malformed request
  * and once blocked 301 s) and the conversation export (`entries`, §3.2).
  */
-import type { Model } from '@earendil-works/pi-ai';
+import type { ImageContent, Model } from '@earendil-works/pi-ai';
 import {
   type AgentSession,
   createAgentSession,
@@ -28,6 +28,8 @@ import {
   SettingsManager,
   type ToolDefinition,
 } from '@earendil-works/pi-coding-agent';
+
+import { acceptsImages } from './models.ts';
 
 /** The only prompt option this service ever uses (must-fix 7: it defaults to true). */
 export const PROMPT_OPTIONS = { expandPromptTemplates: false } as const;
@@ -113,6 +115,35 @@ function redactProviderError<T>(message: T): T {
   return { ...message, errorMessage: REDACTED_PROVIDER_ERROR };
 }
 
+/** What a stored picture is replaced with: the history keeps the turn, never the bytes (#348). */
+export const IMAGE_PLACEHOLDER = '[the figure crop the reader selected, shown on this turn]';
+
+/**
+ * A user message with its pictures replaced by a line of text. A thread's stored entries
+ * (`done.entries`, kept by the API and sent back on every follow-up) must not carry megabytes of
+ * base64: the API attaches the crop again to each new turn instead.
+ */
+function withoutImages<T>(message: T): T {
+  const m = message as { role?: unknown; content?: unknown };
+  if (m.role !== 'user' || !Array.isArray(m.content)) return message;
+  const content = m.content as Array<{ type?: unknown }>;
+  if (!content.some((part) => part.type === 'image')) return message;
+  const kept: unknown[] = [];
+  for (const part of content) {
+    if (part.type !== 'image') kept.push(part);
+    else if (!kept.some((p) => (p as { text?: unknown }).text === IMAGE_PLACEHOLDER))
+      kept.push({ type: 'text', text: IMAGE_PLACEHOLDER });
+  }
+  return { ...message, content: kept };
+}
+
+/** A picture was about to go to a model whose definition does not list `image` as an input. */
+export class NoVisionModelError extends Error {
+  constructor(modelId: string) {
+    super(`${modelId} does not accept images; an image is never sent to it.`);
+  }
+}
+
 export class DisposedSessionError extends Error {
   constructor() {
     super('This session was disposed; it is never prompted again.');
@@ -132,10 +163,21 @@ export class PaperSession {
     return this.disposed;
   }
 
-  /** `prompt()` with `expandPromptTemplates: false`, and never on a disposed session. */
-  async prompt(text: string): Promise<void> {
+  /**
+   * `prompt()` with `expandPromptTemplates: false`, and never on a disposed session. `images` (an
+   * `image` run's crop) go with the message ONLY to a model that accepts images: any other throws
+   * `NoVisionModelError` before a byte is sent (the hard guard of #348's acceptance: "a non-vision
+   * model is never sent an image").
+   */
+  async prompt(text: string, images: readonly ImageContent[] = []): Promise<void> {
     if (this.disposed) throw new DisposedSessionError();
-    await this.session.prompt(text, PROMPT_OPTIONS);
+    if (images.length > 0 && !acceptsImages(this.session.model ?? {})) {
+      throw new NoVisionModelError(this.session.model?.id ?? 'the model');
+    }
+    await this.session.prompt(
+      text,
+      images.length > 0 ? { ...PROMPT_OPTIONS, images: [...images] } : PROMPT_OPTIONS,
+    );
   }
 
   /** `session.abort()` without awaiting idle: safe to call from inside an event listener. */
@@ -174,7 +216,7 @@ export class PaperSession {
       kept.push({
         ...entry,
         parentId: previous ? previous.id : null,
-        message: redactProviderError(message),
+        message: withoutImages(redactProviderError(message)),
       } as ConversationEntry);
     }
     return kept;

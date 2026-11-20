@@ -21,6 +21,16 @@ the datamark, ``code_path``) and the seed's handles ``b1…``. A follow-up's run
 thread's earlier handles (``thread_handles``), so a ``[b4]`` the model reads in its own history
 still names the same passage, and the explain seed is rebuilt from the thread's origin anchor.
 
+AN IMAGE THREAD (v0.3 #348) is about a figure or a region the reader selected: ``kind: "image"``
+with an IMAGE anchor (``image_anchor``: ``figure`` or ``figure_region``, a page and one quad, no
+words). The API renders the crop (``region_crops``), finds the figure's caption and the paragraph
+that first mentions it (``image_context``), and runs the ``image`` kind: the crop goes to the model
+as a picture, those words as passages, the answer is the tutor shape and streams like any other.
+``with_text_anchor`` adds a paragraph the reader selected with the figure. It is stored as an
+``ask`` thread and read back as ``image``; a follow-up (and a relevel) re-attaches the crop to ITS
+turn (the stored history keeps the turn, not the bytes). The default question is "Explain this
+figure."
+
 A DIAGRAM THREAD (v0.2 S7a, #216) starts like an explain (an anchor is required; the default
 question is "Explain with a diagram."). It is not continued by a question: its only next turn is a
 Redraw (``FollowUp.redraw_of``, a finished diagram answer of the same thread), which appends a new
@@ -53,7 +63,7 @@ from papertree_prompts import mint_datamark
 from pydantic_core import from_json
 
 from .. import agent_client as runs
-from .. import diagrams, evidence
+from .. import diagrams, evidence, image_run
 from ..agent_client import RunBroker, RunKind, RunSpec
 from ..deps import (
     AgentClientDep,
@@ -69,6 +79,7 @@ from ..exchanges import ask_excerpt
 from ..logging import log_event
 from ..schemas import (
     DIAGRAM_QUESTION,
+    IMAGE_QUESTION,
     AgentHistory,
     AgentPaper,
     AgentRunRequest,
@@ -156,8 +167,20 @@ def wants_check(
 
 
 def stored_level(kind: RunKind, level: str) -> str | None:
-    """Only an explain or ask answer has a level; a diagram's is not stored."""
-    return level if kind in ("explain", "ask") else None
+    """Only an explain, ask or image answer has a level; a diagram's is not stored."""
+    return level if kind in ("explain", "ask", "image") else None
+
+
+def stored_kind(kind: RunKind) -> str:
+    """The ``ai_threads.kind`` of a thread of this run kind: an image thread is an ``ask`` thread
+    (0017 does not rebuild the thread table); the store reads it back as ``image`` by its run."""
+    return "ask" if kind == "image" else kind
+
+
+def run_extras(prepared: image_run.ImageRun | None) -> dict[str, Any]:
+    """The run request's ``images`` for an image run, and nothing at all for any other kind (an
+    omittable field is absent, never null)."""
+    return {} if prepared is None else {"images": prepared.images}
 
 
 def request_id_of(request: Request) -> str | None:
@@ -197,15 +220,41 @@ async def create_thread(
         index_cache, call.db, call.db_owner, call.user_id, paper_id, generation
     )
     datamark = mint_datamark()
-    plan = evidence.plan_seed(index, anchor, datamark=datamark) if anchor is not None else None
     kind: RunKind = body.kind
     question = body.question
     if kind == "diagram" and "question" not in body.model_fields_set:
         question = DIAGRAM_QUESTION
+    if kind == "image" and "question" not in body.model_fields_set:
+        question = IMAGE_QUESTION
+    prepared: image_run.ImageRun | None = None
+    if kind == "image":
+        assert anchor is not None  # ThreadCreate requires an image anchor for this kind
+        with_text: dict[str, Any] | None = None
+        if body.with_text_anchor is not None:
+            with_text = {
+                k: v for k, v in dict(raw["with_text_anchor"]).items() if k != "resolution"
+            }
+            check_anchor(with_text, paper_id, str(paper["source_hash"]))
+        prepared = await image_run.prepare_image_run(
+            settings,
+            index,
+            anchor,
+            paper_id=paper_id,
+            generation=generation,
+            datamark=datamark,
+            question=question,
+            with_text_anchor=with_text,
+        )
+        plan: evidence.SeedPlan | None = prepared.seed
+    else:
+        plan = evidence.plan_seed(index, anchor, datamark=datamark) if anchor is not None else None
     thread_id, user_message_id = new_id("thr"), new_id("msg")
     message_id, run_id = new_id("msg"), new_id("run")
     token, token_sha256 = runs.mint_run_token()
-    title = title_of(plan.quote if plan is not None and plan.quote else question)
+    if prepared is not None:
+        title = prepared.title
+    else:
+        title = title_of(plan.quote if plan is not None and plan.quote else question)
 
     db, owner = call.db, call.db_owner
     with db.transaction():
@@ -213,7 +262,7 @@ async def create_thread(
             owner,
             PaperId(paper_id),
             thread_id=thread_id,
-            kind=kind,
+            kind=stored_kind(kind),
             title=title,
             origin_anchor=anchor,
         )
@@ -274,6 +323,7 @@ async def create_thread(
         limits=runs.LIMITS[kind],
         level=body.level,
         check=wants_check(db, owner, None, kind, body.level),
+        **run_extras(prepared),
     )
     broker = RunBroker(
         spec=RunSpec(
@@ -381,7 +431,21 @@ async def follow_up(
     index = evidence.load_index(index_cache, db, owner, call.user_id, paper_id, generation)
     datamark = mint_datamark()
     origin = from_json(thread["origin_anchor_json"]) if thread["origin_anchor_json"] else None
-    plan = evidence.plan_seed(index, origin, datamark=datamark) if origin is not None else None
+    prepared: image_run.ImageRun | None = None
+    if kind == "image" and origin is not None:
+        # The picture goes with THIS turn too (the stored history keeps no bytes).
+        prepared = await image_run.prepare_image_run(
+            settings,
+            index,
+            origin,
+            paper_id=paper_id,
+            generation=generation,
+            datamark=datamark,
+            question=question,
+        )
+        plan: evidence.SeedPlan | None = prepared.seed
+    else:
+        plan = evidence.plan_seed(index, origin, datamark=datamark) if origin is not None else None
     state = from_json(thread["agent_state_json"]) if thread["agent_state_json"] else []
     if releveled is not None and releveled.is_last_question:
         state = _before_last_question(state)  # the model re-answers it, not "as above"
@@ -463,6 +527,7 @@ async def follow_up(
         limits=runs.LIMITS[kind],
         level=level,
         check=check,
+        **run_extras(prepared),
     )
     broker = RunBroker(
         spec=RunSpec(
@@ -531,9 +596,9 @@ def _relevel_target(
     answer, so no user message is written."""
     if body.retry_of is not None or body.redraw_of is not None:
         raise ApiError("validation_failed", "relevel_of: not combined with retry_of or redraw_of")
-    if thread["kind"] not in ("explain", "ask"):
+    if thread["kind"] not in ("explain", "ask", "image"):
         raise ApiError(
-            "validation_failed", "relevel_of: only an explain or ask answer is re-leveled"
+            "validation_failed", "relevel_of: only an explain, ask or image answer is re-leveled"
         )
     messages = db.list_messages(owner, thread["thread_id"])
     by_id = {message["message_id"]: message for message in messages}
@@ -638,7 +703,7 @@ def _level_wire(row: dict[str, Any], thread_kind: str | None) -> str | None:
         return None
     if row["level"] is not None:
         return str(row["level"])
-    return "familiar" if thread_kind in ("explain", "ask") else None
+    return "familiar" if thread_kind in ("explain", "ask", "image") else None
 
 
 def message_wire(

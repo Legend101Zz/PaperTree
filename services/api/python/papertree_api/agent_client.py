@@ -103,12 +103,20 @@ KNOWN_MODELS: Final = ("MiniMax-M3", "MiniMax-M3.1-Flash", "MiniMax-M3.1-Flash-P
 MODEL_PREFIX: Final = "minimax/"
 UNKNOWN_SDK: Final = "unknown"
 
-RunKind = Literal["explain", "ask", "summary", "diagram", "topic", "glance"]
+RunKind = Literal["explain", "ask", "summary", "diagram", "topic", "glance", "image"]
 
 PROMPT_VERSIONS: Final[
     dict[
         RunKind,
-        Literal["explain-v1", "ask-v1", "summary-v1", "diagram-v1", "topic-v1", "glance-v1"],
+        Literal[
+            "explain-v1",
+            "ask-v1",
+            "summary-v1",
+            "diagram-v1",
+            "topic-v1",
+            "glance-v1",
+            "image-v1",
+        ],
     ]
 ] = {
     "explain": "explain-v1",
@@ -116,6 +124,7 @@ PROMPT_VERSIONS: Final[
     "summary": "summary-v1",
     "diagram": "diagram-v1",
     "topic": "topic-v1",
+    "image": "image-v1",
     "glance": "glance-v1",
 }
 
@@ -126,6 +135,7 @@ CODE_PATHS: Final[dict[RunKind, str]] = {
     "summary": "api.summary>agent.v1.runs>pi.createAgentSession>minimax.anthropic-messages",
     "diagram": "api.threads.diagram>agent.v1.runs>pi.createAgentSession>minimax.anthropic-messages",
     "topic": "api.topics>agent.v1.runs>pi.createAgentSession>minimax.anthropic-messages",
+    "image": "api.threads.image>agent.v1.runs>pi.createAgentSession>minimax.anthropic-messages",
     "glance": "api.glance>agent.v1.runs>pi.createAgentSession>minimax.anthropic-messages",
 }
 
@@ -193,6 +203,16 @@ LIMITS: Final[dict[RunKind, AgentLimits]] = {
         max_tool_calls=0,
         max_turns=2,
         max_output_tokens=3072,
+        max_retries=1,
+    ),
+    # The image ask (v0.3 #348): a vision run, an ask's budget with a longer first-token wait (the
+    # model reads a crop before it writes; idle_ms 30 s) and a longer deadline (75 s).
+    "image": AgentLimits(
+        deadline_ms=75_000,
+        idle_ms=30_000,
+        max_tool_calls=4,
+        max_turns=5,
+        max_output_tokens=4096,
         max_retries=1,
     ),
 }
@@ -1026,6 +1046,10 @@ RUN_RESERVE_USD: Final[dict[str, float]] = {
     # The topic Flash run (#242, topic_run.py): a few hundred input tokens and at most 1,024
     # output, about $0.001 on M3 rates; the reserve is the explain's.
     "topic": 0.01,
+    # The image ask (#348): Flash at $0.15 / $0.60 per million with a crop (about 1-2k input tokens
+    # once the model has downsampled it) and the caption and a paragraph: about $0.003-0.006; the
+    # reserve is an ask's, so a few at once cannot overshoot the cap.
+    "image": 0.02,
     # The glance Flash run (v0.3 #337): a digest of about 6,000 tokens in and about 3,000 out is
     # about $0.003 on Flash rates ($0.01 on M3's, the override); the reserve is a summary's tenth
     # twice over, so a cap near its edge waits instead of letting a library's worth start at once.
