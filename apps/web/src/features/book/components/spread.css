@@ -144,3 +144,307 @@
   background: var(--pt-paper-label);
   border-inline-start: 3px solid var(--pt-control-border);
 }
+
+/* ── the abstract, folded to two lines (V3-33): the paper speaking, in the paper's own face ───── */
+
+.pt-bookdetails__abstracthead {
+  display: flex;
+  inline-size: 100%;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.pt-bookdetails__unfold {
+  display: inline-flex;
+  min-block-size: 24px;
+  align-items: center;
+  gap: 4px;
+  padding: 0 2px;
+  font-family: var(--pt-font-you);
+  font-size: 13px;
+  color: var(--pt-ink-2);
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+}
+
+.pt-bookdetails__unfold:hover {
+  color: var(--pt-ink);
+}
+
+.pt-bookdetails__unfold:focus-visible {
+  outline: var(--pt-focus-width) solid var(--pt-focus);
+  outline-offset: 2px;
+}
+
+.pt-bookdetails__unfold svg {
+  transition: transform 120ms var(--pt-ease-lift, ease-out);
+}
+
+.pt-bookdetails__unfold[aria-expanded='true'] svg {
+  transform: rotate(180deg);
+}
+
+/* Folded: two lines and the rest hidden (the words stay in the page, for a reader and a search). */
+.pt-bookdetails__fold[data-folded='true'] .pt-bookdetails__excerpt {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+
+/* ── At a glance (V3-33, V3-15b): the AI's map of the paper, on the AI slip ──────────────────── */
+
+.pt-glance {
+  margin-block-start: 18px;
+}
+
+.pt-glance__tabs {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-inline-start: 8px;
+}
+
+.pt-glance__tabs .pt-glance__tab {
+  /* The AI slip's own tab: its ink is 6.3:1 on the slip, not on the page tab's fill (which is what
+     `.pt-tab` paints), so the tab takes the slip colour too. */
+  background: var(--pt-ai-slip);
+  color: var(--pt-ai-tab-ink);
+}
+
+.pt-glance__title {
+  font-family: var(--pt-font-ai);
+  font-size: 13px;
+  color: var(--pt-derived-ink-muted);
+}
+
+.pt-glance__model {
+  margin-inline-start: auto;
+  font-family: var(--pt-font-ai);
+  font-size: 12.5px;
+  color: var(--pt-derived-ink-muted);
+  cursor: help;
+}
+
+.pt-glance__sheet {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 14px 16px 16px;
+  font-family: var(--pt-font-ai);
+  color: var(--pt-derived-ink);
+  background: var(--pt-ai-slip);
+  border-radius: 2px;
+  box-shadow: var(--pt-e1);
+}
+
+.pt-glance__gist {
+  margin: 0 0 8px;
+  font-size: 16.5px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+/* A row: a small-caps label and its words. A row with a page is itself the link. */
+.pt-glance__row {
+  position: relative;
+  display: grid;
+  grid-template-columns: 92px minmax(0, 1fr);
+  gap: 16px;
+  padding-block: 5px;
+  color: inherit;
+  text-decoration: none;
+  border-radius: 2px;
+}
+
+.pt-glance__label {
+  padding-block-start: 3px;
+  font-family: var(--pt-font-label);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  color: var(--pt-derived-ink-muted);
+  text-transform: uppercase;
+}
+
+.pt-glance__body {
+  font-size: 14.5px;
+  line-height: 1.5;
+}
+
+.pt-glance__row--link {
+  cursor: pointer;
+}
+
+.pt-glance__row--link:hover,
+.pt-glance__row--link:focus-visible {
+  background: rgb(122 91 58 / 9%);
+}
+
+.pt-glance__row--link:focus-visible {
+  outline: var(--pt-focus-width) solid var(--pt-focus);
+  outline-offset: 1px;
+}
+
+/* The one quiet mark: `p. 3 ›` at the block's end, on hover or focus only, never at rest. */
+.pt-glance__page {
+  margin-inline-start: 8px;
+  font-family: var(--pt-font-you);
+  font-size: 12.5px;
+  color: var(--pt-derived-ink-muted);
+  white-space: nowrap;
+  opacity: 0;
+  transition: opacity 120ms var(--pt-ease-lift, ease-out);
+}
+
+.pt-glance__row--link:hover .pt-glance__page,
+.pt-glance__row--link:focus-visible .pt-glance__page {
+  opacity: 1;
+}
+
+@media (pointer: coarse) {
+  /* A finger has no hover: the mark is there, and still quiet. */
+  .pt-glance__page {
+    opacity: 0.7;
+  }
+}
+
+.pt-glance__numbers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 28px;
+  align-items: flex-end;
+}
+
+.pt-glance__number {
+  display: inline-flex;
+  flex-direction: column;
+}
+
+.pt-glance__value {
+  font-family: var(--pt-font-display);
+  font-size: 32px;
+  line-height: 1.05;
+  font-variant-numeric: lining-nums;
+}
+
+.pt-glance__measures {
+  font-size: 13px;
+  color: var(--pt-derived-ink-muted);
+}
+
+.pt-glance__note {
+  display: block;
+  margin-block-start: 6px;
+}
+
+.pt-glance__dash {
+  margin-block: 6px;
+  border-block-start: 1px dashed var(--pt-derived-rule);
+  opacity: 0.55;
+}
+
+.pt-glance__words {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 14px;
+  margin: 0;
+  padding: 0;
+  font-size: 14.5px;
+  list-style: none;
+}
+
+.pt-glance__term {
+  text-decoration: underline dotted;
+  text-decoration-color: var(--pt-derived-rule);
+  text-underline-offset: 3px;
+  cursor: help;
+}
+
+/* Being made (V3-15b): every label is placed at once so nothing jumps; an unfilled block is a
+   quiet hairline, not a skeleton bar. */
+.pt-glance__hairline {
+  align-self: center;
+  border-block-start: 1px solid var(--pt-derived-rule);
+  opacity: 0.4;
+}
+
+.pt-glance__status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 10px 0 0;
+  font-size: 13px;
+  color: var(--pt-derived-ink-muted);
+}
+
+.pt-glance__dots,
+.pt-glance__dots::before,
+.pt-glance__dots::after {
+  display: inline-block;
+  inline-size: 5px;
+  block-size: 5px;
+  background: var(--pt-derived-ink-muted);
+  border-radius: 50%;
+}
+
+.pt-glance__dots {
+  position: relative;
+  margin-inline: 8px;
+  opacity: 0.8;
+}
+
+.pt-glance__dots::before,
+.pt-glance__dots::after {
+  position: absolute;
+  inset-block-start: 0;
+  content: '';
+  opacity: 0.55;
+}
+
+.pt-glance__dots::before {
+  inset-inline-start: -9px;
+}
+
+.pt-glance__dots::after {
+  inset-inline-start: 9px;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .pt-glance__dots {
+    animation: pt-glance-pulse 1.4s ease-in-out infinite;
+  }
+}
+
+@keyframes pt-glance-pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+/* ── "from the start": a link beside Continue (V3-36) ───────────────────────────────────────── */
+
+.pt-bookdetails__fromstart {
+  display: inline-flex;
+  min-block-size: 44px;
+  align-items: center;
+  font-family: var(--pt-font-ai);
+  font-size: 15px;
+  color: var(--pt-primary);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.pt-bookdetails__fromstart:focus-visible {
+  outline: var(--pt-focus-width) solid var(--pt-focus);
+  outline-offset: 2px;
+}
+
+@media (width <= 760px) {
+  .pt-glance__row {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+}

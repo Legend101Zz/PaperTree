@@ -8,6 +8,7 @@ import { PROCESSING_DETAIL } from '@/components/library/types';
 import { readingPage } from '@/features/library/model/shelf';
 import { dehyphenate } from '@/lib/markdown';
 
+import type { Glance, GlanceStatus } from '../api/bookApi';
 import type { BookFigure, BookPaper, BookPlate } from './types';
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -146,29 +147,31 @@ export function countsLine(paper: BookPaper): string {
   return parts.length === 0 ? 'No highlights, threads or notebook pages yet' : parts.join(' · ');
 }
 
-/** The excerpt stops after the sentence that reaches this many characters. */
-export const EXCERPT_CHARS = 360;
+/** Below this many characters an abstract is not worth folding: two lines hold it. */
+export const ABSTRACT_FOLD_CHARS = 150;
 
 /**
- * The abstract's first sentences, as a reader should see them: a typesetter's line-end hyphen
- * joined, whitespace collapsed, whole sentences up to about `EXCERPT_CHARS` (always at least one).
+ * The abstract as a reader should see it: a typesetter's line-end hyphen joined and whitespace
+ * collapsed, the whole of it. The spread folds it to two lines with CSS ("all of it" unfolds).
  *
  * @param text - `GET /papers/{id}/abstract`'s text (the paper's words, line breaks kept).
- * @returns The excerpt, or null when there is no abstract.
+ * @returns The abstract on one line of text, or null when there is none.
  */
-export function abstractExcerpt(text: string | null): string | null {
+export function abstractText(text: string | null): string | null {
   if (text === null) return null;
   const flat = dehyphenate(text).replace(/\s+/g, ' ').trim();
-  if (flat === '') return null;
-  // A sentence ends at a stop followed by a space and a capital (or an opening quote or bracket):
-  // "e.g. the", "Fig. 3" and "28.4 BLEU" do not end one (#200 review).
-  const sentences = flat.split(/(?<=[.!?]["”’)]*)\s+(?=[A-Z“"(])/);
-  let out = '';
-  for (const sentence of sentences) {
-    out = out === '' ? sentence : `${out} ${sentence}`;
-    if (out.length >= EXCERPT_CHARS) break;
-  }
-  return out.trim();
+  return flat === '' ? null : flat;
+}
+
+/**
+ * The model's name as the sheet prints it: `MiniMax-M3.1-Flash` is "M3.1 Flash" (the vendor is
+ * implied).
+ *
+ * @param model - The model id the run reported.
+ * @returns The short name.
+ */
+export function shortModel(model: string): string {
+  return model.replace(/^MiniMax-/i, '').replaceAll('-', ' ');
 }
 
 /**
@@ -293,4 +296,28 @@ export function summaryLine(state: SummaryState | null): { button: string; line:
     default:
       return { button: 'Summary', line: '' };
   }
+}
+
+/** What the sheet draws: the sheet, a sheet being made (or about to be asked for), or nothing. */
+export type GlanceView =
+  | { readonly kind: 'ready'; readonly glance: Glance }
+  | { readonly kind: 'making'; readonly known: boolean }
+  | { readonly kind: 'none' };
+
+/**
+ * Which picture the sheet draws. Before the first answer arrives it is the sheet being made, with
+ * its labels in place and no claim that anything is being written (`known: false`), so the page
+ * never jumps and never shows a spinner; a failed request draws nothing.
+ *
+ * @param answer - The query's data, or undefined while it is loading.
+ * @param failed - The request failed.
+ * @returns The view.
+ */
+export function glanceView(answer: GlanceStatus | undefined, failed: boolean): GlanceView {
+  if (failed) return { kind: 'none' };
+  if (answer === undefined) return { kind: 'making', known: false };
+  if (answer.state === 'ready' && answer.glance !== null)
+    return { kind: 'ready', glance: answer.glance };
+  if (answer.state === 'making') return { kind: 'making', known: true };
+  return { kind: 'none' };
 }

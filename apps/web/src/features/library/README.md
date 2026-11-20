@@ -127,7 +127,7 @@ same papers as a ruled catalogue, Topics shows each topic as a card, and the Map
   `keepalive`). After "Got it" focus is on the shelf. A search dims what does not match and lights what does,
   without reordering anything; the hint row under the plank says what the keys do.
 - **Touch:** on a phone width or a coarse pointer every control in the header, title row and hints is 44 px
-  (`useTouchTargets`); on a desktop they keep frame 01's 36–40 px. The spines keep their 26–48 px widths
+  (`useTouchTargets`); on a desktop they keep frame 01's 36–40 px. The spines keep their 46–88 px widths
   (WCAG 2.5.8's 24 px holds); a phone lays the books flat instead. A coarse pointer gets no key hints and no
   "/" in the search (a finger has neither); a narrow window with a keyboard keeps the key hints.
 - **Phone** (08a, #199; at most 900 px wide, `PHONE_MAX_WIDTH`, the width at which the header goes compact and the
@@ -175,7 +175,8 @@ ribbon, no year means no year on the spine.
 - **Flat book length** (phone): `274 + 1.12 × pages` px on frame 08a's 358 px stack, kept as how far it falls short
   of the stack (0–84 px), so a 320 px phone draws the same stack narrower; each book sits 0–12 px in from the
   stack's edge by a hash of its id.
-- **Spine width**: `26 + 0.85 × pages` px (fitted to frame 01), capped at 48; 40 while the page count is
+- **Spine width** (v0.3, V3-AI-NOTES §6.1): `34 + 1.5 × pages` px, capped at 88 (a 34-page paper is 85, the
+  prototype's FlashAttention 88); 48 while the page count is
   unknown or the paper is still being read, so the count arriving mid-parse does not reflow the shelf.
 - **Order within a row**: shelving order (when added) for Topic; Year rows by title; Title A–Z; Recently
   opened most recent first.

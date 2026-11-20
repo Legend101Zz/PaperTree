@@ -181,6 +181,10 @@ test.describe('S8: the prototype flow, 14 steps, at 1440 and 390, both schemes (
         await expect(spread.locator('blockquote[data-voice="paper"]')).toContainText(
           'The dominant sequence transduction models',
         );
+        // #347 step 3: the bookplate on the left; title, abstract and At a glance on the right. The
+        // sheet is the faux agent's canned one, made in the background when the paper was added.
+        await expect(spread.locator('[data-glance]')).toBeVisible({ timeout: 90_000 });
+        await expect(spread.getByRole('region', { name: 'Paper at a glance' })).toBeVisible();
       });
 
       await step('Read', async () => {

@@ -7,7 +7,9 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  abstractExcerpt,
+  abstractText,
+  glanceView,
+  shortModel,
   arxivLink,
   bookplateOwner,
   canOpenBook,
@@ -23,6 +25,7 @@ import {
   summaryLine,
 } from './book';
 
+import type { Glance } from '../api/bookApi';
 import type { BookFigure, BookPaper } from './types';
 import type { Anchor } from '@papertree/anchoring';
 
@@ -141,27 +144,42 @@ describe('the right page', () => {
     );
   });
 
-  it('quotes the abstract’s first whole sentences, hyphens joined', () => {
+  it('gives the whole abstract on one line, hyphens joined, for the spread to fold', () => {
     const text =
       'The dominant sequence transduction models are based on complex recurrent or\n' +
       'convolutional neural networks that include an encoder and a decoder. The best\n' +
       'performing models also connect the encoder and decoder through an attention\n' +
-      'mechanism. We propose a new simple network architecture, the Transformer, based\n' +
-      'solely on attention mechanisms, dispensing with recurrence and convolutions\n' +
-      'entirely. Experiments on two machine translation tasks show these models to be\n' +
+      'mechanism. Experiments on two machine translation tasks show these models to be\n' +
       'superior in quality.';
-    const excerpt = abstractExcerpt(text) ?? '';
-    expect(excerpt.startsWith('The dominant sequence transduction models')).toBe(true);
-    expect(excerpt.endsWith('dispensing with recurrence and convolutions entirely.')).toBe(true);
-    expect(excerpt).not.toMatch(/\n/);
-    expect(abstractExcerpt('We present a residual learn-\ning framework.')).toBe(
+    const whole = abstractText(text) ?? '';
+    expect(whole.startsWith('The dominant sequence transduction models')).toBe(true);
+    expect(whole.endsWith('to be superior in quality.')).toBe(true);
+    expect(whole).not.toMatch(/\n/);
+    expect(abstractText('We present a residual learn-\ning framework.')).toBe(
       'We present a residual learning framework.',
     );
-    // A stop inside "e.g.", "Fig. 3" or "28.4" does not end the excerpt mid-sentence.
-    const dotted = `${'x'.repeat(355)} as in e.g. the model of Fig. 3 at 28.4 BLEU. Then more.`;
-    expect(abstractExcerpt(dotted)).toBe(dotted.slice(0, dotted.indexOf(' Then')));
-    expect(abstractExcerpt(null)).toBeNull();
-    expect(abstractExcerpt('   ')).toBeNull();
+    expect(abstractText(null)).toBeNull();
+    expect(abstractText('   ')).toBeNull();
+  });
+
+  it('decides what the sheet draws: the sheet, the frame, or nothing', () => {
+    const glance = { gist: 'g', model: 'MiniMax-M3.1-Flash' } as unknown as Glance;
+    expect(glanceView(undefined, false)).toEqual({ kind: 'making', known: false });
+    expect(glanceView({ state: 'making', glance: null }, false)).toEqual({
+      kind: 'making',
+      known: true,
+    });
+    expect(glanceView({ state: 'ready', glance }, false)).toEqual({ kind: 'ready', glance });
+    expect(glanceView({ state: 'none', glance: null }, false)).toEqual({ kind: 'none' });
+    // A ready answer with no sheet in it, and a failed request, draw nothing (never a half sheet).
+    expect(glanceView({ state: 'ready', glance: null }, false)).toEqual({ kind: 'none' });
+    expect(glanceView({ state: 'making', glance: null }, true)).toEqual({ kind: 'none' });
+    expect(glanceView(undefined, true)).toEqual({ kind: 'none' });
+  });
+
+  it('prints the model as the design does', () => {
+    expect(shortModel('MiniMax-M3.1-Flash')).toBe('M3.1 Flash');
+    expect(shortModel('MiniMax-M3')).toBe('M3');
   });
 
   it('writes the arXiv link out and the plate’s caption as the frame does', () => {

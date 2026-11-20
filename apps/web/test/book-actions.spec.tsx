@@ -38,6 +38,7 @@ vi.mock('@/lib/api/papers', async (importOriginal) => {
 const book = vi.hoisted(() => ({
   figures: vi.fn(),
   abstract: vi.fn(),
+  glance: vi.fn(),
   setPlate: vi.fn(),
   clearPlate: vi.fn(),
 }));
@@ -126,6 +127,7 @@ beforeEach(() => {
   auth.me.mockResolvedValue({ user_id: 'usr_1', email: 'a@example.test', display_name: 'Mrigesh' });
   book.figures.mockResolvedValue([]);
   book.abstract.mockResolvedValue({ text: null, page_index: null, anchor: null });
+  book.glance.mockResolvedValue({ state: 'none', glance: null });
   summary.get.mockResolvedValue({ state: 'none', summary: null });
   topics.list.mockResolvedValue([
     { ...TRANSFORMERS, sort_order: 0, paper_count: 1, page_count: 15, categories: [] },

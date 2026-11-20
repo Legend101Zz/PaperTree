@@ -27,13 +27,14 @@ export const ME_KEY = ['me'] as const;
 export const NAME_DECLINED_PREFIX = 'papertree/book/name-declined/';
 
 /**
- * The figures, the abstract and the summary's state of one paper, fetched when the book opens.
+ * The figures, the abstract, the summary's state and the "At a glance" sheet of one paper, fetched
+ * when the book opens.
  * The summary is `GET /papers/{id}/summary` itself (the current prompt version, `ready` or
  * `partial`), not the library row's looser `has_summary` (#200 review S4).
  *
  * @param paperId - The paper.
  * @param enabled - False until the spread is shown (the flight off the shelf needs none of them).
- * @returns The three queries.
+ * @returns The four queries.
  */
 export function useBookFacts(paperId: string, enabled: boolean) {
   const figures = useQuery({
@@ -53,7 +54,36 @@ export function useBookFacts(paperId: string, enabled: boolean) {
     queryFn: () => summaryApi.get(paperId),
     enabled,
   });
-  return { figures, abstract, summary };
+  const glance = useGlance(paperId, enabled);
+  return { figures, abstract, summary, glance };
+}
+
+/** How often a sheet that is still being made is asked for again, and for how many asks. */
+const GLANCE_POLL_MS = 3000;
+const GLANCE_POLL_MAX = 40;
+
+/**
+ * The "At a glance" sheet of one paper (`GET /papers/{id}/glance`). The sheet is made in the
+ * background when the paper is added, so the spread usually finds it made; while the answer is
+ * `making` it asks again every few seconds (at most about two minutes of asking) and the sheet
+ * appears in place. `none` (nothing is coming) and a failed request draw nothing.
+ *
+ * @param paperId - The paper.
+ * @param enabled - False until the spread is shown and the paper is read in.
+ * @returns The query.
+ */
+export function useGlance(paperId: string, enabled: boolean) {
+  return useQuery({
+    queryKey: bookKeys.glance(paperId),
+    queryFn: () => bookApi.glance(paperId),
+    enabled,
+    staleTime: 60_000,
+    retry: false,
+    refetchInterval: (query) =>
+      query.state.data?.state === 'making' && query.state.dataUpdateCount < GLANCE_POLL_MAX
+        ? GLANCE_POLL_MS
+        : false,
+  });
 }
 
 /** A session token is stored; a storage that throws (blocked site data) reads as none. */

@@ -11,6 +11,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { Compile } from 'typebox/schema';
 
+import { GLANCE_QUESTION } from './glance.ts';
 import { parseTopicInput } from './topic.ts';
 
 /** The four read-only paper tools, in the order they are registered (contracts.md §3.1, §4). */
@@ -123,12 +124,13 @@ function conditionalFields(schemaPath: string): string[] {
   return Object.keys(then?.properties ?? {});
 }
 
-export type Kind = 'explain' | 'ask' | 'summary' | 'diagram' | 'topic';
+export type Kind = 'explain' | 'ask' | 'summary' | 'diagram' | 'topic' | 'glance';
 /** The reader's level an explain/ask answer is written for (v0.3, #339). */
 export type Level = 'new' | 'familiar' | 'expert';
 export const LEVELS: readonly Level[] = ['new', 'familiar', 'expert'];
 
-export type PromptVersion = 'explain-v1' | 'ask-v1' | 'summary-v1' | 'diagram-v1' | 'topic-v1';
+export type PromptVersion =
+  'explain-v1' | 'ask-v1' | 'summary-v1' | 'diagram-v1' | 'topic-v1' | 'glance-v1';
 
 export interface SeedPassage {
   readonly handle: string;
@@ -180,6 +182,7 @@ export const PROMPT_FOR_KIND: Readonly<Record<Kind, PromptVersion>> = {
   summary: 'summary-v1',
   diagram: 'diagram-v1',
   topic: 'topic-v1',
+  glance: 'glance-v1',
 };
 
 /**
@@ -235,6 +238,9 @@ export function validateRunRequest(body: unknown): Validation {
       ok: false,
       detail: 'question: a topic run takes "Category: …" and "Existing topics: [...]" lines',
     };
+  }
+  if (request.kind === 'glance' && !request.question.startsWith(GLANCE_QUESTION)) {
+    return { ok: false, detail: 'question: a glance run takes the glance question' };
   }
   const history = historyProblem(request.history?.entries ?? []);
   if (history !== null) return { ok: false, detail: `history.entries: ${history}` };
