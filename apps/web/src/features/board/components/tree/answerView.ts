@@ -3,7 +3,12 @@
  * blocks (`features/explain`), compact: the section labels, paragraphs, maths and the inline
  * figure, WITHOUT the source line (the card's foot carries the pages) and without the Check block.
  */
-import { buildAnswer, type AnswerModel, type PaperSource } from '@/features/explain/model/answer';
+import {
+  buildAnswer,
+  stripPartialTail,
+  type AnswerModel,
+  type PaperSource,
+} from '@/features/explain/model/answer';
 import { threadHandles, type ThreadHandles } from '@/features/explain/model/passages';
 
 import type { Citation } from '@/lib/api/types';
@@ -40,7 +45,9 @@ export function answerView(
     {
       key,
       role: 'assistant',
-      text,
+      // A stored text can end inside a handle run too (a cancelled run leaves `[b1, b`): the
+      // answer is cut there whatever status the row carries, so no raw marker ever shows.
+      text: stripPartialTail(text),
       status: state === 'live' ? 'streaming' : state === 'done' ? 'complete' : 'aborted',
       citations,
       question: '',
