@@ -33,12 +33,16 @@ export function useEscapeDeselect(active: boolean, deselect: () => void): void {
   const latest = useRef({ active, deselect });
   latest.current = { active, deselect };
   useEffect(() => {
-    // Bubble phase, after the board's own Escape (registered earlier on the same window): a press
-    // that closed something has been defaultPrevented.
+    // The board's own Escape (useBranchBoard) re-registers whenever its control changes, so it can
+    // sit AFTER this listener on the window: listener order says nothing. Look once every listener
+    // has run: a press that closed a level has been defaultPrevented by then.
     const onKey = (event: KeyboardEvent): void => {
       if (event.key !== 'Escape' || event.defaultPrevented) return;
       if (!latest.current.active || !escapeBelongsToBoard(event.target)) return;
-      latest.current.deselect();
+      setTimeout(() => {
+        if (event.defaultPrevented || !latest.current.active) return;
+        latest.current.deselect();
+      }, 0);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
