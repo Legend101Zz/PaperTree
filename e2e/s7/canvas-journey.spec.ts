@@ -251,7 +251,11 @@ test.describe('Journey D: the canvas', () => {
       kind: 'derives_from',
       label: 'needs the passage',
     });
-    await page.mouse.click(1000, 870); // empty pane: deselect the link
+    // Empty pane: deselect the link. Not a fixed point: with a thread on the board the key sits
+    // under the stage (y ~825-885 at 1440x900, in the flow, a key and not the pane), so (1000, 870)
+    // is the key. `emptyPanePoint` is verified to be the pane itself.
+    const off = await emptyPanePoint(page);
+    await page.mouse.click(off.x, off.y);
     await expect(edgeBar).toBeHidden();
 
     // ── 6. a note: add, type, Enter = one PATCH of the body ──

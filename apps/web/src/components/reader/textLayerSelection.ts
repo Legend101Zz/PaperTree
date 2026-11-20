@@ -491,7 +491,12 @@ function enableGlobalListeners(): void {
       dragging = false;
       downAt = null;
       owned = null;
-      resetAll();
+      // Not now. While a selection exists `endOfContent` covers the layer, so it is the pointer's
+      // target, and `reset` MOVES it in the DOM. Moved during the pointerup, Chrome loses the node
+      // the press began on and sends NO `click` at all: a Shift+click on a figure while words are
+      // selected never reached the reader's click handler. The click is dispatched synchronously
+      // after the mouseup, so the next task is after it.
+      setTimeout(resetAll, 0);
     },
     { signal, capture: true },
   );
