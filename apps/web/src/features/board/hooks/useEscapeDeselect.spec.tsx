@@ -6,6 +6,8 @@
 import { cleanup, renderHook } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+const settle = (): Promise<void> => new Promise((r) => setTimeout(r, 5));
+
 import { useEscapeDeselect } from './useEscapeDeselect';
 
 afterEach(cleanup);
@@ -17,10 +19,11 @@ const press = (target: EventTarget, prevent = false): void => {
 };
 
 describe('Escape clears the selection', () => {
-  it('on the board, when something is selected', () => {
+  it('on the board, when something is selected', async () => {
     const deselect = vi.fn();
     renderHook(() => useEscapeDeselect(true, deselect));
     press(document.body);
+    await settle();
     expect(deselect).toHaveBeenCalledTimes(1);
   });
 
@@ -31,10 +34,11 @@ describe('Escape clears the selection', () => {
     expect(deselect).not.toHaveBeenCalled();
   });
 
-  it('not when another level of the board already took the key', () => {
+  it('not when another level of the board already took the key', async () => {
     const deselect = vi.fn();
     renderHook(() => useEscapeDeselect(true, deselect));
     press(document.body, true);
+    await settle();
     expect(deselect).not.toHaveBeenCalled();
   });
 
@@ -54,7 +58,7 @@ describe('Escape clears the selection', () => {
     dialog.remove();
   });
 
-  it('follows the latest selection state without re-registering', () => {
+  it('follows the latest selection state without re-registering', async () => {
     const deselect = vi.fn();
     const { rerender } = renderHook(({ on }) => useEscapeDeselect(on, deselect), {
       initialProps: { on: false },
@@ -62,6 +66,26 @@ describe('Escape clears the selection', () => {
     press(document.body);
     rerender({ on: true });
     press(document.body);
+    await settle();
     expect(deselect).toHaveBeenCalledTimes(1);
+  });
+
+  it('leaves a press to a path-focus handler registered AFTER it, whichever order they run in', async () => {
+    const deselect = vi.fn();
+    let focus: string | null = 'card-2';
+    renderHook(() => useEscapeDeselect(true, deselect));
+    // Registered later (as the board's Escape is after every re-render): it closes the focus first.
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape' && focus !== null) {
+        focus = null;
+        e.preventDefault();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    press(document.body);
+    await settle();
+    window.removeEventListener('keydown', onKey);
+    expect(focus).toBeNull();
+    expect(deselect).not.toHaveBeenCalled();
   });
 });
