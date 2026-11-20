@@ -295,7 +295,7 @@ describe('Fold', () => {
     await waitFor(() =>
       expect(api.patchNode).toHaveBeenCalledWith('brd_1', 'a', { version: 1, folded: true }),
     );
-    expect(card(result, 'a').pill?.label).toBe('2 answers · 1 note');
+    expect(card(result, 'a').pill?.label).toBe('1 answer · 1 note');
     expect(result.current.branch.view.layout.hidden.has('b')).toBe(true);
     expect(result.current.branch.view.nodes.find((n) => n.id === 'n')?.hidden).toBe(true);
 
@@ -626,7 +626,7 @@ describe('the ask box is a layout slot, not a card of the tree (#343 review)', (
     expect(tree.byId.has(DRAFT_ID)).toBe(false);
     expect(tree.byId.size).toBe(before.byId.size);
     expect(downChild(tree, 'a')).toBeUndefined();
-    expect(countsPhrase(branchCounts(tree, 'a'))).toBe('1 answer');
+    expect(countsPhrase(branchCounts(tree, 'a'))).toBe('nothing under it');
     expect(countsPhrase(branchCounts(tree, 'p'))).toBe('1 answer');
     expect(spanKnots(tree, 'a')).toEqual([]);
     expect(buildOutline(tree).rows.map((r) => r.id)).toEqual(['p', 'a']);
@@ -635,7 +635,7 @@ describe('the ask box is a layout slot, not a card of the tree (#343 review)', (
     );
   });
 
-  it('a lone answer that is folded says "1 answer" while its ask box is open', async () => {
+  it('a lone answer that is folded hides nothing, and says so while its ask box is open', async () => {
     const { result } = await mount([
       node({ id: 'p', x: 40, y: 60, body: 'Residual learning.' }),
       node({ id: 'a', parent: 'p', branch: 'right', question: 'why?', finalText: TEXT }),
@@ -644,7 +644,7 @@ describe('the ask box is a layout slot, not a card of the tree (#343 review)', (
     act(() => result.current.branch.control.openAsk('a'));
     measure(result, [DRAFT_ID], 40);
     act(() => result.current.branch.ask.fold('a', true));
-    expect(card(result, 'a').pill?.label).toBe('1 answer');
+    expect(card(result, 'a').pill?.label).toBe('nothing under it');
   });
 });
 

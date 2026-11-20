@@ -217,8 +217,8 @@ describe('layoutBoard: fold', () => {
     const layout = layoutBoard(buildTree(rows), input({ p: 100 }));
     const pill = layout.cards.get('a');
     expect(pill?.h).toBe(PILL_HEIGHT);
-    expect(pill?.pill?.label).toBe('2 answers · 1 note');
-    expect(pill?.pill?.counts).toEqual({ answers: 2, notes: 1 });
+    expect(pill?.pill?.label).toBe('1 answer · 1 note');
+    expect(pill?.pill?.counts).toEqual({ answers: 1, notes: 1 });
   });
 
   it('hides everything under the pill and draws no line to it', () => {

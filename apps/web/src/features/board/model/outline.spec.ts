@@ -114,7 +114,7 @@ describe('buildOutline', () => {
     const out = buildOutline(folded);
     expect(out.rows.map((r) => r.id)).toEqual(['p', 'pn', 'a', 'an', 'b', 'd']);
     const row = out.rows.find((r) => r.id === 'b');
-    expect(row?.kind === 'question' ? row.folded?.label : '').toBe('2 answers');
+    expect(row?.kind === 'question' ? row.folded?.label : '').toBe('1 answer');
   });
 
   it('says an empty board is empty', () => {
@@ -191,7 +191,7 @@ describe('exportMarkdown', () => {
     );
     const folded = buildTree(rows);
     const shut = exportMarkdown(folded, opts);
-    expect(shut).toContain('*2 answers, folded on the board.*');
+    expect(shut).toContain('*1 answer, folded on the board.*');
     expect(shut).not.toContain('so a block can do nothing?');
     const open = exportMarkdown(folded, { ...opts, include: { ...DEFAULT_INCLUDE, folded: true } });
     expect(open).toContain('so a block can do nothing?');

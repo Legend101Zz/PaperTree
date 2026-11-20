@@ -285,15 +285,16 @@ describe('branchCounts and countsPhrase', () => {
     node({ id: 'n', parent: 'a', kind: 'note' }),
   ]);
 
-  it('counts the card itself with what is under it', () => {
-    expect(branchCounts(tree, 'a')).toEqual({ answers: 2, notes: 1 });
-    expect(branchCounts(tree, 'b')).toEqual({ answers: 1, notes: 0 });
+  it('counts only what is hidden under the card, never the card itself', () => {
+    expect(branchCounts(tree, 'a')).toEqual({ answers: 1, notes: 1 });
+    expect(branchCounts(tree, 'b')).toEqual({ answers: 0, notes: 0 });
+    expect(branchCounts(tree, 'p')).toEqual({ answers: 2, notes: 1 });
   });
 
   it('says "2 answers · 1 note" and leaves out a zero count', () => {
     expect(countsPhrase({ answers: 2, notes: 1 })).toBe('2 answers · 1 note');
     expect(countsPhrase({ answers: 1, notes: 0 })).toBe('1 answer');
     expect(countsPhrase({ answers: 0, notes: 2 })).toBe('2 notes');
-    expect(countsPhrase({ answers: 0, notes: 0 })).toBe('0 answers');
+    expect(countsPhrase({ answers: 0, notes: 0 })).toBe('nothing under it');
   });
 });
