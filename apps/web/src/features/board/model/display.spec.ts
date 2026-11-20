@@ -39,6 +39,18 @@ describe('displayNodes: the cards as xyflow draws them', () => {
     expect(a.position).not.toEqual({ x: rows[1]!.x, y: rows[1]!.y });
   });
 
+  it('lets a far-off card (a glance, no strip) be dragged by itself, and a full card only by its strip', () => {
+    document.body.innerHTML =
+      '<div id="full"><div class="pt-tc__strip"><b id="q">q</b></div><div id="body">words</div></div>' +
+      '<div id="far" class="pt-bc pt-bc--glance"><p id="kind">Passage</p></div>';
+    const hits = (id: string): boolean =>
+      document.getElementById(id)!.closest(DRAG_HANDLE) !== null;
+    expect(hits('q')).toBe(true);
+    expect(hits('body')).toBe(false);
+    expect(hits('far')).toBe(true);
+    expect(hits('kind')).toBe(true);
+  });
+
   it('leaves a loose card where it is stored', () => {
     const out = displayNodes(flow, layout, base);
     expect(out.find((n) => n.id === 'loose')!.position).toEqual({ x: 900, y: 900 });
