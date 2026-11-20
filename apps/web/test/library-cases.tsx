@@ -22,7 +22,6 @@ import {
 } from '@/components/library/SystemStates';
 import type { LibraryPaper } from '@/components/library/types';
 import { AddPapers } from '@/features/library/components/AddPapers';
-import { CatalogueCard } from '@/features/library/components/CatalogueCard';
 import { LibraryHeader } from '@/features/library/components/LibraryHeader';
 import { LibraryTitle } from '@/features/library/components/LibraryTitle';
 import { ShelfHints } from '@/features/library/components/ShelfHints';
@@ -222,49 +221,6 @@ export function openDisclosure(
 }
 
 export const CASES: readonly LibraryCase[] = [
-  {
-    // #195: the failed paper's catalogue card, so Read, Retry and Delete are all audited.
-    name: 'CatalogueCard',
-    element: (
-      <CatalogueCard
-        id="card"
-        book={{ ...(PAPERS[4] as LibraryPaper), year: 2019, reading: null, arxivCategory: null }}
-        onRead={noop}
-        onRetry={noopAsync}
-        onDelete={noopAsync}
-      />
-    ),
-  },
-  {
-    name: 'CatalogueCard (a ready paper)',
-    element: (
-      <CatalogueCard
-        id="card"
-        book={{ ...(PAPERS[3] as LibraryPaper), year: 2017, reading: null, arxivCategory: null }}
-        onRead={noop}
-        onRetry={noopAsync}
-        onDelete={noopAsync}
-      />
-    ),
-  },
-  {
-    // The failed paper's card with its Delete confirmation open, so "Delete paper" and "Keep it" are audited.
-    name: 'CatalogueCard (confirming Delete)',
-    element: (
-      <CatalogueCard
-        id="card"
-        book={{ ...(PAPERS[4] as LibraryPaper), year: null, reading: null, arxivCategory: null }}
-        onRead={noop}
-        onRetry={noopAsync}
-        onDelete={noopAsync}
-      />
-    ),
-    afterRender: (container) => {
-      const remove = container.querySelector<HTMLButtonElement>('button[aria-label^="Delete "]');
-      if (remove === null) throw new Error('Delete not found');
-      fireEvent.click(remove, { detail: 0 });
-    },
-  },
   { name: 'UploadRow', element: <UploadRow queue={QUEUE} /> },
   {
     name: 'LibraryHeader (searching)',

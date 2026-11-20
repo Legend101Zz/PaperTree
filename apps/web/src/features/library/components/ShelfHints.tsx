@@ -1,7 +1,7 @@
 /**
  * ShelfHints: the row under the plank (#195, frame 01). Without a search it teaches the keys
- * ("← → along the shelf · Enter take it out · Space its card · Esc put it back", dismissed
- * with Got it, per browser) and notes that PDFs drop anywhere; with one it says what matched and what Enter and
+ * ("← → along the shelf · Enter take it out · Esc put it back", dismissed with Got it, per
+ * browser) and notes that PDFs drop anywhere; with one it says what matched and what Enter and
  * Esc do now.
  */
 'use client';
@@ -26,7 +26,7 @@ export interface ShelfHintsProps {
   readonly total: number;
   /** Got it hides the key hints; focus goes here instead of falling to the page. */
   readonly onKeysHidden?: () => void;
-  /** The phone's flat stacks: ↑ and ↓, and Enter takes a book down into the sheet (#199). */
+  /** The phone's flat stacks: ↑ and ↓ walk them (#199). */
   readonly vertical?: boolean;
 }
 
@@ -61,7 +61,7 @@ export function ShelfHints({
           {matched} of {total} match “{query.trim()}”
         </span>
         <span className="pt-hints__key">
-          <kbd className="pt-kbd">Enter</kbd> take down the first
+          <kbd className="pt-kbd">Enter</kbd> take out the first
         </span>
         <span className="pt-hints__key">
           <kbd className="pt-kbd">Esc</kbd> clear
@@ -77,21 +77,9 @@ export function ShelfHints({
             <kbd className="pt-kbd">{vertical ? '↑' : '←'}</kbd>
             <kbd className="pt-kbd">{vertical ? '↓' : '→'}</kbd> along the shelf
           </span>
-          {vertical ? (
-            // The phone's stacks: Enter opens the sheet, as a tap does (#199); no pull-out there.
-            <span className="pt-hints__key">
-              <kbd className="pt-kbd">Enter</kbd> take it down
-            </span>
-          ) : (
-            <>
-              <span className="pt-hints__key">
-                <kbd className="pt-kbd">Enter</kbd> take it out
-              </span>
-              <span className="pt-hints__key">
-                <kbd className="pt-kbd">Space</kbd> its card
-              </span>
-            </>
-          )}
+          <span className="pt-hints__key">
+            <kbd className="pt-kbd">Enter</kbd> take it out
+          </span>
           <span className="pt-hints__key">
             <kbd className="pt-kbd">Esc</kbd> put it back
           </span>

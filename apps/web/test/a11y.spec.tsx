@@ -109,14 +109,7 @@ describe('axe: zero violations at WCAG 2.2 AA', () => {
     // them still exercise every rule named below.
     const { container } = render(
       <>
-        <Shelf
-          papers={PAPERS}
-          arrangement="topic"
-          matches={null}
-          openId={null}
-          cardId="card"
-          onActivate={() => {}}
-        />
+        <Shelf papers={PAPERS} arrangement="topic" matches={null} onActivate={() => {}} />
         <FailureState
           failedStep="equation crops"
           completedSteps={['page images']}
@@ -208,14 +201,7 @@ describe('keyboard operation', () => {
   it('a click (Space; Enter on an unparsed book) on a spine takes the book down (#195, #200)', () => {
     const onActivate = vi.fn();
     const { container } = render(
-      <Shelf
-        papers={PAPERS}
-        arrangement="topic"
-        matches={null}
-        openId={null}
-        cardId="card"
-        onActivate={onActivate}
-      />,
+      <Shelf papers={PAPERS} arrangement="topic" matches={null} onActivate={onActivate} />,
     );
     const spine = container.querySelector<HTMLButtonElement>('button[tabindex="0"]');
     expect(spine).not.toBeNull();

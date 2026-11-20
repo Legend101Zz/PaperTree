@@ -81,6 +81,9 @@ export const topicsApi = {
   /** Shelves the paper: the offer kept as its source ("you accepted"), any other choice manual. */
   accept: (paperId: string, body: AcceptTopicBody) =>
     request<PaperTopic>(`/papers/${seg(paperId)}/topic`, { method: 'PUT', body: json(body) }),
+  /** Takes the paper off its shelf (status `none`); 200 with the new state. */
+  clear: (paperId: string) =>
+    request<PaperTopic>(`/papers/${seg(paperId)}/topic`, { method: 'DELETE' }),
   /** "Not this": the offer is never made again for this paper. */
   reject: (paperId: string) =>
     request<PaperTopic>(`/papers/${seg(paperId)}/topic/reject`, { method: 'POST' }),

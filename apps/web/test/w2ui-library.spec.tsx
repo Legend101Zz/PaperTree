@@ -1,7 +1,8 @@
 /**
- * W2UI #141 (S3 should-fixes): the unverified-session notice really retries, a failed card says
- * one sentence, the upload row does not linger above the card it became, and a cancelled upload
- * tells the truth about whether the server kept the file.
+ * W2UI #141 (S3 should-fixes): the unverified-session notice really retries, the upload row does
+ * not linger above the book it became, and a cancelled upload tells the truth about whether the
+ * server kept the file. (The failed paper's one-sentence reason lived on the catalogue card, which
+ * v0.3 #337 removed.)
  */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
@@ -140,45 +141,6 @@ describe('the unverified-session notice (item 1)', () => {
     useAuthStore.setState({ sessionUnverified: false });
     render(<SessionBanner />);
     expect(screen.queryByRole('status')).toBeNull();
-  });
-});
-
-describe('a failed card says one sentence (item 2)', () => {
-  it('shows the reason once and never the generic state sentence next to it', async () => {
-    useAuthStore.setState({ sessionUnverified: false });
-    api.list.mockResolvedValue([
-      row({
-        processing: 'failed',
-        job: {
-          job_id: 'j',
-          kind: 'parse',
-          state: 'dead_letter',
-          step: 'parse',
-          done: 0,
-          total: 3,
-          attempt: 3,
-          max_attempts: 3,
-          error_code: 'pdf_unreadable',
-        } as never,
-      }),
-    ]);
-    renderLibrary();
-    // #195: the failed paper is a spine; its catalogue card holds the sentence and Retry.
-    fireEvent.click(await screen.findByRole('button', { name: /garbage, could not read/ }));
-    const card = await waitFor(() => {
-      const found = document.querySelector<HTMLElement>('[data-card-paper-id]');
-      if (found === null) throw new Error('no catalogue card');
-      return found;
-    });
-    const reason =
-      'This file could not be read as a PDF. It may be damaged, scanned without text or password protected. Retry, or upload a different copy.';
-    expect(card.textContent).toContain(reason);
-    // The whole card text, screen-reader-only text included.
-    expect(card.textContent).not.toContain(
-      'We could not read this paper. Retry, or open the original PDF.',
-    );
-    expect(card.querySelectorAll('[data-failure-reason]')).toHaveLength(1);
-    expect(within(card).getByRole('button', { name: /Retry/ })).toBeTruthy();
   });
 });
 

@@ -1,5 +1,5 @@
 /**
- * The library feature (#195): the shelf, its header, catalogue card and uploads, and the data
+ * The library feature (#195): the shelf, its header and uploads, and the data
  * layer behind them. Its public surface: the page, the shelf, and what the tests read.
  */
 export { LibraryView } from './components/LibraryView';

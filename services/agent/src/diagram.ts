@@ -309,6 +309,49 @@ export class PlateReader {
   }
 }
 
+/** A figure of one box shows nothing, so an inline fence with fewer parts than this is removed. */
+export const MIN_INLINE_PARTS = 2;
+
+const KINDS = ['input', 'step', 'output', 'concept'] as const;
+
+/**
+ * Forgive the small slips of an inline fence's part line before the strict reader sees it (#339
+ * follow-up): an inline figure is a tutor's aside, so a part is kept with a repaired field rather
+ * than dropped whole. A missing or malformed `cite` is "no passage" (null); a `kind` outside the
+ * four is a `step`; `after` keeps only valid letters (lowercase is upcased), at most three; a bad
+ * `edge` list is dropped. A diagram RUN stays strict (its quotes are grounded by the API). A line
+ * that is not a JSON part is returned as written.
+ */
+function repairInlineLine(line: string): string {
+  const text = line.trim();
+  if (!text.startsWith('{')) return line;
+  let json: unknown;
+  try {
+    json = JSON.parse(text);
+  } catch {
+    return line;
+  }
+  if (typeof json !== 'object' || json === null) return line;
+  const part = json as Record<string, unknown>;
+  if (part['t'] !== 'part') return line;
+  const cite = part['cite'];
+  const quote =
+    typeof cite === 'object' && cite !== null ? (cite as { quote?: unknown }).quote : null;
+  if (typeof quote !== 'string') part['cite'] = null;
+  if (!(KINDS as readonly unknown[]).includes(part['kind'])) part['kind'] = 'step';
+  const after = Array.isArray(part['after']) ? (part['after'] as unknown[]) : [];
+  part['after'] = after
+    .map((from) => (typeof from === 'string' ? from.trim().toUpperCase() : ''))
+    .filter((from) => Letter.safeParse(from).success)
+    .slice(0, 3);
+  if (!Array.isArray(part['edge'])) delete part['edge'];
+  else
+    part['edge'] = (part['edge'] as unknown[])
+      .slice(0, 3)
+      .map((e) => (typeof e === 'string' && e.trim() !== '' ? e : null));
+  return JSON.stringify(part);
+}
+
 /**
  * An answer's inline ```diagram fence, validated with the same reader a diagram run uses
  * (v0.3, #339): every line that does not read is dropped, the rest is written back in one
@@ -318,7 +361,8 @@ export class PlateReader {
  * figure).
  *
  * @param body - The lines between the fences.
- * @returns The cleaned lines, or null when no part is left (the fence is then removed).
+ * @returns The cleaned lines, or null when fewer than {@link MIN_INLINE_PARTS} parts are left (the
+ *   fence is then removed: a one-box figure explains nothing).
  */
 export function cleanDiagramFence(body: string): string | null {
   const out: string[] = [];
@@ -350,7 +394,7 @@ export function cleanDiagramFence(body: string): string | null {
       );
     }
   });
-  reader.push(body);
+  reader.push(body.split('\n').map(repairInlineLine).join('\n'));
   reader.flush();
-  return parts === 0 ? null : out.join('\n');
+  return parts < MIN_INLINE_PARTS ? null : out.join('\n');
 }

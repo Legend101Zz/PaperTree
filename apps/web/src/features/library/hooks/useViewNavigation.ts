@@ -3,6 +3,7 @@
  * shelf" (the Shelf tab, that spine focused once it is shown), Enter on a topic card (the shelf by
  * Topic at the topic's first book), and Enter in the search, which acts on the view that is
  * showing and never changes a hidden view's state unseen (the shelf stays mounted under the others).
+ * Enter in the search on the shelf takes the first match off its plank and opens it (v0.3 #337).
  */
 'use client';
 
@@ -12,7 +13,6 @@ import { arrangeShelf, type Arrangement } from '../model/shelf';
 
 import type { LibraryViewName } from '../components/LibraryTitle';
 import type { LibraryBook } from './useLibrary';
-import type { Dispatch, SetStateAction } from 'react';
 
 /** What `useViewNavigation` needs from the page. */
 export interface ViewNavigationInput {
@@ -22,9 +22,8 @@ export interface ViewNavigationInput {
   readonly books: readonly LibraryBook[];
   readonly arrangement: Arrangement;
   readonly matches: ReadonlySet<string> | null;
-  /** The shelf's open catalogue card. */
-  readonly openId: string | null;
-  readonly setOpenId: Dispatch<SetStateAction<string | null>>;
+  /** Takes a book off the shelf and opens it. */
+  readonly onOpen: (paperId: string) => void;
 }
 
 // Focus the first element any of `selectors` finds, in order; true when one was found.
@@ -42,7 +41,7 @@ function focusFirst(...selectors: readonly string[]): boolean {
 /**
  * The page's view moves.
  *
- * @param input - The page's view, arrangement, books, search matches and open card.
+ * @param input - The page's view, arrangement, books, search matches and the way to open a book.
  * @returns `showOnShelf`, `showTopicOnShelf` and the search's `takeFirstMatch`.
  */
 export function useViewNavigation({
@@ -52,8 +51,7 @@ export function useViewNavigation({
   books,
   arrangement,
   matches,
-  openId,
-  setOpenId,
+  onOpen,
 }: ViewNavigationInput) {
   const [shelfFocus, setShelfFocus] = useState<string | null>(null);
   const showOnShelf = useCallback(
@@ -104,10 +102,7 @@ export function useViewNavigation({
     const first = arrangeShelf(books, arrangement)
       .flatMap((group) => group.papers)
       .find((book) => matches?.has(book.id) === true);
-    if (first === undefined) return;
-    // Already down: Enter goes to its Read, as taking it down would have.
-    if (first.id === openId) focusFirst('[data-card-read]');
-    else setOpenId(first.id);
-  }, [view, books, arrangement, matches, openId, setOpenId]);
+    if (first !== undefined) onOpen(first.id);
+  }, [view, books, arrangement, matches, onOpen]);
   return { showOnShelf, showTopicOnShelf, takeFirstMatch };
 }

@@ -1,6 +1,6 @@
 /**
  * The library's states (#196): who is "reading now" (and that the stats line counts the same set),
- * the face-out and at-scale thresholds, how many covers stand on a plank, what a sideways row shows
+ * the at-scale threshold, what a sideways row shows
  * ("28 of 36 shown", "+8 more"), the stats line at scale, and the place Continue writes for the
  * reader.
  */
@@ -9,10 +9,7 @@ import { describe, expect, it } from 'vitest';
 import { libraryStats, type ShelfPaper } from './shelf';
 import {
   AT_SCALE_MIN,
-  FACE_OUT_MAX,
   READING_NOW_MAX,
-  coverRows,
-  coversPerRow,
   planContinue,
   readerPlace,
   readingNow,
@@ -84,29 +81,12 @@ describe('reading now', () => {
 });
 
 describe('the shelf layout', () => {
-  it(`stands up to ${String(FACE_OUT_MAX)} papers face-out, spines to ${String(AT_SCALE_MIN)}, rows past that`, () => {
-    expect(shelfLayout(1)).toBe('face-out');
-    expect(shelfLayout(FACE_OUT_MAX)).toBe('face-out');
-    expect(shelfLayout(FACE_OUT_MAX + 1)).toBe('spines');
+  it(`stands spines up to ${String(AT_SCALE_MIN)} papers, whatever the count, rows past that`, () => {
+    expect(shelfLayout(1)).toBe('spines');
+    expect(shelfLayout(13)).toBe('spines');
     expect(shelfLayout(AT_SCALE_MIN)).toBe('spines');
     expect(shelfLayout(AT_SCALE_MIN + 1)).toBe('rows');
     expect(shelfLayout(400)).toBe('rows');
-  });
-
-  it('puts four covers on a plank at 1440 px, one on a phone, one before measuring', () => {
-    expect(coversPerRow(1280)).toBe(4);
-    expect(coversPerRow(358)).toBe(1);
-    expect(coversPerRow(0)).toBe(1);
-  });
-
-  it('cuts the arranged order into planks', () => {
-    const papers = ['e', 'a', 'd', 'c', 'b'].map((id, i) =>
-      paper(id, { title: id, addedAt: `2026-10-0${String(i + 1)}T00:00:00Z` }),
-    );
-    const ids = (rows: ShelfPaper[][]) => rows.map((row) => row.map((p) => p.id));
-    expect(ids(coverRows(papers, 'topic', 2))).toEqual([['e', 'a'], ['d', 'c'], ['b']]);
-    expect(ids(coverRows(papers, 'title', 4))).toEqual([['a', 'b', 'c', 'd'], ['e']]);
-    expect(coverRows([], 'topic', 4)).toEqual([]);
   });
 });
 

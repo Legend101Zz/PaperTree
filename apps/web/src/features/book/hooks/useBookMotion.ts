@@ -49,6 +49,17 @@ export function cancelAll(running: Set<Animation>): void {
 }
 
 /**
+ * Jumps every animation in `running` to its end (each one's `finished` then resolves): "click or
+ * press any key to skip". Unlike `cancelAll` the end state is kept, so the book is where it was
+ * going.
+ *
+ * @param running - The animations `play` is tracking.
+ */
+export function finishAll(running: Set<Animation>): void {
+  for (const animation of [...running]) animation.finish();
+}
+
+/**
  * `prefers-reduced-motion: reduce`, kept current.
  *
  * @returns True while the reader asks for less motion.

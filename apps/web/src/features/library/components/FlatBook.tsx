@@ -20,9 +20,6 @@ export interface FlatBookProps {
   readonly tabIndex: 0 | -1;
   /** While a search runs: true lights the book, false dims it. Undefined: no search. */
   readonly match?: boolean;
-  /** This book's catalogue card is open. */
-  readonly expanded: boolean;
-  readonly cardId?: string;
   readonly onActivate: (paperId: string) => void;
   readonly onFocusBook: (paperId: string) => void;
 }
@@ -32,14 +29,12 @@ export interface FlatBookProps {
  * `match` changed.
  *
  * @example
- * <FlatBook paper={p} tabIndex={0} expanded={false} onActivate={open} onFocusBook={setActive} />
+ * <FlatBook paper={p} tabIndex={0} onActivate={open} onFocusBook={setActive} />
  */
 export const FlatBook = memo(function FlatBook({
   paper,
   tabIndex,
   match,
-  expanded,
-  cardId,
   onActivate,
   onFocusBook,
 }: FlatBookProps): ReactNode {
@@ -59,8 +54,7 @@ export const FlatBook = memo(function FlatBook({
       style={style}
       tabIndex={tabIndex}
       aria-label={spineName(paper)}
-      aria-expanded={expanded}
-      aria-controls={expanded ? cardId : undefined}
+      aria-haspopup="dialog"
       data-paper-id={paper.id}
       data-processing-state={paper.processing}
       data-spine-state={spineState(paper)}

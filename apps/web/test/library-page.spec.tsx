@@ -1,8 +1,8 @@
 /**
  * The library page (#195, part 2): the header search ("/" focuses it, Esc clears it, "2 of N",
- * Enter takes down the first match, nothing reorders), the catalogue card (a click or Space
- * opens it with focus on Read; Enter on a parsed book takes it out instead, test/book.spec.tsx; Esc puts the book back and returns focus to its spine), the stats line and
- * "need a look", Arrange by, the header menus and dropping PDFs anywhere.
+ * Enter takes the first match off the shelf and opens it, nothing reorders), the stats line and
+ * "need a look", Arrange by, the header menus and dropping PDFs anywhere. A click on a spine, the
+ * motion and the spread are test/book.spec.tsx's.
  */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
@@ -33,6 +33,13 @@ vi.mock('@/lib/api/papers', async (importOriginal) => ({
 // The library reads `GET /topics` for its stats line; this spec is not about topics (#310).
 vi.mock('@/lib/api/topics', async (importOriginal) =>
   (await import('./api-stubs')).withNoTopics(await importOriginal()),
+);
+// The opened book reads its figures, abstract and summary; this spec only needs it to open.
+vi.mock('@/features/book/api/bookApi', async (importOriginal) =>
+  (await import('./api-stubs')).withEmptyBook(await importOriginal()),
+);
+vi.mock('@/lib/api/summary', async (importOriginal) =>
+  (await import('./api-stubs')).withNoSummary(await importOriginal()),
 );
 
 let seq = 0;
@@ -109,8 +116,7 @@ async function renderLibrary() {
   return screen.findByRole('toolbar', { name: 'Shelf' });
 }
 
-// The books only: since #196 a short shelf stands face-out, with Continue and Open under each
-// cover inside the same toolbar.
+// The books only: the toolbar holds the spines, and (at scale) a row's "+n more" bookend.
 const spineOrder = (shelf: HTMLElement) =>
   within(shelf)
     .getAllByRole('button')
@@ -191,65 +197,39 @@ describe('the header search', () => {
     ).toBe(true);
   });
 
-  it('Enter takes down the first match', async () => {
+  it('Enter takes the first match off the shelf and opens it', async () => {
     await renderLibrary();
     const search = screen.getByRole('searchbox', { name: 'Search the library' });
     fireEvent.change(search, { target: { value: 'residual' } });
     fireEvent.keyDown(search, { key: 'Enter' });
-    const card = await screen.findByRole('region', {
+    const book = await screen.findByRole('dialog', {
       name: 'Deep Residual Learning for Image Recognition',
     });
-    expect(within(card).getByText('Not started')).toBeTruthy();
+    expect(within(book).getByText('Not started')).toBeTruthy();
+    expect(document.querySelector('[data-card-paper-id]')).toBeNull();
   });
 });
 
-describe('the catalogue card', () => {
-  it('opens on a click (or Space) with focus on Read, points at its spine, and Esc puts it back', async () => {
+describe('the paper tag on a hovered spine (V3-34)', () => {
+  it('names the book over its spine with author, year, pages and state, and goes when the pointer leaves', async () => {
     const shelf = await renderLibrary();
     const spine = within(shelf).getByRole('button', { name: /^Attention Is All You Need/ });
-    spine.focus();
-    // A native button turns Enter into a click; happy-dom does not, so the click stands for it.
-    fireEvent.click(spine);
-    const card = await screen.findByRole('region', { name: 'Attention Is All You Need' });
-    expect(spine.getAttribute('aria-expanded')).toBe('true');
-    expect(spine.getAttribute('aria-controls')).toBe(card.id);
-    expect(within(card).getByText('Reading now · p. 4 of 12')).toBeTruthy();
-    expect(within(card).getByText('Ada Author et al. · 2017 · 12 pages')).toBeTruthy();
-    const read = within(card).getByRole('button', { name: 'Read Attention Is All You Need' });
-    expect(document.activeElement).toBe(read);
-    // Enter again (on Read) opens the reader.
-    fireEvent.click(read);
-    expect(push).toHaveBeenCalledWith(`/paper/${spine.dataset['paperId'] ?? ''}/read`);
-
-    fireEvent.keyDown(read, { key: 'Escape' });
-    expect(screen.queryByRole('region', { name: 'Attention Is All You Need' })).toBeNull();
-    expect(document.activeElement).toBe(spine);
-    expect(spine.getAttribute('aria-expanded')).toBe('false');
-  });
-
-  it('Esc on the shelf also puts the open book back', async () => {
-    const shelf = await renderLibrary();
-    const spine = within(shelf).getByRole('button', { name: /^Deep Residual/ });
-    fireEvent.click(spine);
-    await screen.findByRole('region', { name: /Deep Residual/ });
-    spine.focus();
-    fireEvent.keyDown(spine, { key: 'Escape' });
-    expect(screen.queryByRole('region', { name: /Deep Residual/ })).toBeNull();
-    expect(document.activeElement).toBe(spine);
-  });
-
-  it('a failed paper offers Retry, and Delete is danger, confirmed inline', async () => {
-    api.retry.mockResolvedValue({ job_id: 'j2', generation: 2 });
-    const shelf = await renderLibrary();
-    fireEvent.click(within(shelf).getByRole('button', { name: /^garbage, .*could not read$/ }));
-    const card = await screen.findByRole('region', { name: 'garbage' });
-    fireEvent.click(within(card).getByRole('button', { name: 'Retry reading garbage' }));
-    await waitFor(() => expect(api.retry).toHaveBeenCalledWith('ppr_4'));
-    const remove = within(card).getByRole('button', { name: 'Delete garbage' });
-    expect(remove.className).toContain('pt-button--danger');
-    fireEvent.click(remove);
-    expect(within(card).getByRole('group', { name: 'Confirm deleting garbage' })).toBeTruthy();
-    expect(api.remove).not.toHaveBeenCalled();
+    expect(document.querySelector('[data-spine-tag]')).toBeNull();
+    fireEvent.mouseOver(spine);
+    const tag = document.querySelector<HTMLElement>('[data-spine-tag]');
+    expect(tag?.querySelector('b')?.textContent).toBe('Attention Is All You Need');
+    expect(tag?.querySelector('span')?.textContent).toBe(
+      'Author et al. · 2017 · 12 pages · reading now, p. 4 of 12',
+    );
+    // The eyes' copy only: the spine's own name already says it all.
+    expect(tag?.getAttribute('aria-hidden')).toBe('true');
+    // Moving from spine to spine replaces the tag; leaving the shelf removes it.
+    const garbage = within(shelf).getByRole('button', { name: /^garbage/ });
+    fireEvent.mouseOut(spine, { relatedTarget: garbage });
+    fireEvent.mouseOver(garbage);
+    expect(document.querySelector('[data-spine-tag]')?.textContent).toMatch(/^garbage/);
+    fireEvent.mouseOut(garbage, { relatedTarget: document.body });
+    expect(document.querySelector('[data-spine-tag]')).toBeNull();
   });
 });
 
@@ -275,7 +255,7 @@ describe('the title block', () => {
   });
 
   it('Arrange by Year regroups the shelf; every view is live', async () => {
-    // Thirteen papers: past the face-out threshold (#196), so the shelf has its labelled rows.
+    // Thirteen papers, so the shelf has its labelled rows.
     // The nine added are corpus papers, dated 2015 here so the row counts are easy to read.
     const more = corpusRows(13)
       .slice(4)
@@ -302,8 +282,8 @@ describe('the title block', () => {
   });
 });
 
-describe('Arrange by on a face-out shelf (#196)', () => {
-  it('orders the covers by year, oldest first, unknown last', async () => {
+describe('Arrange by on the shelf', () => {
+  it('orders the spines by year, oldest first, unknown last', async () => {
     const shelf = await renderLibrary();
     fireEvent.change(screen.getByRole('combobox', { name: 'Arrange by' }), {
       target: { value: 'year' },
@@ -393,23 +373,6 @@ const tabbable = (root: ParentNode) =>
     (el) => el.getAttribute('tabindex') !== '-1' && el.closest('[aria-hidden="true"]') === null,
   );
 
-describe('the catalogue card belongs to one book (review B1)', () => {
-  it('an armed Delete does not follow the card to the next book taken down', async () => {
-    const shelf = await renderLibrary();
-    fireEvent.click(within(shelf).getByRole('button', { name: /^Attention/ }));
-    const first = await screen.findByRole('region', { name: 'Attention Is All You Need' });
-    fireEvent.click(
-      within(first).getByRole('button', { name: 'Delete Attention Is All You Need' }),
-    );
-    expect(within(first).getByRole('group', { name: /^Confirm deleting/ })).toBeTruthy();
-
-    fireEvent.click(within(shelf).getByRole('button', { name: /^Deep Residual/ }));
-    const next = await screen.findByRole('region', { name: /^Deep Residual/ });
-    expect(within(next).queryByRole('group', { name: /Confirm deleting/ })).toBeNull();
-    expect(api.remove).not.toHaveBeenCalled();
-  });
-});
-
 describe('no count the page does not have (review S1)', () => {
   it('prints no stats while loading, and none beside the load error', async () => {
     let fail: (error: Error) => void = () => undefined;
@@ -439,97 +402,7 @@ describe('no count the page does not have (review S1)', () => {
   });
 });
 
-describe('the card points at its spine after the shelf moves (review S3)', () => {
-  it('re-measures when Arrange by reorders the spines', async () => {
-    // happy-dom lays nothing out: give each spine a box by its place on the shelf.
-    const real = HTMLElement.prototype.getBoundingClientRect;
-    HTMLElement.prototype.getBoundingClientRect = function box(this: HTMLElement) {
-      const spines = Array.from(document.querySelectorAll('[data-paper-id]'));
-      const at = spines.indexOf(this);
-      const left = at < 0 ? 0 : 60 + at * 50;
-      return {
-        left,
-        width: at < 0 ? 1280 : 40,
-        top: 0,
-        height: 0,
-        right: 0,
-        bottom: 0,
-        x: left,
-        y: 0,
-        toJSON: () => ({}),
-      };
-    };
-    try {
-      const shelf = await renderLibrary();
-      fireEvent.click(within(shelf).getByRole('button', { name: /^Deep Residual/ }));
-      const card = await screen.findByRole('region', { name: /^Deep Residual/ });
-      const before = card.style.marginInlineStart; // third spine in shelving order
-      fireEvent.change(screen.getByRole('combobox', { name: 'Arrange by' }), {
-        target: { value: 'year' },
-      });
-      // By year it stands first (2015), so the card moves left with it.
-      await waitFor(() => expect(card.style.marginInlineStart).not.toBe(before));
-      expect(parseFloat(card.style.marginInlineStart)).toBeLessThan(parseFloat(before));
-    } finally {
-      HTMLElement.prototype.getBoundingClientRect = real;
-    }
-  });
-});
-
 describe('focus never falls to the page (review S4)', () => {
-  it('after Retry it is on Read', async () => {
-    api.retry.mockImplementation(async () => {
-      // The server now reports the paper queued: Retry leaves with the failed state.
-      api.list.mockResolvedValue(
-        ROWS().map((r) =>
-          r.paper_id === 'ppr_4' ? { ...r, processing: 'queued' as const, job: null } : r,
-        ),
-      );
-      return { job_id: 'j2', generation: 2 };
-    });
-    const shelf = await renderLibrary();
-    fireEvent.click(within(shelf).getByRole('button', { name: /^garbage,/ }));
-    const card = await screen.findByRole('region', { name: 'garbage' });
-    const retry = within(card).getByRole('button', { name: 'Retry reading garbage' });
-    retry.focus();
-    fireEvent.click(retry);
-    await waitFor(() => expect(within(card).queryByRole('button', { name: /^Retry/ })).toBeNull());
-    expect(document.activeElement).toBe(within(card).getByRole('button', { name: 'Read garbage' }));
-  });
-
-  it('after Delete it is on the next spine, or the previous one at the end', async () => {
-    api.remove.mockResolvedValue(undefined);
-    const shelf = await renderLibrary();
-    fireEvent.click(within(shelf).getByRole('button', { name: /^FlashAttention/ }));
-    let card = await screen.findByRole('region', { name: /^FlashAttention/ });
-    fireEvent.click(within(card).getByRole('button', { name: /^Delete FlashAttention/ }));
-    fireEvent.click(within(card).getByRole('button', { name: 'Delete paper' }));
-    await waitFor(() =>
-      expect(document.activeElement?.getAttribute('data-paper-id')).toBe('ppr_3'),
-    );
-
-    fireEvent.click(within(shelf).getByRole('button', { name: /^garbage,/ }));
-    card = await screen.findByRole('region', { name: 'garbage' });
-    fireEvent.click(within(card).getByRole('button', { name: 'Delete garbage' }));
-    fireEvent.click(within(card).getByRole('button', { name: 'Delete paper' }));
-    await waitFor(() =>
-      expect(document.activeElement?.getAttribute('data-paper-id')).toBe('ppr_3'),
-    );
-    expect(within(shelf).getByRole('button', { name: /^Deep Residual/ }).tabIndex).toBe(0);
-  });
-
-  it('after the last paper goes it is on Add papers', async () => {
-    api.list.mockResolvedValue(ROWS().slice(0, 1));
-    api.remove.mockResolvedValue(undefined);
-    const shelf = await renderLibrary();
-    fireEvent.click(within(shelf).getByRole('button', { name: /^Attention/ }));
-    const card = await screen.findByRole('region', { name: 'Attention Is All You Need' });
-    fireEvent.click(within(card).getByRole('button', { name: /^Delete Attention/ }));
-    fireEvent.click(within(card).getByRole('button', { name: 'Delete paper' }));
-    await screen.findByRole('heading', { name: 'Drop PDFs here or choose files' });
-    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Add papers' }));
-  });
-
   it('after "Got it" it is on the shelf', async () => {
     const shelf = await renderLibrary();
     const gotIt = screen.getByRole('button', { name: 'Got it' });

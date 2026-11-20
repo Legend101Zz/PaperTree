@@ -14,7 +14,7 @@ import {
   uploadWithProgress as uploadWithProgressTransport,
   type UploadOptions,
 } from './client';
-import type { LibraryLinks, LibraryPaper, Me, ReadingMode } from './types';
+import type { LibraryLinks, LibraryPaper, Me, PaperRename, ReadingMode } from './types';
 
 const seg = encodeURIComponent;
 
@@ -115,8 +115,23 @@ export const papersApi = {
     ),
   job: (jobId: string) => request<JobStatus>(`/jobs/${seg(jobId)}`),
 
-  /** 204. The DB rows, the upload and the assets go (S1). */
-  remove: (paperId: string) => request<void>(`/papers/${seg(paperId)}`, { method: 'DELETE' }),
+  /**
+   * 200 with the library row, whose `title` is now the name given (v0.3 #337). 404 for a paper
+   * that is not the caller's; 422 for a blank title or one over 300 characters after trimming.
+   */
+  rename: (paperId: string, title: string) =>
+    request<LibraryPaper>(`/papers/${seg(paperId)}`, {
+      method: 'PATCH',
+      body: json({ title } satisfies PaperRename),
+    }),
+
+  /** 204. The DB rows, the upload and the assets go (S1). `keepalive` lets it outlive the page. */
+  remove: (paperId: string, options: { readonly keepalive?: boolean } = {}) =>
+    request<void>(`/papers/${seg(paperId)}`, {
+      method: 'DELETE',
+      // keepalive: a delete that was waiting out its Undo time must outlive the page (v0.3 #337).
+      ...(options.keepalive === true ? { keepalive: true } : {}),
+    }),
   /** 202; 409 `not_failed` unless the latest job dead-lettered (S1). */
   retry: (paperId: string) =>
     request<{ job_id: string; generation: number }>(`/papers/${seg(paperId)}/retry`, {
