@@ -565,6 +565,23 @@ type SchemaKeys<
 > = Schemas[G]['$defs'][M] extends { properties: infer P } ? keyof P : never;
 /** The keys `T` lets the sender leave out. */
 type OptionalKeys<T> = { [K in keyof T]-?: object extends Pick<T, K> ? K : never }[keyof T];
+/**
+ * TEMPORARY (#343): the v0.3 branching fields are typed on `CanvasNode` (all optional) before the
+ * `boards` schema carries them. Delete this and the two `Exclude`s on `CanvasNode` below once
+ * migration 0016's contract lands.
+ */
+type BranchKeys =
+  | 'parent_id'
+  | 'branch'
+  | 'parent_span'
+  | 'question'
+  | 'uses'
+  | 'offset_x'
+  | 'offset_y'
+  | 'folded'
+  | 'final_text'
+  | 'level'
+  | 'model';
 /** Type equality (mutual assignability is not it: `string` and a union of strings pass one way). */
 type Equal<A, B> =
   (<X>() => X extends A ? 1 : 2) extends <X>() => X extends B ? 1 : 2 ? true : false;
@@ -793,8 +810,8 @@ const KEYS_ARE_EXACT: true[] = [
   true satisfies Equal<OptionalKeys<Board>, Opt<'boards.Board'>>,
   true satisfies Equal<keyof NonNullable<Board['viewport']>, SchemaKeys<'boards', 'Viewport'>>,
   true satisfies Equal<OptionalKeys<NonNullable<Board['viewport']>>, Opt<'boards.Viewport'>>,
-  true satisfies Equal<keyof CanvasNode, SchemaKeys<'boards', 'CanvasNode'>>,
-  true satisfies Equal<OptionalKeys<CanvasNode>, Opt<'boards.CanvasNode'>>,
+  true satisfies Equal<Exclude<keyof CanvasNode, BranchKeys>, SchemaKeys<'boards', 'CanvasNode'>>,
+  true satisfies Equal<Exclude<OptionalKeys<CanvasNode>, BranchKeys>, Opt<'boards.CanvasNode'>>,
   true satisfies Equal<keyof CanvasEdge, SchemaKeys<'boards', 'CanvasEdge'>>,
   true satisfies Equal<OptionalKeys<CanvasEdge>, Opt<'boards.CanvasEdge'>>,
   true satisfies Equal<keyof BoardView, SchemaKeys<'boards', 'BoardView'>>,

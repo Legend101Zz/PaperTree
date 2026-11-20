@@ -130,6 +130,25 @@ const DEAD_EXPORT_LEDGER: readonly { readonly key: string; readonly why: string 
   { key: 'lib/fixtures.ts#FIXTURE_TITLES', why: 'used in-file only; export unneeded' },
   { key: 'lib/pdf/worker.ts#WORKER_SRC', why: 'used in-file only; export unneeded' },
   { key: 'lib/pdf/worker.ts#__resetPdfjsForTests', why: 'test seam with no test caller yet' },
+  // The v0.3 branching board's types (#343), used by features/board/model/* before any route
+  // mounts that model. The Wave 4 UI worker imports them from a reachable file: delete these four
+  // entries then (the second ledger test fails until they are gone).
+  {
+    key: 'lib/api/types.ts#AskLevel',
+    why: 'used by features/board/model until the board UI mounts it',
+  },
+  {
+    key: 'lib/api/types.ts#AskUses',
+    why: 'used by features/board/model until the board UI mounts it',
+  },
+  {
+    key: 'lib/api/types.ts#BoardBranch',
+    why: 'used by features/board/model until the board UI mounts it',
+  },
+  {
+    key: 'lib/api/types.ts#ParentSpan',
+    why: 'used by features/board/model until the board UI mounts it',
+  },
 ];
 
 interface ModuleSurface {
