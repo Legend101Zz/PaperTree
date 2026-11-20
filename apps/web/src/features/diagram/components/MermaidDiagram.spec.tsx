@@ -139,7 +139,7 @@ describe('MermaidDiagram in a board card', () => {
     expect(figure.getAttribute('data-scrolls')).toBe('false');
   });
 
-  it('the preview is a nodrag button that opens the larger view, and does not bubble', async () => {
+  it('the preview is a nodrag button that opens a dialog, not an in-place enlarge, and does not bubble', async () => {
     draw.width = 700;
     const onClick = vi.fn();
     render(<MermaidDiagram body={BODY} closed compact />);
@@ -153,22 +153,73 @@ describe('MermaidDiagram in a board card', () => {
     expect(preview.tagName).toBe('BUTTON');
     expect(preview.classList.contains('nodrag')).toBe(true);
     expect(preview.getAttribute('aria-label')).toBe('Show the diagram larger');
+    expect(screen.queryByRole('dialog')).toBeNull();
     fireEvent.click(preview);
     document.body.removeEventListener('click', onClick);
     expect(onClick).not.toHaveBeenCalled();
-    expect(figure.getAttribute('data-large')).toBe('true');
-    expect(figure.getAttribute('data-preview')).toBe('false');
-    expect(figure.style.getPropertyValue('--pt-mmd-w')).toBe('700px');
-    expect(figure.querySelector('.pt-mmd__preview')).toBeNull();
+    const dialog = screen.getByRole('dialog', { name: 'History' });
+    expect(dialog.getAttribute('aria-modal')).toBe('true');
+    // The dialog is in a portal on <body>, outside the figure; the card is not enlarged in place.
+    expect(figure.contains(dialog)).toBe(false);
+    expect(figure.getAttribute('data-large')).toBe('false');
+    expect(figure.getAttribute('data-preview')).toBe('true');
+    expect(figure.style.getPropertyValue('--pt-mmd-w')).toBe(`${String(CARD)}px`);
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Close' }));
   });
 
-  it('keeps the caption-row "larger" control too', async () => {
+  it('the dialog is named "Diagram" when the drawing has no title', async () => {
+    draw.width = 700;
+    render(<MermaidDiagram body={'flowchart TD\n  A-->B'} closed compact />);
+    const figure = await waitFor(() => {
+      const f = document.querySelector<HTMLElement>('figure[data-mermaid]');
+      if (f === null) throw new Error('not drawn yet');
+      return f;
+    });
+    fireEvent.click(figure.querySelector('.pt-mmd__preview') as HTMLElement);
+    expect(screen.getByRole('dialog', { name: 'Diagram' })).toBeTruthy();
+  });
+
+  it('the dialog fits by the panel rule: held at 0.7 of natural, scrolls sideways', async () => {
+    draw.width = 3290;
+    const figure = await drawn(true);
+    fireEvent.click(figure.querySelector('.pt-mmd__preview') as HTMLElement);
+    const dialog = screen.getByRole('dialog');
+    const svg = dialog.querySelector<HTMLElement>('.pt-mmd-dialog__svg') as HTMLElement;
+    expect(svg.style.getPropertyValue('--pt-mmd-w')).toBe(`${String(Math.round(3290 * 0.7))}px`);
+    expect(dialog.querySelector('.pt-mmd-dialog__scroll')).not.toBeNull();
+  });
+
+  it('opens from the caption-row control too, and Esc closes it and returns focus there', async () => {
     draw.width = 700;
     const figure = await drawn(true);
     const caption = figure.querySelector<HTMLElement>('.pt-mmd__caption button') as HTMLElement;
     expect(caption.textContent).toBe('larger');
     fireEvent.click(caption);
-    expect(figure.getAttribute('data-large')).toBe('true');
+    expect(screen.getByRole('dialog')).toBeTruthy();
+    expect(figure.getAttribute('data-large')).toBe('false');
+    fireEvent.keyDown(document.activeElement as HTMLElement, { key: 'Escape' });
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(document.activeElement).toBe(caption);
+  });
+
+  it('Close returns focus to the preview', async () => {
+    draw.width = 700;
+    const figure = await drawn(true);
+    const preview = figure.querySelector<HTMLElement>('.pt-mmd__preview') as HTMLElement;
+    fireEvent.click(preview);
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(document.activeElement).toBe(preview);
+  });
+
+  it('a click on the backdrop closes it; a click inside the dialog does not', async () => {
+    draw.width = 700;
+    const figure = await drawn(true);
+    fireEvent.click(figure.querySelector('.pt-mmd__preview') as HTMLElement);
+    fireEvent.click(screen.getByRole('dialog'));
+    expect(screen.getByRole('dialog')).toBeTruthy();
+    fireEvent.click(screen.getByTestId('mermaid-dialog-backdrop'));
+    expect(screen.queryByRole('dialog')).toBeNull();
   });
 
   it('any container narrower than 380 px does the same without being told', async () => {

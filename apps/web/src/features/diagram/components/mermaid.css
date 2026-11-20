@@ -127,3 +127,64 @@
   outline: var(--pt-focus-width, 2px) solid var(--pt-focus);
   outline-offset: -2px;
 }
+
+/*
+ * The larger view from a board card: a modal over the page, up to min(92vw, 1200px) x 86vh, the
+ * drawing fitted to its box (the panel's rule). Page and room tokens only.
+ */
+.pt-mmd-dialog__backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 3000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--pt-ink, #000) 45%, transparent);
+}
+
+.pt-mmd-dialog {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  inline-size: min(92vw, 1200px);
+  max-block-size: 86vh;
+  padding: 36px 12px 12px;
+  box-sizing: border-box;
+  border-radius: 8px;
+  background: var(--pt-page);
+  color: var(--pt-ink);
+  box-shadow: 0 12px 40px rgb(0 0 0 / 0.3);
+}
+
+.pt-mmd-dialog__close {
+  position: absolute;
+  inset-block-start: 6px;
+  inset-inline-end: 8px;
+  margin: 0;
+  padding: 2px 10px;
+  border: 1px solid var(--pt-ink-muted);
+  border-radius: 6px;
+  background: none;
+  color: var(--pt-ink);
+  font: 13px var(--pt-font-ui);
+  line-height: 1.4;
+  cursor: pointer;
+}
+
+.pt-mmd-dialog__close:focus-visible,
+.pt-mmd-dialog__scroll:focus-visible {
+  outline: var(--pt-focus-width, 2px) solid var(--pt-focus);
+  outline-offset: 2px;
+}
+
+.pt-mmd-dialog__scroll {
+  flex: 1 1 auto;
+  min-block-size: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.pt-mmd-dialog__svg {
+  inline-size: max-content;
+  min-inline-size: 100%;
+}

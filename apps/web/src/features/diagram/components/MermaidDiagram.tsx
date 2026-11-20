@@ -20,7 +20,7 @@
  *  - It scales to the room it has (the panel, or a board card about half as wide) but never below
  *    `MIN_SCALE` (`../mermaid/scale`): a wider drawing keeps that scale and scrolls sideways inside
  *    the figure, with a fade at the edge it scrolls toward; its height is capped like a board card
- *    (`--pt-card-cap`, 60vh) and scrolls inside. One click shows it at its natural size; click,
+ *    (`--pt-card-cap`, 60vh) and scrolls inside. One click shows it at its natural size (in a narrow room: a modal dialog, `DiagramDialog`, over the page); click,
  *    Enter/Space or Esc puts it back (the Explain image head's pattern, `ImageHead`). The control
  *    is a small right-aligned caption row UNDER the drawing, never over it (it covered the last
  *    x-axis label, the scrollbar end, a participant). The figure's accessible name is its type and
@@ -41,6 +41,7 @@ import { mermaidName } from '../mermaid/fence';
 import { renderMermaid, type MermaidResult } from '../mermaid/render';
 import { fitFigure, NARROW_ROOM } from '../mermaid/scale';
 import { readTokens, tokensKey, type FigureTokens } from '../mermaid/theme';
+import { DiagramDialog } from './DiagramDialog';
 
 import './inline.css';
 import './mermaid.css';
@@ -125,6 +126,9 @@ export function MermaidDiagram({ body, closed, compact = false }: MermaidDiagram
   const tokens = useTokens(ref, closed);
   const [result, setResult] = useState<MermaidResult | null>(null);
   const [large, setLarge] = useState(false);
+  // A narrow room opens the larger view as a dialog (never in place): who opened it gets focus back.
+  const [dialog, setDialog] = useState(false);
+  const opener = useRef<HTMLElement | null>(null);
   const box = useRef<HTMLSpanElement | null>(null);
   const [atEnd, setAtEnd] = useState(false);
 
@@ -142,8 +146,16 @@ export function MermaidDiagram({ body, closed, compact = false }: MermaidDiagram
   const drawn = result?.ok === true ? result : null;
   const room = useRoom(box, drawn !== null);
   const narrow = compact || (room > 0 && room < NARROW_ROOM);
-  const fit = fitFigure(drawn?.width ?? 0, room, large, narrow);
-  const preview = narrow && !large;
+  const fit = fitFigure(drawn?.width ?? 0, room, large && !narrow, narrow);
+  const preview = narrow;
+  const openDialog = (from: HTMLElement): void => {
+    opener.current = from;
+    setDialog(true);
+  };
+  const closeDialog = (): void => {
+    setDialog(false);
+    opener.current?.focus();
+  };
   // A new size starts at the left edge again: the fade is back until the reader reaches the end.
   useLayoutEffect(() => setAtEnd(false), [fit.width, room]);
   if (result?.ok === false) {
@@ -161,13 +173,15 @@ export function MermaidDiagram({ body, closed, compact = false }: MermaidDiagram
       />
     );
   }
-  const label = large ? 'Show the diagram smaller' : 'Show the diagram larger';
+  const showLarge = large && !narrow;
+  const label = showLarge ? 'Show the diagram smaller' : 'Show the diagram larger';
+  const title = /^\s*title\s+(.+)$/m.exec(body)?.[1]?.trim();
   return (
     <figure
       ref={ref}
       className="pt-diagram-inline pt-mmd"
       data-mermaid=""
-      data-large={large}
+      data-large={showLarge}
       data-preview={preview}
       data-scrolls={fit.scrolls && !atEnd}
       aria-label={mermaidName(body)}
@@ -198,7 +212,7 @@ export function MermaidDiagram({ body, closed, compact = false }: MermaidDiagram
             onClick={(event) => {
               // A click on the preview is the reader's, never a card drag or a board click.
               event.stopPropagation();
-              setLarge(true);
+              openDialog(event.currentTarget);
             }}
           />
         ) : null}
@@ -208,20 +222,32 @@ export function MermaidDiagram({ body, closed, compact = false }: MermaidDiagram
         <button
           type="button"
           className="pt-mmd__btn nodrag nopan"
-          aria-expanded={large}
+          aria-expanded={narrow ? dialog : large}
+          aria-haspopup={narrow ? 'dialog' : undefined}
           aria-label={label}
-          title={large ? 'Show smaller (Esc)' : 'Show larger'}
-          onClick={() => setLarge((on) => !on)}
+          title={showLarge ? 'Show smaller (Esc)' : 'Show larger'}
+          onClick={(event) => {
+            if (narrow) openDialog(event.currentTarget);
+            else setLarge((on) => !on);
+          }}
           onKeyDown={(event: KeyboardEvent<HTMLButtonElement>) => {
-            if (event.key !== 'Escape' || !large) return;
+            if (event.key !== 'Escape' || !showLarge) return;
             // The figure goes back first; the panel stays open.
             event.stopPropagation();
             setLarge(false);
           }}
         >
-          {large ? 'smaller' : 'larger'}
+          {showLarge ? 'smaller' : 'larger'}
         </button>
       </span>
+      {dialog && narrow ? (
+        <DiagramDialog
+          svg={drawn.svg}
+          width={drawn.width}
+          label={title !== undefined && title !== '' ? title : 'Diagram'}
+          onClose={closeDialog}
+        />
+      ) : null}
     </figure>
   );
 }
