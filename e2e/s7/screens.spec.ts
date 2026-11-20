@@ -253,8 +253,9 @@ test('the canvas screens, both sizes, both themes', async ({ browser, stack }, t
       // #214: Select, Add note, Add frame, Thread, Fit all, Zoom out, Zoom in, More board tools; on
       // a phone Select and the zoom are in More, so the bar is one row beside "Board". #215 adds
       // Undo and Redo after Thread (in More on a phone). v0.3 adds the branching board's Tidy, Fold
-      // and Outline after Thread: three more on a wide screen, in More on a phone.
-      expect(tools).toHaveLength(vp.mobile ? 5 : 13);
+      // and Outline after Thread: three more on a wide screen, in More on a phone. The full-width
+      // board also offers "Paper beside" (#344, a wide screen only): 14.
+      expect(tools).toHaveLength(vp.mobile ? 5 : 14);
       for (const t of tools) {
         expect(t.h).toBeGreaterThanOrEqual(40);
         expect(t.w).toBeGreaterThanOrEqual(40);
