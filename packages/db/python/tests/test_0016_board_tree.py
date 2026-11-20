@@ -25,7 +25,7 @@ NEW_COLUMNS = (
 
 def test_0016_keeps_every_card_and_gives_the_new_columns_their_defaults(tmp_path: Path) -> None:
     file = tmp_path / "old.sqlite"
-    with open_database(file, migrations_through(14, tmp_path / "m14")) as db:
+    with open_database(file, migrations_through(15, tmp_path / "m15")) as db:
         db.migrate()
         owner = db.create_user("reader@papertree.test").owner
         document = load_fixture_paper()
@@ -61,7 +61,7 @@ def test_0016_keeps_every_card_and_gives_the_new_columns_their_defaults(tmp_path
 
     with open_database(file) as db:
         result = db.migrate()
-        assert 16 in result.applied and not result.backups  # additive: no backup needed
+        assert 16 in result.applied and not result.backups  # additive; 0015 ran earlier
     assert 16 not in BACKUP_BEFORE_VERSIONS
     conn = sqlite3.connect(file)
     conn.execute("PRAGMA foreign_keys = ON")
