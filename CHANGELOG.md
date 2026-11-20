@@ -7,6 +7,63 @@ better or worse, are in [`docs/METRICS.md`](docs/METRICS.md).
 
 ## [Unreleased]
 
+## [0.3.0] - unreleased
+
+The "tutor" release: a book comes off the shelf and opens in one move, an answer reads like a tutor
+explaining, and the board becomes a branching tree you can lay beside the paper. v0.3 is not tagged yet:
+its pull requests (#350, #352 to #369) are the work of the v0.3 build, and the figures below come from a
+metrics pass on the build, not from a CI run. What got better or worse, with numbers, is in
+[`docs/METRICS.md`](docs/METRICS.md#v03-against-v02).
+
+### Added
+
+- **The shelf and the spread:** a click takes the book off the shelf and opens it (spines stand on planks
+  and have widths that follow the paper). The spread has At a glance (a short sheet made in the background),
+  Continue, Rename, Topic, and Delete with Undo.
+- **Tutor answers:** an explanation comes in sections, in plain words, with maths set in KaTeX, an inline
+  diagram that draws the mechanism, levels (simpler or deeper), and Check yourself. Sources are quiet: a
+  small mark you open, not chips between the words.
+- **Dark and sepia pages:** the paper itself can be read light-on-dark or in sepia (the Aa menu); figures
+  sit on a mat that never covers a caption or a label.
+- **The selection menu** sits beside the selection, with one paint band per line.
+- **The branching board:** ask on a card, branch from words in an answer, focus on a path, Tidy, and an
+  Outline you can Export. A card's asks read the path that leads to it.
+- **Board beside:** the paper and the board side by side in a split view; drag text in, and a source flash
+  shows where it came from.
+- **Images:** select a figure, a table or any area, then ask about it, explain it, or send it to the board
+  as an image card, from tight high-DPI crops. The agent has an `image` run kind.
+
+### Changed
+
+- **Every run kind runs on MiniMax-M3.1-Flash** (the GA id), at effort low for explain and glance and
+  medium for ask, summary and image ([ADR-003](research/architecture-decisions/ADR-003-model-policy.md),
+  revision 2026-11-19). Cost is priced at MiniMax's published Flash rates ($0.15 in, $0.60 out, $0.015
+  cache read per million). Prompts are about 55 % shorter and the seed budget is half (1,500 tokens).
+- **The Summary** no longer shows how many passages it stands on or which bullet was not verified.
+- **Send to board** places a long passage in a card sized to it, in view.
+- **The agent bench** (`services/agent/bench`) is one arm, the shipped policy, with kinds for follow-up,
+  glance, image and board ask.
+
+### Removed
+
+- Citation chips and the repeated page flags between the words of an answer; the "verified" and
+  "grounded" readouts, and the API's grounding verdicts (`ai_citations.supported`, a diagram part's
+  `supported`; migration 0015, #351) with their verifier and dead code (Wave 6b).
+- The catalogue card on the spread (replaced by the open-and-read spread), "Explain with a diagram" as a
+  separate selection action (the diagram is inline in the answer), and the per-word datamarks in prompts.
+- The Read / Open the book buttons and the Delete card (the click opens the book, Delete has Undo).
+
+### Fixed
+
+- **Issues closed:** #323 (env files and `contracts.md` list v0.2's model variables), #336 to #346 (shelf
+  and book opening, maths, tutor answers, quiet sources, Summary readout, board send, split view, dark
+  reading, the selection menu), #348 (image selection and asks), #349 (UI changes found by playing the
+  prototype, in part) and #351 (grounding verdicts). #359 (circle a region an answer talks about) and #361
+  (an e2e job that can hang) stay open.
+- **Pull requests:** #350 (Wave 0), #352 to #358 and #360 (Waves 1 to 3: reading, selection, shelf, spread,
+  tutor answer), #362 to #365 (Wave 4: the board), #366 and #367 (Wave 5: images), #368 and #369 (Wave 6:
+  the reader split, live-check fixes, the dead-code sweep). #363 was closed and replaced by #364.
+
 ## [0.2.0] - 2026-10-17
 
 The "Ex Libris" release: PaperTree becomes a reading room. The papers stand on a shelf. The reader
@@ -168,5 +225,6 @@ code, or carried over from an earlier walk where the feature table says so
   [#182](https://github.com/Legend101Zz/PaperTree/issues/182).
 
 [Unreleased]: https://github.com/Legend101Zz/PaperTree/compare/v0.2.0...HEAD
+[0.3.0]: https://github.com/Legend101Zz/PaperTree/compare/v0.2.0...HEAD
 [0.2.0]: https://github.com/Legend101Zz/PaperTree/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/Legend101Zz/PaperTree/releases/tag/v0.1.0
