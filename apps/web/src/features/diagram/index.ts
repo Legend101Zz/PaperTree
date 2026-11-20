@@ -6,6 +6,7 @@
 export { DiagramExchange, type DiagramExchangeProps } from './components/DiagramExchange';
 export { DiagramPlate, type DiagramPlateProps } from './components/DiagramPlate';
 export { InlineDiagram, type InlineDiagramProps } from './components/InlineDiagram';
+export { MermaidDiagram, type MermaidDiagramProps } from './components/MermaidDiagram';
 export { parseDiagramFence, type InlineFigure } from './model/fence';
 export { PlateMiniature, type PlateMiniatureProps } from './components/PlateMiniature';
 export { layoutPlate, type PlateLayout } from './model/layout';

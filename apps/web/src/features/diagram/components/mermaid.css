@@ -1,0 +1,80 @@
+/*
+ * A Mermaid figure inside an answer. The box is the plate figure's (`inline.css`); the drawing is
+ * Mermaid's own svg, themed from the tokens by `../mermaid/theme`. Tokens only here.
+ */
+
+.pt-diagram-inline.pt-mmd {
+  display: block;
+  padding: 6px;
+}
+
+.pt-mmd__btn {
+  position: relative;
+  display: block;
+  inline-size: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: center;
+  cursor: zoom-in;
+}
+
+.pt-mmd__btn:focus-visible {
+  outline: var(--pt-focus-width, 2px) solid var(--pt-focus);
+  outline-offset: 2px;
+}
+
+.pt-mmd__svg {
+  display: block;
+  line-height: 0;
+}
+
+/* Fit to the room: Mermaid's svg is width 100% with a natural max-width; keep it from filling the panel. */
+.pt-mmd[data-large='false'] .pt-mmd__svg svg {
+  display: block;
+  margin-inline: auto;
+  inline-size: 100%;
+  block-size: auto;
+  max-block-size: 420px;
+}
+
+/* Larger: its natural width, the figure scrolls sideways inside its own box. */
+.pt-mmd[data-large='true'] {
+  overflow-x: auto;
+}
+
+.pt-mmd[data-large='true'] .pt-mmd__btn {
+  inline-size: max-content;
+  min-inline-size: 100%;
+  cursor: zoom-out;
+}
+
+.pt-mmd[data-large='true'] .pt-mmd__svg svg {
+  display: block;
+  margin-inline: auto;
+  inline-size: var(--pt-mmd-w, 100%);
+  max-inline-size: none !important; /* Mermaid sets its own max-width inline */
+  block-size: auto;
+}
+
+.pt-mmd__hint {
+  position: absolute;
+  inset-block-end: 0;
+  inset-inline-end: 0;
+  padding: 0 4px;
+  font: 13px var(--pt-font-ui);
+  line-height: 1.4;
+  color: var(--pt-ink-muted);
+  background: var(--pt-page);
+}
+
+/* Mermaid draws no motion of its own; make sure a diagram never animates for a reader who asked not to. */
+@media (prefers-reduced-motion: reduce) {
+  .pt-mmd * {
+    animation: none !important;
+    transition: none !important;
+  }
+}
