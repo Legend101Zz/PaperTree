@@ -2,22 +2,31 @@
 
 /**
  * The small figure inside an answer (v0.3 answer format §1, prototype `dgbox`): a ```diagram
- * fence drawn with the plate's own boxes and arrows (`PlateDrawing`, the slot grid) in the
- * answer's column, with no key, no readout and no passage buttons: the answer's words and source
- * line already carry those. While the fence is still being written it stands as a quiet
- * placeholder, so the answer never reflows under the reader's eyes when the figure lands; a fence
- * that holds nothing drawable draws nothing at all (never the raw lines).
+ * fence drawn as layers (`layoutLayered`, `LayeredDrawing`): parallel branches side by side, the
+ * plate's boxes and arrows, no key letters, no readout and no passage buttons: the answer's words
+ * and source line already carry those. The layout takes the room the figure has (the Explain panel,
+ * or a board card half as wide), measured, so boxes narrow and rows wrap rather than the text
+ * shrinking. While the fence is still being written it stands as a quiet placeholder, so the
+ * answer never reflows under the reader's eyes when the figure lands; a fence that holds nothing
+ * drawable draws nothing at all (never the raw lines).
  *
- * The drawing is `aria-hidden` (a picture of its parts), so the figure's accessible name and a
- * visually hidden list of its parts carry the same content as text.
+ * The picture is a `role="img"` whose title and description carry its parts and arrows as text.
  */
-import { useMemo, type CSSProperties, type ReactNode } from 'react';
+import {
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type RefObject,
+  type ReactNode,
+} from 'react';
 
 import { mathToPlain } from '@/lib/markdown';
 
-import { layoutPlate } from '../model/layout';
+import { LAYERED, layoutLayered } from '../model/layered';
 import { parseDiagramFence } from '../model/fence';
-import { PlateDrawing } from './PlateDrawing';
+import { LayeredDrawing } from './LayeredDrawing';
 
 import './plate.css';
 import './inline.css';
@@ -33,18 +42,42 @@ export interface InlineDiagramProps {
 /** The tallest the figure grows before it is scaled down; the panel scrolls, a figure must not fill it. */
 const MAX_HEIGHT = 420;
 /** Never scaled below this fraction: the labels (13 px in the grid) must stay legible. */
-const MIN_SCALE = 0.75;
+const MIN_SCALE = 0.85;
+/** The figure's own padding and border, both sides: the drawing has the rest of its width. */
+const CHROME = 16;
+/** The narrowest layout width, and the step widths are rounded to so a resize does not thrash. */
+const NARROWEST = 240;
+const STEP = 20;
+
+/** The width the drawing may take: the figure's measured width, rounded down to a step. */
+function useRoom(ref: RefObject<HTMLElement | null>, mounted: boolean): number {
+  const [room, setRoom] = useState<number>(LAYERED.defaultWidth);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (el === null) return undefined;
+    const measure = (): void => {
+      const w = el.clientWidth - CHROME;
+      if (w <= 0) return;
+      const next = Math.max(NARROWEST, Math.min(LAYERED.defaultWidth, Math.floor(w / STEP) * STEP));
+      setRoom((prev) => (prev === next ? prev : next));
+    };
+    measure();
+    if (typeof ResizeObserver === 'undefined') return undefined;
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [ref, mounted]);
+  return room;
+}
 
 /** The figure of one ```diagram fence. */
 export function InlineDiagram({ body, closed }: InlineDiagramProps): ReactNode {
+  const ref = useRef<HTMLElement | null>(null);
+  const room = useRoom(ref, closed);
   const figure = useMemo(() => (closed ? parseDiagramFence(body) : null), [body, closed]);
   const layout = useMemo(
-    () => (figure === null ? null : layoutPlate(figure.parts, figure.links, false)),
-    [figure],
-  );
-  const byLetter = useMemo(
-    () => new Map((figure?.parts ?? []).map((p) => [p.letter, p] as const)),
-    [figure],
+    () => (figure === null ? null : layoutLayered(figure.parts, figure.links, room)),
+    [figure, room],
   );
   if (!closed) {
     // A reserved, quiet box: the same width as the figure, so the text below does not jump.
@@ -61,24 +94,14 @@ export function InlineDiagram({ body, closed }: InlineDiagramProps): ReactNode {
   const name = `Diagram${figure.title === null ? '' : `: ${mathToPlain(figure.title)}`}`;
   return (
     <figure
+      ref={ref}
       className="pt-diagram-inline"
       data-diagram-inline={figure.parts.length}
+      data-diagram-columns={layout.columns}
       aria-label={name}
       style={{ '--pt-diagram-w': `${String(Math.round(layout.width * scale))}px` } as CSSProperties}
     >
-      <PlateDrawing layout={layout} parts={byLetter} lit={null} onPart={noop} />
-      <ol className="pt-sr-only">
-        {figure.parts.map((part) => (
-          <li key={part.letter}>
-            {part.letter}: {mathToPlain(part.label)}
-            {part.text === '' ? '' : `. ${mathToPlain(part.text)}`}
-          </li>
-        ))}
-      </ol>
+      <LayeredDrawing layout={layout} title={figure.title} />
     </figure>
   );
-}
-
-function noop(): void {
-  // The plate's parts open the paper from the key; an answer's figure has no key.
 }

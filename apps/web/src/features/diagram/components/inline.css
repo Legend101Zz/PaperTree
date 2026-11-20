@@ -43,3 +43,45 @@
     animation: none;
   }
 }
+
+/* The layered figure (`LayeredDrawing`): the plate's boxes and arrows, with no key letters. */
+.pt-dg__part {
+  animation: pt-plate-settle 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.pt-dg__route[data-feedback='true'] polyline {
+  stroke-dasharray: 5 3;
+}
+
+.pt-dg__elabel {
+  font: italic 13px var(--pt-font-paper);
+  fill: var(--pt-ink);
+  paint-order: stroke;
+  stroke: var(--pt-page);
+  stroke-width: 4px;
+  stroke-linejoin: round;
+}
+
+/* A label with maths: HTML inside the box, centred, the same face as the SVG labels. */
+.pt-dg__math {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  block-size: 100%;
+  text-align: center;
+  font-family: var(--pt-font-paper);
+  font-weight: 700;
+  line-height: 1.15;
+  color: var(--pt-ink);
+  overflow: hidden;
+}
+
+.pt-dg__math[data-kind='input'] {
+  font-style: italic;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pt-dg__part {
+    animation: none;
+  }
+}

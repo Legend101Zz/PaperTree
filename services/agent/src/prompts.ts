@@ -247,7 +247,8 @@ export const INLINE_DIAGRAM = [
   'When the mechanism is a flow of 4 or more parts (a block, pipeline, loop), add one ```diagram ' +
     'fence in "## How it works": a box-and-arrow figure of 4-8 parts, one per step or component ' +
     '(never a single box), each "after" listing the earlier parts (A = first line) that feed it; ' +
-    'kind: input, step, output or concept. Skip it for a plain definition. Example:',
+    'kind: input, step, output or concept. Maths in $…$, no backslash. ' +
+    'Skip it for a plain definition. Example:',
   '```diagram',
   '{"t":"plate","title":"Hybrid search"}',
   '{"t":"part","label":"Query","text":"what the user types","kind":"input","after":[],"cite":null}',
