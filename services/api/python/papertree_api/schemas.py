@@ -1218,6 +1218,44 @@ class NotebookCardCounts(Wire):
     strokes: NonNegative
 
 
+BoardBranch = Literal["down", "right"]
+UsesPaper = Literal["page", "whole", "off"]
+UsesDiagram = Literal["may", "never", "always"]
+QuickAsk = Literal["simpler", "example", "diagram"]
+AnswerStatus = Literal["streaming", "complete", "error", "partial", "aborted"]
+BOARD_QUESTION_MAX = 2000
+BOARD_EXTRA_NODES_MAX = 12
+
+
+class ParentSpan(Wire):
+    """The words of a parent answer a branch starts from (spec §1 rule 4): `start` and `end` are
+    UTF-16 code units into the parent's stored final answer text (the Markdown the model wrote), and
+    `quote` is exactly the words at those offsets, which the store checks."""
+
+    start: NonNegative
+    end: Positive
+    quote: str = Field(min_length=1, max_length=BOARD_QUESTION_MAX)
+
+    @model_validator(mode="after")
+    def _a_span_is_not_empty(self) -> Self:
+        if self.end <= self.start:
+            raise PydanticCustomError("value_error", "end must be after start")
+        return self
+
+
+class NodeUses(Wire):
+    """What an ask reads (spec §2 `uses_json`), shown above the ask box and stored on the card.
+    `path` is always the card's ancestors; `paper` is `page` (the root passage's page and the
+    pages on each side, tools off), `whole` (tools on) or `off` (the path only); `extra_node_ids`
+    are cards the user explicitly attached."""
+
+    path: bool = True
+    paper: UsesPaper = "page"
+    level: AnswerLevel = "familiar"
+    diagram: UsesDiagram = "may"
+    extra_node_ids: list[ClientId] = Field(default_factory=list, max_length=BOARD_EXTRA_NODES_MAX)
+
+
 class CanvasNode(Wire):
     node_id: str
     board_id: str
@@ -1236,6 +1274,24 @@ class CanvasNode(Wire):
     source_diagram_id: str | None
     #: A notebook card's page counts, computed on read; null on every other kind.
     counts: NotebookCardCounts | None
+    #: The branching board (0016, v0.3 #343). A root passage or a loose v0.2 card has no parent.
+    parent_id: str | None
+    branch: BoardBranch | None
+    parent_span: ParentSpan | None
+    #: An answer card's ask (as typed, or the quick-ask label), and what the ask read.
+    question: str | None
+    uses: NodeUses | None
+    #: The user's drag offset on top of the Tidy layout; `folded` collapses the subtree to a pill.
+    offset_x: float
+    offset_y: float
+    folded: bool
+    #: An answer card's answer, read with the board in one query (no thread fetch per card): the
+    #: stored final text, the level it was written at, the model that wrote it and its status
+    #: (`streaming` while the run is live). All null on every other kind.
+    final_text: str | None
+    level: AnswerLevel | None
+    model: str | None
+    answer_status: AnswerStatus | None
     version: Version
     created_at: WireTime
     updated_at: WireTime
@@ -1261,6 +1317,9 @@ class BoardView(Wire):
     edges: list[CanvasEdge]
 
 
+BROWSER_EVENTS["node"] = CanvasNode  # the board ask's first event: the card its answer streams into
+
+
 class NodeCreate(Wire):
     """`POST /papers/{id}/board/nodes`. An excerpt needs `source_anchor` (on this paper, which the
     route checks), an explanation needs `source_message_id`."""
@@ -1278,6 +1337,16 @@ class NodeCreate(Wire):
     source_page_id: str | None = omittable(validate_default=True)
     source_diagram_id: str | None = omittable(validate_default=True)
     group_id: str | None = None
+    #: The tree (0016). Used by an undo that puts a deleted subtree back, parents first; the store
+    #: holds the rules (one `down` child, a span branch is `right` and its words are the parent's).
+    parent_id: str | None = omittable()
+    branch: BoardBranch | None = omittable()
+    parent_span: ParentSpan | None = omittable()
+    question: str | None = omittable(min_length=1, max_length=BOARD_QUESTION_MAX)
+    uses: NodeUses | None = omittable()
+    offset_x: Coord | None = omittable()
+    offset_y: Coord | None = omittable()
+    folded: bool | None = omittable()
 
     @field_validator("source_anchor", mode="after")
     @classmethod
@@ -1327,6 +1396,54 @@ class NodePatch(Wire):
     group_id: str | None = None
     source_page_id: str | None = omittable()
     source_diagram_id: str | None = omittable()
+    offset_x: Coord | None = omittable()
+    offset_y: Coord | None = omittable()
+    folded: bool | None = omittable()
+
+
+class AskCreate(Wire):
+    """`POST /boards/{bid}/nodes/{nid}/asks` (spec §3): ask about the card, as a branch of it.
+    `question` is required unless `quick` names one. The server decides `branch` (rule 3): `down`
+    for the first plain ask on a card, `right` for every other, including `ask_differently` and
+    every ask with a `span`. `level` (when sent) overrides `uses.level`. `redo_of` is a retry or a
+    re-level of an answer card of this board (rule 6): a failed answer with no branches is replaced
+    in place, any other answer gets a `right` sibling."""
+
+    node_id: ClientId | None = omittable()
+    question: str | None = Field(default=None, min_length=1, max_length=BOARD_QUESTION_MAX)
+    span: ParentSpan | None = omittable()
+    ask_differently: bool = False
+    quick: QuickAsk | None = None
+    uses: NodeUses = Field(default_factory=NodeUses)
+    level: AnswerLevel | None = omittable()
+    redo_of: str | None = omittable()
+
+    @model_validator(mode="after")
+    def _a_question_or_a_quick_ask(self) -> Self:
+        if self.question is None and self.quick is None and self.redo_of is None:
+            raise PydanticCustomError("missing", "question is required unless quick is given")
+        return self
+
+
+class NoteCreate(Wire):
+    """`POST /boards/{bid}/nodes/{nid}/notes` (Keep as note): the selected words become a note
+    card to the right of the answer. No AI call."""
+
+    node_id: ClientId | None = omittable()
+    span: ParentSpan
+    text: str = Field(min_length=1, max_length=CANVAS_BODY_MAX)
+
+
+class TidyRequest(Wire):
+    """`POST /boards/{bid}/tidy`: reset the drag offsets of the tree that holds `root_id`."""
+
+    root_id: str
+
+
+class Tidied(Wire):
+    """The cards Tidy changed, with their new versions (one tree, never the loose cards)."""
+
+    nodes: list[CanvasNode]
 
 
 class StaleVersion(Wire):
@@ -1646,6 +1763,9 @@ class AgentRunRequest(Wire):
     #: ```check fence (the API decides: contracts.md §2.5). Both are optional on the agent's side.
     level: AnswerLevel = "familiar"
     check: bool = False
+    #: v0.3 (#343): whether the answer may / must / must not carry a ```diagram fence. `may` is the
+    #: tutor shape's own rule; a board ask's `uses.diagram` sets the others.
+    diagram: Literal["may", "never", "always"] = "may"
 
     @field_validator("seed", mode="after")
     @classmethod

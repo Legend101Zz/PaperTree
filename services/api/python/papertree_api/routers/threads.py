@@ -129,7 +129,7 @@ def check_anchor(anchor: dict[str, Any], paper_id: str, source_hash: str) -> Non
         raise ApiError("anchor_mismatch", "anchor.doc.pdfSha256: the anchor is on other PDF bytes")
 
 
-def _title(text: str) -> str:
+def title_of(text: str) -> str:
     title = evidence.header_text(text, limit=TITLE_CHARS)
     return title or "Untitled"
 
@@ -160,7 +160,7 @@ def stored_level(kind: RunKind, level: str) -> str | None:
     return level if kind in ("explain", "ask") else None
 
 
-def _request_id(request: Request) -> str | None:
+def request_id_of(request: Request) -> str | None:
     value = getattr(request.state, "request_id", None)
     return value if isinstance(value, str) else None
 
@@ -205,7 +205,7 @@ async def create_thread(
     thread_id, user_message_id = new_id("thr"), new_id("msg")
     message_id, run_id = new_id("msg"), new_id("run")
     token, token_sha256 = runs.mint_run_token()
-    title = _title(plan.quote if plan is not None and plan.quote else question)
+    title = title_of(plan.quote if plan is not None and plan.quote else question)
 
     db, owner = call.db, call.db_owner
     with db.transaction():
@@ -237,7 +237,7 @@ async def create_thread(
             run_id=run_id,
             level=stored_level(kind, body.level),
         )
-        _create_run(
+        create_run_row(
             db,
             owner,
             request,
@@ -258,7 +258,7 @@ async def create_thread(
 
     run_body = AgentRunRequest(
         run_id=run_id,
-        request_id=_request_id(request) or new_id("req"),
+        request_id=request_id_of(request) or new_id("req"),
         kind=kind,
         prompt_version=runs.PROMPT_VERSIONS[kind],
         tool=tool_access(settings, run_id, token),
@@ -303,7 +303,7 @@ async def create_thread(
     )
 
 
-def _create_run(
+def create_run_row(
     db: PaperTreeDb,
     owner: OwnerId,
     request: Request,
@@ -328,7 +328,7 @@ def _create_run(
         datamark=datamark,
         expires_at=runs.token_expiry(kind),
         code_path=runs.CODE_PATHS[kind],
-        request_id=_request_id(request),
+        request_id=request_id_of(request),
         prompt_version=runs.PROMPT_VERSIONS[kind],
     )
 
@@ -416,7 +416,7 @@ async def follow_up(
             sibling_of=sibling_of,
         )
         appended.append(message_id)
-        _create_run(
+        create_run_row(
             db,
             owner,
             request,
@@ -443,7 +443,7 @@ async def follow_up(
 
     run_body = AgentRunRequest(
         run_id=run_id,
-        request_id=_request_id(request) or new_id("req"),
+        request_id=request_id_of(request) or new_id("req"),
         kind=kind,
         prompt_version=runs.PROMPT_VERSIONS[kind],
         tool=tool_access(settings, run_id, token),
@@ -610,7 +610,7 @@ def thread_wire(row: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _run_is_live(run: dict[str, Any] | None) -> bool:
+def run_is_live(run: dict[str, Any] | None) -> bool:
     return (
         run is not None
         and run["status"] == "running"
@@ -656,7 +656,7 @@ def message_wire(
     assistant message's (0014): an answer stored before v0.3 has no level and reads ``familiar``
     on an explain or ask thread."""
     status, error_code = row["status"], row["error_code"]
-    if status == "streaming" and not _run_is_live(run):
+    if status == "streaming" and not run_is_live(run):
         # An answer whose run can no longer finish (the API process stopped mid-stream, so no
         # `done` was ever persisted, and the token has expired): shown as ended, with its text,
         # not as a stream a reader would wait on forever. The stored row is not rewritten.
@@ -779,5 +779,5 @@ async def cancel_run(
         if broker is not None and broker.spec.user_id == call.user_id:
             broker.request_cancel()
         else:
-            await client.cancel(run_id, request_id=_request_id(request))
+            await client.cancel(run_id, request_id=request_id_of(request))
     return Response(status_code=status.HTTP_202_ACCEPTED)
