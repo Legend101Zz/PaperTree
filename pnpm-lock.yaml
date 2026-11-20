@@ -190,13 +190,6 @@ importers:
         version: 3.0.1(ajv@8.20.0)
 
   packages/ui:
-    dependencies:
-      '@papertree/anchoring':
-        specifier: workspace:*
-        version: link:../anchoring
-      '@papertree/document-ir':
-        specifier: workspace:*
-        version: link:../document-ir
     devDependencies:
       '@testing-library/react':
         specifier: ^16.1.0
