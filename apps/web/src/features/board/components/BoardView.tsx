@@ -27,7 +27,14 @@ import { usePaperTitle } from '../hooks/usePaperTitle';
 import { useThreadDrawing } from '../hooks/useThreadDrawing';
 import { useUndoKeys } from '../hooks/useUndoKeys';
 import { anchorPageIndex } from '../model/cards';
-import { ZOOM_RANGE, besideHref, boardCounts, countsLine, paperBesideHref } from '../model/chrome';
+import {
+  ZOOM_RANGE,
+  besideHref,
+  boardCounts,
+  boardName,
+  countsLine,
+  paperBesideHref,
+} from '../model/chrome';
 import { withPageTitles, type PtEdge, type PtNode } from '../model/flow';
 import { bigBoard, glanceAt, publishedZoom } from '../model/glance';
 import { BoardHeader } from './BoardHeader';
@@ -247,7 +254,9 @@ function Board({ paperId }: { readonly paperId: string }) {
   );
   const notice = drawing.refusal ?? ctl.notice;
 
-  const title = ctl.board?.title ?? paperTitle ?? 'Board';
+  // The reader's own name for the board, else the paper's title; the default "Canvas" is neither.
+  const givenName = boardName(ctl.board?.title, null);
+  const title = boardName(ctl.board?.title, paperTitle) ?? 'Board';
 
   // B opens the paper beside a full-width board. (Beside the paper the reader owns the key.)
   useEffect(() => {
@@ -273,7 +282,7 @@ function Board({ paperId }: { readonly paperId: string }) {
             paperTitle={paperTitle}
             counts={ready ? counts : null}
             beside={beside}
-            {...(ctl.board?.title == null ? {} : { name: ctl.board.title })}
+            {...(givenName === null ? {} : { name: givenName })}
           >
             <BoardToolbar {...tools} />
           </BoardHeader>

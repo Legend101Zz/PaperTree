@@ -90,6 +90,29 @@ describe('the branching board', () => {
     await waitFor(() => expect(screen.queryByTestId('outline')).toBeNull());
   });
 
+  it('an unnamed board ("Canvas", the default) exports under the paper’s title, not "# Canvas"', async () => {
+    vi.mocked(boardsApi.get).mockResolvedValue({
+      board: { ...BOARD, title: 'Canvas' },
+      nodes: [
+        node({ id: 'p', x: 0, y: 0, body: 'Residual learning.' }),
+        node({ id: 'a', parent: 'p', question: 'Why?', finalText: '## TL;DR\nAn easy default.' }),
+      ],
+      edges: [],
+    });
+    render(<BoardView paperId="ppr_1" />);
+    await drawn();
+    fireEvent.click(screen.getByRole('button', { name: /^Outline/ }));
+    await waitFor(() =>
+      expect(
+        screen.getByRole('heading', { level: 1, name: 'Deep Residual Learning' }),
+      ).not.toBeNull(),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Export Markdown' }));
+    const md = screen.getByLabelText('The Markdown').textContent ?? '';
+    expect(md.startsWith('# Deep Residual Learning\n')).toBe(true);
+    expect(md).not.toContain('# Canvas');
+  });
+
   it('a click on a card focuses its path: a breadcrumb, and Esc leaves it', async () => {
     render(<BoardView paperId="ppr_1" />);
     await drawn();
