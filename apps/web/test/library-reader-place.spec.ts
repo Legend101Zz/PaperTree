@@ -6,7 +6,7 @@
  */
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { readSavedReaderState } from '@/app/paper/[id]/read/ReaderWorkspace';
+import { readSavedReaderState } from '@/features/reader';
 import { readerPlace } from '@/features/library/model/states';
 
 const KEY = 'papertree/reader/ppr_drift';

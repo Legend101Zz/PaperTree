@@ -5,3 +5,5 @@
 export { BoardBeside } from './components/BoardBeside';
 export { useBoardBeside, type BoardBeside as BoardBesideControl } from './hooks/useBoardBeside';
 export { draggedPassage, setDraggedPassage } from './model/passageDrag';
+export { useBoardBesideWiring } from './hooks/useBoardBesideWiring';
+export { useDragIn } from './hooks/useDragIn';

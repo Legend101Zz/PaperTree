@@ -15,7 +15,7 @@ import { indexDocument, type PaperSource } from '@papertree/anchoring';
 
 import { setDraggedPassage } from '@/features/split';
 import { useBoardBeside } from '@/features/split';
-import { ReaderActionsMount } from '@/app/paper/[id]/read/ReaderWorkspace';
+import { ReaderActionsMount } from '@/features/reader/components/ReaderActionsMount';
 import { useReaderActions } from '@/components/reader/actions';
 import { buildImageAnchor } from '@/lib/imageAnchor';
 

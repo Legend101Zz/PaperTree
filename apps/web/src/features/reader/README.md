@@ -6,7 +6,9 @@ The reader's v0.2 chrome (#203, DESIGN.md §1 "Reader", frames 04 and 09b). The 
 
 ## Data flow
 
-UI (`components/ReaderHeader`) ← props from `app/paper/[id]/read/ReaderWorkspace.tsx`, which owns every piece
+UI (`components/ReaderHeader`) ← props from `app/paper/[id]/read/ReaderWorkspace.tsx` (composition only; its state lives in
+`hooks/usePaperSource`, `useReadingPosition`, `useFocusAnchor`, `useHighlightActions`, and `features/split`'s
+`useBoardBesideWiring`; the regions are `components/ReaderWorkspaceView`, `DocumentSlot`, `NavigatorSlot`), which owns every piece
 of state the header shows: the reading mode and zoom (saved per paper in `localStorage`, contracts.md §5), the
 page at the top of the view (reported by Source's scroller and Guided's top block), the Contents panel, and
 the Explain toggle (`useExplainActions`, `components/explain`). Presses go back up as callbacks; the header
