@@ -2,12 +2,13 @@
  * LibraryView: the signed-in library (#195–#198; frames 01, 01b–01f, 03). The compact
  * header (search, Add papers, Aa, account), "Your library" with its stats and "N need a look"
  * (which opens the Table filtered to those papers), the view row with Arrange by, Reading now with
- * Continue, then the shelf (face-out covers when short, a plank per row at scale) with its card in
- * the band above and the hint row under the plank, or Topics, the Map or the Table; an empty library
- * shows the accession slip. PDFs drop anywhere. The shelf stays mounted (hidden) under the others,
- * so its focus, open card and scroll survive a switch; `useViewNavigation` moves between them.
- * At phone width (#199, frame 08a) the books lie flat under their holders, Reading now always
- * stands above them, the card opens as a bottom sheet, and the Map puts its list first.
+ * Continue (above the shelf at every size), then the shelf (spines on planks, a plank per row at
+ * scale) with the hint row under the plank, or Topics, the Map or the Table; an empty library
+ * shows the accession slip. PDFs drop anywhere. A click on a spine takes the book off the shelf
+ * and opens it (`useBookOnShelf`, v0.3 #337: no card in between). The shelf stays mounted (hidden)
+ * under the others, so its focus and scroll survive a switch; `useViewNavigation` moves between
+ * them. At phone width (#199, frame 08a) the books lie flat under their holders and the Map puts
+ * its list first.
  *
  * The data layer is `useLibrary` (polling only while a row is unfinished, Retry, Delete) and the
  * uploads are `useUploadQueue`, both unchanged in behaviour from v0.1. Read goes to
@@ -23,7 +24,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { SessionBanner } from '@/components/auth/SessionBanner';
 import { OfflineState } from '@/components/library/SystemStates';
 import { describeError } from '@/components/ui/errors';
-import { useMe } from '@/features/book';
+import { useBookOnShelf, useMe } from '@/features/book';
 import { useAuthStore } from '@/store/authStore';
 
 import { useContinue } from '../hooks/useContinue';
@@ -34,7 +35,6 @@ import { useTopics } from '../hooks/useTopics';
 import { useTouchTargets } from '../hooks/useTouchTargets';
 import { useUploadQueue } from '../hooks/useUploadQueue';
 import { useViewNavigation } from '../hooks/useViewNavigation';
-import { libraryPlan } from '../model/phone';
 import { libraryStats, matchPapers, type Arrangement } from '../model/shelf';
 import { readingNow, shelfLayout } from '../model/states';
 import { readerHref } from '../model/table';
@@ -90,7 +90,6 @@ export function LibraryView(): ReactNode {
   const table = useTableView();
   const touch = useTouchTargets();
   const phone = usePhoneLayout();
-  const [openId, setOpenId] = useState<string | null>(null);
   const [signingOut, setSigningOut] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
   useSlashToSearch(searchRef);
@@ -106,21 +105,26 @@ export function LibraryView(): ReactNode {
       : { ...counted, topics: topicCount };
   }, [loaded, books, topicCount]);
   const matches = useMemo(() => matchPapers(books, search), [books, search]);
-  // A short library stands face-out and carries Continue under each cover (frame 01c draws no
-  // strip), so the strip stands above spines, rows and the phone's flat books only.
-  const withStrip = libraryPlan(books.length, phone).readingNow;
-  const reading = useMemo(() => (withStrip ? readingNow(books) : []), [withStrip, books]);
+  const reading = useMemo(() => readingNow(books), [books]);
 
   // "Need a look" ends when nothing needs one any more, so a later upload cannot switch it back
-  // on by itself; and a card whose book has left the shelf closes rather than waiting to return.
+  // on by itself.
   const { chip, setChip } = table;
   useEffect(() => {
     if (chip === 'look' && stats !== null && stats.needALook === 0) setChip('all');
   }, [chip, setChip, stats]);
-  useEffect(() => {
-    if (openId !== null && !books.some((book) => book.id === openId)) setOpenId(null);
-  }, [openId, books]);
-  const nav = { view, setView, setArrangement, books, arrangement, matches, openId, setOpenId };
+  const read = useCallback((paperId: string) => router.push(readerHref(paperId)), [router]);
+  const resume = useContinue(read);
+  // A book that cannot be opened yet (queued, being read, failed) is read instead: Source mode
+  // works for it, and Retry and Delete are in the Table, where "N need a look" leads.
+  const { open, overlay } = useBookOnShelf(books, read);
+  const takeOut = useCallback(
+    (paperId: string) => {
+      if (!open(paperId)) read(paperId);
+    },
+    [open, read],
+  );
+  const nav = { view, setView, setArrangement, books, arrangement, matches, onOpen: takeOut };
   const { showOnShelf, showTopicOnShelf, takeFirstMatch } = useViewNavigation(nav);
   const needALook = useCallback(
     (on: boolean) => {
@@ -130,8 +134,6 @@ export function LibraryView(): ReactNode {
     [setChip],
   );
 
-  const read = useCallback((paperId: string) => router.push(readerHref(paperId)), [router]);
-  const resume = useContinue(read);
   const chooseFiles = useCallback(() => {
     document.querySelector<HTMLElement>('[data-add-papers] input[type="file"]')?.click();
   }, []);
@@ -144,109 +146,109 @@ export function LibraryView(): ReactNode {
   }, [logout, queryClient, router]);
 
   return (
-    <div className="pt-library pt-laid">
-      <LibraryHeader
-        search={{
-          value: search,
-          onChange: setSearch,
-          matched: matches === null ? null : matches.size,
-          total: books.length,
-          onSubmit: takeFirstMatch,
-        }}
-        searchRef={searchRef}
-        onFiles={queue.enqueue}
-        email={user?.email ?? null}
-        name={me.data?.display_name ?? null}
-        signingOut={signingOut}
-        onSignOut={() => void signOut()}
-      />
-      <UploadRow queue={queue} />
-      <DropAnywhere onFiles={queue.enqueue} />
-      <main className="pt-library__main">
-        {online ? (
-          <SessionBanner />
-        ) : (
-          <OfflineState availableSummary="Papers already open on this device still work. Uploading and questions need the network." />
-        )}
-        <LibraryTitle
-          stats={stats}
-          atScale={shelfLayout(books.length) === 'rows'}
-          needALookOnly={view === 'table' && chip === 'look'}
-          onNeedALook={needALook}
-          view={view}
-          onView={setView}
-          tools={
-            view === 'table' ? (
-              <ColumnsMenu
-                hidden={table.hidden}
-                onShown={table.setShown}
-                size={touch ? 'touch' : 'md'}
-              />
-            ) : view === 'topics' ? (
-              <NewTopic />
-            ) : null
-          }
-          arrangement={arrangement}
-          onArrange={setArrangement}
+    <>
+      <div className="pt-library pt-laid">
+        <LibraryHeader
+          search={{
+            value: search,
+            onChange: setSearch,
+            matched: matches === null ? null : matches.size,
+            total: books.length,
+            onSubmit: takeFirstMatch,
+          }}
+          searchRef={searchRef}
+          onFiles={queue.enqueue}
+          email={user?.email ?? null}
+          name={me.data?.display_name ?? null}
+          signingOut={signingOut}
+          onSignOut={() => void signOut()}
         />
-        {query.isLoading ? (
-          <div role="status" aria-label="Loading your papers" className="pt-s3-skeleton" />
-        ) : query.isError && own.length === 0 ? (
-          <div role="alert" className="pt-s3-alert pt-s3-alert--error flex flex-col gap-3">
-            <p>
-              {describeError(query.error, 'Your papers could not be loaded.')} Your uploaded papers
-              are safe.
-            </p>
-            <div>
-              <button
-                type="button"
-                className="pt-s3-btn pt-s3-btn--small"
-                onClick={() => void query.refetch()}
-              >
-                Try again
-              </button>
+        <UploadRow queue={queue} />
+        <DropAnywhere onFiles={queue.enqueue} />
+        <main className="pt-library__main">
+          {online ? (
+            <SessionBanner />
+          ) : (
+            <OfflineState availableSummary="Papers already open on this device still work. Uploading and questions need the network." />
+          )}
+          <LibraryTitle
+            stats={stats}
+            atScale={shelfLayout(books.length) === 'rows'}
+            needALookOnly={view === 'table' && chip === 'look'}
+            onNeedALook={needALook}
+            view={view}
+            onView={setView}
+            tools={
+              view === 'table' ? (
+                <ColumnsMenu
+                  hidden={table.hidden}
+                  onShown={table.setShown}
+                  size={touch ? 'touch' : 'md'}
+                />
+              ) : view === 'topics' ? (
+                <NewTopic />
+              ) : null
+            }
+            arrangement={arrangement}
+            onArrange={setArrangement}
+          />
+          {query.isLoading ? (
+            <div role="status" aria-label="Loading your papers" className="pt-s3-skeleton" />
+          ) : query.isError && own.length === 0 ? (
+            <div role="alert" className="pt-s3-alert pt-s3-alert--error flex flex-col gap-3">
+              <p>
+                {describeError(query.error, 'Your papers could not be loaded.')} Your uploaded
+                papers are safe.
+              </p>
+              <div>
+                <button
+                  type="button"
+                  className="pt-s3-btn pt-s3-btn--small"
+                  onClick={() => void query.refetch()}
+                >
+                  Try again
+                </button>
+              </div>
             </div>
-          </div>
-        ) : books.length === 0 ? (
-          <AccessionSlip onChooseFiles={chooseFiles} />
-        ) : (
-          <>
-            <div className="pt-library__shelf" hidden={view !== 'shelf'}>
-              <ReadingNow papers={reading} onContinue={resume} />
-              <ShelfSection
-                shown={view === 'shelf'}
-                books={books}
-                arrangement={arrangement}
-                search={search}
-                matches={matches}
-                openId={openId}
-                setOpenId={setOpenId}
-                onRead={read}
-                onContinue={resume}
-                onRetry={retry}
-                onDelete={remove}
-                phone={phone}
-              />
-            </div>
-            {view === 'table' ? (
-              <TableView
-                books={books}
-                matches={matches}
-                table={table}
-                touch={touch}
-                onRetry={retry}
-                onDelete={remove}
-                onShowOnShelf={showOnShelf}
-                onRead={read}
-              />
-            ) : null}
-            {view === 'topics' ? (
-              <TopicsView books={books} matches={matches} onShowOnShelf={showTopicOnShelf} />
-            ) : null}
-            {view === 'map' ? <MapView books={books} matches={matches} listFirst={phone} /> : null}
-          </>
-        )}
-      </main>
-    </div>
+          ) : books.length === 0 ? (
+            <AccessionSlip onChooseFiles={chooseFiles} />
+          ) : (
+            <>
+              <div className="pt-library__shelf" hidden={view !== 'shelf'}>
+                <ReadingNow papers={reading} onContinue={resume} />
+                <ShelfSection
+                  books={books}
+                  arrangement={arrangement}
+                  search={search}
+                  matches={matches}
+                  onOpen={takeOut}
+                  phone={phone}
+                />
+              </div>
+              {view === 'table' ? (
+                <TableView
+                  books={books}
+                  matches={matches}
+                  table={table}
+                  touch={touch}
+                  onRetry={retry}
+                  onDelete={remove}
+                  onShowOnShelf={showOnShelf}
+                  onRead={read}
+                />
+              ) : null}
+              {view === 'topics' ? (
+                <TopicsView books={books} matches={matches} onShowOnShelf={showTopicOnShelf} />
+              ) : null}
+              {view === 'map' ? (
+                <MapView books={books} matches={matches} listFirst={phone} />
+              ) : null}
+            </>
+          )}
+        </main>
+      </div>
+      {/* Beside the library, not in it: the library goes inert while the book is out. */}
+      {overlay}
+    </>
   );
 }

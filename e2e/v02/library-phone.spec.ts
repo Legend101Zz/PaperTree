@@ -1,10 +1,10 @@
 /**
  * S2h (#199) on the real stack at 390 × 844, touch: the stacked phone library (search, title,
  * tabs, Reading now, the books lying flat) → Continue on a Reading-now row opens the reader at its
- * page → back → a flat book taken down opens its card as a modal bottom sheet (Read focused, the
- * keys kept inside it at 320 px, its book clear above it, Put it back) → its "Open the book" opens
- * S3's spread (no pull-out on a phone) and Esc puts it back on the flat book → the Table tab scrolls
- * sideways in its own region while the page never does.
+ * page → back → a tap on a flat book takes it out and opens S3's spread in one motion (v0.3 #337:
+ * no card or sheet; Read focused, the keys kept inside it at 320 px, Put it back, Esc) and puts it
+ * back on the flat book → the Table tab scrolls sideways in its own region while the page never
+ * does.
  *
  * The brief names the demo account; the e2e stack has none (as for S2f), so a new account holds
  * two corpus PDFs (Attention, 15 pages, and ResNet, 12) and the server is told the person is on
@@ -49,7 +49,7 @@ const pageAtTop = (page: Page) =>
     return pages.sort((a, b) => a.gap - b.gap)[0]?.index ?? null;
   }, SCROLLER);
 
-test('390: stacked library → Continue opens p. 3 → back → a flat book opens the sheet → Table scrolls sideways', async ({
+test('390: stacked library → Continue opens p. 3 → back → a flat book opens the spread → Table scrolls sideways', async ({
   page,
   stack,
 }, info) => {
@@ -89,7 +89,7 @@ test('390: stacked library → Continue opens p. 3 → back → a flat book open
   expect(tops).toEqual([...tops].sort((a, b) => a - b));
   const book = shelf.locator(`button[data-paper-id="${resnet}"]`);
   await expect(book).toHaveClass(/pt-flatbook/);
-  await expect(shelf.locator('.pt-spine, .pt-cover')).toHaveCount(0);
+  await expect(shelf.locator('.pt-spine')).toHaveCount(0);
   // Every book and every view tab is a 44 px target; the page is 390 wide.
   for (const target of [
     ...(await shelf.locator('button[data-paper-id]').all()),
@@ -114,31 +114,27 @@ test('390: stacked library → Continue opens p. 3 → back → a flat book open
   await expect.poll(() => pageAtTop(page), { timeout: 30_000 }).toBe(2);
   await page.screenshot({ path: shot('s2h-continue-p3-390.png') });
 
-  // ── back: a flat book taken down opens its card as a bottom sheet ──
+  // ── back: a tap takes a flat book out and opens the spread, with no card or sheet ──
   await page.goBack();
   await expect(book).toBeVisible({ timeout: 60_000 });
   await book.tap();
-  const sheet = page.locator(`[data-card-paper-id="${resnet}"]`);
-  await expect(sheet).toHaveClass(/pt-catalogue--sheet/);
-  await expect(book).toHaveAttribute('aria-expanded', 'true');
-  await expect(sheet.getByRole('button', { name: /^Read / })).toBeFocused();
-  const box = await sheet.boundingBox();
-  expect(Math.round((box?.y ?? 0) + (box?.height ?? 0))).toBe(844);
-  expect(Math.round(box?.width ?? 0)).toBe(390);
+  const spread = page.getByRole('dialog', { name: /^Deep Residual Learning/ });
+  await expect(page.locator('[data-card-paper-id]')).toHaveCount(0);
+  await expect(spread).toHaveAttribute('data-book-stage', 'open');
+  await expect(book).toHaveAttribute('data-pulled', 'true');
+  await expect(spread.getByRole('button', { name: /^Read / })).toBeFocused();
   expect(await pageWidth(page)).toBe(390);
-  await page.screenshot({ path: shot('s2h-sheet-390.png') });
-  await sheet.getByRole('button', { name: 'Put it back' }).tap();
-  await expect(sheet).toHaveCount(0);
+  await page.screenshot({ path: shot('s2h-spread-390.png') });
+  await spread.getByRole('button', { name: /^Put it back/ }).tap();
+  await expect(spread).toHaveCount(0);
   // The inert has lifted before the book took focus (a real browser refuses focus to inert).
   await expect(book).toBeFocused();
 
-  // ── 320 px with a keyboard: no key can put focus on a book behind the sheet (review SF2) ──
+  // ── 320 px with a keyboard: no key can put focus on a book behind the spread (review SF2) ──
   await page.setViewportSize({ width: 320, height: 700 });
-  // A tap opens it (Enter on a book becomes S3's pull-out once that lands); the keys come after.
   await book.tap();
-  await expect(sheet).toHaveAttribute('aria-modal', 'true');
-  const sheetTop = (await sheet.boundingBox())?.y ?? 0;
-  expect(((await book.boundingBox())?.y ?? 0) + 44).toBeLessThanOrEqual(sheetTop);
+  await expect(spread).toHaveAttribute('aria-modal', 'true');
+  await expect(spread).toHaveAttribute('data-book-stage', 'open');
   for (const key of [
     'ArrowDown',
     'ArrowDown',
@@ -150,26 +146,14 @@ test('390: stacked library → Continue opens p. 3 → back → a flat book open
     'Shift+Tab',
   ]) {
     await page.keyboard.press(key);
-    expect(await sheet.evaluate((el) => el.contains(document.activeElement))).toBe(true);
+    expect(await spread.evaluate((el) => el.contains(document.activeElement))).toBe(true);
   }
   expect(await pageWidth(page)).toBe(320);
-  await page.screenshot({ path: shot('s2h-sheet-keys-320.png') });
-  await page.keyboard.press('Escape');
-  await expect(sheet).toHaveCount(0);
-  await expect(book).toBeFocused();
-  await page.setViewportSize({ width: 390, height: 844 });
-
-  // ── the sheet's "Open the book": S3's spread, the sheet gone first; Esc back to the flat book ──
-  await book.tap();
-  await sheet.getByRole('button', { name: /^Open the book/ }).tap();
-  await expect(sheet).toHaveCount(0);
-  const spread = page.getByRole('dialog', { name: /^Deep Residual Learning/ });
-  await expect(spread.getByRole('button', { name: /^Read / })).toBeVisible();
-  expect(await pageWidth(page)).toBe(390);
-  await page.screenshot({ path: shot('s2h-spread-390.png') });
+  await page.screenshot({ path: shot('s2h-spread-keys-320.png') });
   await page.keyboard.press('Escape');
   await expect(spread).toHaveCount(0);
   await expect(book).toBeFocused();
+  await page.setViewportSize({ width: 390, height: 844 });
   expect(await page.locator('[inert]').count()).toBe(0);
 
   // ── the Table tab: its region scrolls sideways, the page does not ──

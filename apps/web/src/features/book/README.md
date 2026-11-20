@@ -2,16 +2,12 @@
 
 A book taken off the shelf and opened (#200; frames 02a, 02 and 11; DESIGN.md §1, §6).
 
-- **Pull out (02a).** Enter on a book whose parse is in (a spine, or a face-out cover) lifts it out of the row and
-  turns it face-out over the veiled shelf; its slot stays as a shadowed gap (`data-pulled` on the spine). The cover
-  is the typographic one in the topic's cloth ("2017 · arXiv 1706.03762" at its foot), or the paper's own figure
-  once one is chosen as the plate. The slip under it says the state ("Reading now · p. 4 of 15") and "Enter open ·
-  Esc put it back" (both are buttons too). A queued, still-being-read, failed or sample paper keeps Enter for its
-  catalogue card, where Retry and Delete are.
-- **The card and the pull-out.** A click (or Space) on a book still takes it down into S2d's catalogue card in the
-  band above the shelf; the card of a book that can be opened gains **Open the book**, which goes straight to the
-  spread. So the card is the mouse's way and Space the keyboard's way to Read / Retry / Delete, and Enter is the
-  pull-out, as DESIGN.md §1 says. The key hints under the plank say "Enter take it out · Space its card".
+- **Take out and open (v0.3 #337).** A click (or Enter, or Space) on a book whose parse is in, on any spine on any
+  plank, takes it off the shelf and opens it in one motion: the spine slides out of its slot, turns to face you,
+  flies to the middle growing into a cover, the cover swings open and you land on the spread. There is no card in
+  between (the owner's catalogue card is gone). The slot stays a shadowed gap while the book is out (`data-pulled`
+  on the spine). A queued, still-being-read, failed or sample paper cannot be opened yet: the shelf reads it
+  instead (Retry and Remove are the Table's).
 - **The spread (02).** Left, on patterned endpaper: the _Ex libris_ bookplate ("From the library of <name>", the
   topic, the arXiv id, "PaperTree · shelved 15 Oct 2026"), or the chosen plate with its caption. The name is
   `display_name`; without one the plate asks once, inline, "Whose library is this?" (Save stores it with
@@ -31,27 +27,29 @@ A book taken off the shelf and opened (#200; frames 02a, 02 and 11; DESIGN.md §
   **Summarize** with "No summary yet"; it opens the reader's panel on the summary), the arXiv link and "Put it back
   (Esc)".
 - **Keyboard and focus.** The book is a modal dialog (`role="dialog"`, `aria-modal`), labelled by its title; Tab
-  stays in it and the library behind is `inert`. Focus is on the cover when it comes out and on Read when it opens;
-  Esc (anywhere) or "Put it back" puts it back, and focus returns to the book on the shelf. Esc while the book
-  is still moving cancels the motion and wins: every animation's end checks the current moment (`moving` in
-  `PulledBook`, the functional `onOpen` in `useBookOnShelf`), so a swing Esc cancelled never reopens the book. Choosing or clearing the
+  stays in it and the library behind is `inert`. Focus is on the dialog while the book moves and on Read when it is open;
+  Esc (anywhere), a click on the veil or "Put it back" puts it back, and focus returns to the spine on the shelf.
+  A click or ANY key (Esc included) while the book is still coming out skips to the end (the animations are
+  finished, not cancelled), and a click that skipped is not also a click outside; a second Esc puts it back.
+  Every animation's end checks the current moment (`moment` in `PulledBook`), so a put-back never reopens the book. Choosing or clearing the
   plate moves focus to the button that replaces the one pressed.
-- **Motion** (`model/motion.ts`, WAAPI over CSS 3D): pull out = lift 120 → turn 200 → settle 80 on the lift curve,
-  starting at the spine's own box; open = the cover swings 480 while the spread comes up; put back 200; Read
-  cross-fades 120. Reduced motion: every step is one 120 ms cross-fade with nothing moving (`data-motion`).
+- **Motion** (`model/motion.ts`, WAAPI over CSS 3D): one sequence of 880 ms: slide out 120 → turn 160 → travel
+  and grow 220 → cover swings 280 → settle 100, played on four elements together (the spine's cloth, the cover,
+  the spread, the veil); put back 420 (the reverse); Read cross-fades 120. Reduced motion (and a spine that
+  cannot be measured): one 120 ms cross-fade each way with nothing moving (`data-motion`).
 - **Phone (390).** The spread stacks (bookplate, then the details) and the dialog scrolls. A phone reaches it
-  from the library's bottom sheet ("Open the book", #199; no pull-out there). Below 900 px or on a touch
+  by a tap on a flat book (the same motion, from the flat book's box; the cover covers the whole page). Below 900 px or on a touch
   screen the "p. 1 · Abstract" tab answers a 44 px tap (its link holds the clipped face, and the link's hit
   area reaches 12 px above and below), the arXiv link is 44 px tall, and "Put it back" draws no Esc key.
 
 ## Data flow
 
-Shelf (`features/library/components/ShelfSection.tsx`) → `useBookOnShelf` (which book is out, and at which stage)
+Shelf (`features/library/components/ShelfSection.tsx`) → `useBookOnShelf` (which book is out)
 → `PulledBook` → `BookSpread` → `useBookFacts` / `useDisplayName` / `usePlateChoice` (TanStack Query) → `bookApi`
 / `authApi` → `GET /papers/{id}/figures`, `GET /papers/{id}/abstract`, `PUT` / `DELETE /papers/{id}/plate`,
 `GET` / `PATCH /auth/me` (services/api, `routers/book.py`) → SQLite (`paper_plate`, 0010; the plate is an Anchor).
 The library row (`GET /papers`) carries everything else: the arXiv id, year, counts, `has_summary`, the topic and
-the plate, which the covers draw. A plate change re-reads `['papers']`. The reader's half of the two links is
+the plate, which the opened book draws. A plate change re-reads `['papers']`. The reader's half of the two links is
 `hooks/useFromBook.ts` (`?from=book&at=abstract`, `?from=book&open=summary`).
 
 ## Key files
@@ -59,7 +57,7 @@ the plate, which the covers draw. A plate change re-reads `['papers']`. The read
 - `model/book.ts`: the bookplate's owner rule, the meta, figures, counts and topic lines, the Figure 1 offer, the
   excerpt, the plate's caption, which books can be opened (pure; `book.spec.ts`).
 - `model/motion.ts`: the keyframes and timings, both paths (pure; `motion.spec.ts`).
-- `components/PulledBook.tsx` (the dialog and its two stages), `BookCover.tsx`, `BookSpread.tsx`, `Bookplate.tsx`,
+- `components/PulledBook.tsx` (the dialog, its three moments: opening, open, closing), `BookCover.tsx`, `BookSpread.tsx`, `Bookplate.tsx`,
   `BookDetails.tsx`, `book.css`.
 - `hooks/useBookOnShelf.ts`, `useBookData.ts`, `useBookMotion.ts`, `useFocusTrap.ts`, `useFromBook.ts`.
 - Tests: `apps/web/test/book.spec.tsx` (through the library page), e2e `e2e/v02/book.spec.ts`.

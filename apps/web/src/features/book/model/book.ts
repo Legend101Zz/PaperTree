@@ -185,11 +185,11 @@ export function arxivLink(
 
 /**
  * Whether a book can be taken out and opened: the parse is in (complete or partial) and the paper
- * is the person's (a sample has no server to ask). A queued, reading or failed paper keeps the
- * catalogue card, where Retry and Delete are.
+ * is the person's (a sample has no server to ask). A queued, reading or failed paper cannot be
+ * opened yet: the shelf reads it instead, and Retry and Remove are the Table's.
  *
  * @param paper - The book's processing state and sample flag.
- * @returns True when Enter should pull it out.
+ * @returns True when a click should take it off the shelf and open it.
  */
 export function canOpenBook(paper: Pick<BookPaper, 'processing' | 'isSample'>): boolean {
   return (

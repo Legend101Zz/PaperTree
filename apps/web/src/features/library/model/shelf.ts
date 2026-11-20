@@ -51,7 +51,7 @@ export interface ShelfPaper {
   readonly reading?: ReadingProgress | null;
   readonly arxivCategory?: string | null;
   readonly topic?: ShelfTopic | null;
-  /** The figure chosen as the cover (#200): a face-out cover shows it; a spine does not. */
+  /** The figure chosen as the cover (#200): the opened book shows it; a spine does not. */
   readonly plate?: { readonly assetUrl: string; readonly label: string | null } | null;
 }
 
@@ -70,9 +70,12 @@ export interface ShelfGroup<P extends ShelfPaper = ShelfPaper> {
 export const SPINE_MAX_WIDTH = 48;
 /** Used while the page count is unknown (see `spineWidth`). */
 export const SPINE_DEFAULT_WIDTH = 40;
-/** Frame 01's spine heights run 262–318 px, 01f's shorter rows 150–179; decoration, not data. */
-const SPINE_HEIGHT_MIN = 262;
-const SPINE_HEIGHT_SPAN = 57;
+/**
+ * The v0.3 prototype draws its spines at 76% of V3-34's 280–330 px, 217–251 px, so that nine books
+ * stand on two planks in a 900 px window; 01f's shorter rows run 150–179. Decoration, not data.
+ */
+const SPINE_HEIGHT_MIN = 217;
+const SPINE_HEIGHT_SPAN = 35;
 const COMPACT_HEIGHT_MIN = 150;
 const COMPACT_HEIGHT_SPAN = 30;
 
@@ -124,7 +127,7 @@ export function fnv1a(text: string): number {
  *
  * @param id - The paper id.
  * @param compact - The shorter spines of a library at scale (frame 01f).
- * @returns Height in CSS px, 262–318 (150–179 compact).
+ * @returns Height in CSS px, 217–251 (150–179 compact).
  */
 export function spineHeight(id: string, compact = false): number {
   const hash = fnv1a(id);
@@ -228,6 +231,24 @@ function stateWords(paper: ShelfPaper): string {
 export function spineName(paper: ShelfPaper): string {
   const parts = [paper.title.trim(), authorLine(paper.authors), paper.year ?? null];
   return [...parts.filter((p) => p !== null), stateWords(paper)].join(', ');
+}
+
+/**
+ * The paper tag a spine shows when you hover it (v0.3 R4): the full title over "He et al. · 2015 ·
+ * 12 pages · not started", leaving out what is not known. The spine's own name says the same to a
+ * screen reader; the tag is for the eyes (a title set sideways on a spine is hard to read).
+ *
+ * @param paper - The paper.
+ * @returns The title and the line under it.
+ */
+export function spineTag(paper: ShelfPaper): { readonly title: string; readonly line: string } {
+  const pages = paper.pageCount > 0 ? `${String(paper.pageCount)} pages` : null;
+  const year = typeof paper.year === 'number' ? String(paper.year) : null;
+  const parts = [authorLine(paper.authors), year, pages];
+  return {
+    title: paper.title.trim(),
+    line: [...parts.filter((p): p is string => p !== null), stateWords(paper)].join(' · '),
+  };
 }
 
 /**
@@ -481,22 +502,62 @@ export function libraryStats(papers: readonly ShelfPaper[]): LibraryStats {
 }
 
 /**
- * Where the catalogue card goes in the band above the shelf: its left edge in band coordinates,
- * kept inside the band, and its pointer's offset from that edge, so it points at the spine.
+ * A brass holder's width in the plank's packing: 112 px at least, 220 px at most (V3-34's are 112–208).
  *
- * @param spineCenter - The open spine's centre, in px from the band's left edge.
- * @param bandWidth - The band's width.
- * @param cardWidth - The card's width (at most the band's).
- * @returns The card's left edge and the pointer's offset inside the card.
+ * @param label - The group's name.
+ * @returns Width in px.
  */
-export function placeCard(
-  spineCenter: number,
-  bandWidth: number,
-  cardWidth: number,
-): { readonly left: number; readonly pointer: number } {
-  const width = Math.min(cardWidth, bandWidth);
-  // Frame 01: the pointer sits 42 px in from the card's left edge when there is room.
-  const left = Math.max(0, Math.min(spineCenter - 42, bandWidth - width));
-  const pointer = Math.max(12, Math.min(spineCenter - left, width - 12));
-  return { left, pointer };
+function holderWidth(label: string): number {
+  return Math.max(112, Math.min(220, 28 + 7 * label.length));
+}
+
+/** The gap between two groups on a plank (`.pt-shelf`'s `gap`). */
+export const GROUP_GAP = 32;
+/**
+ * How wide the books of one plank may run: a bay of a bookcase, not the whole window. V3-34 and the
+ * prototype stand nine books as 6 + 3 on two planks at 1440 px (the Vision group wraps), so the
+ * plank is full well before the window is.
+ */
+export const PLANK_BAY = 640;
+
+/**
+ * How much of a plank a group takes: its spines side by side, or its brass holder if that is wider.
+ *
+ * @param group - The group.
+ * @returns Width in px.
+ */
+export function groupWidth<P extends ShelfPaper>(group: ShelfGroup<P>): number {
+  const spines = group.papers.reduce((sum, p) => sum + spineWidth(p.pageCount) + 2, 4);
+  return Math.max(spines, holderWidth(group.label));
+}
+
+/**
+ * The groups cut into planks: they flow left to right in shelving order and wrap onto the next
+ * plank when the next group would not fit (`PLANK_BAY`, or the shelf's own width when that is
+ * less). A group wider than a plank stands alone and scrolls. Unmeasured (0) it is one plank.
+ *
+ * @param groups - The arranged groups.
+ * @param width - The shelf's width in px (0 before it is measured).
+ * @returns The planks, each a list of groups, top to bottom.
+ */
+export function packPlanks<P extends ShelfPaper>(
+  groups: readonly ShelfGroup<P>[],
+  width: number,
+): ShelfGroup<P>[][] {
+  if (!(width > 0)) return groups.length === 0 ? [] : [[...groups]];
+  const room = Math.min(width, PLANK_BAY);
+  const planks: ShelfGroup<P>[][] = [];
+  let used = 0;
+  for (const group of groups) {
+    const need = groupWidth(group);
+    const last = planks[planks.length - 1];
+    if (last !== undefined && used + GROUP_GAP + need <= room) {
+      last.push(group);
+      used += GROUP_GAP + need;
+    } else {
+      planks.push([group]);
+      used = need;
+    }
+  }
+  return planks;
 }
