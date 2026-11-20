@@ -1,16 +1,36 @@
 # ruff: noqa: E501
-"""The model A/B (ADR-003): M3 against Flash through the REAL stack (api + worker + agent + MiniMax).
+"""The v0.3 live bench: the REAL stack (api + worker + agent + MiniMax), one default-policy arm.
 
-    uv run python services/agent/bench/ab.py --out <evidence dir> [--arms m3,flash-low,flash-medium-summary]
+    uv run python services/agent/bench/ab.py --out <evidence dir> [--arms default] [--repeats 2]
+
+v0.3 CHANGES (against the v0.1/v0.2 model A/B this file used to be):
+
+* NO VERDICT COLUMNS. #351 dropped the grounding verdicts (`ai_citations.supported`, a summary
+  bullet's `supported`): migration 0015 removed the column, so the old `settle_supported` query
+  failed on a current database and the `supported` / `db_supported_*` columns could only ever be
+  empty. They are gone from the rows and from summarize.py. What is kept: run status, latency,
+  first text, tokens (input, output, reasoning, cache read), cost, tool calls, and how many
+  citations were minted (and whether a written `[bN]` marker was minted at all, which is a
+  structural check, not a verdict).
+* ONE ARM, THE SHIPPED POLICY. Flash for every kind at the default efforts (models.ts); no
+  PAPERTREE_MODEL* variable is set unless an arm names one, so the agent runs what a user gets.
+  The M3-against-Flash arms are retired with the verdict columns (ADR-003, revision 2026-11-19).
+* NEW KINDS: `followup` (its own kind now, not `ask` q2), `glance` (the spread's At-a-glance sheet,
+  made in the background from `GET /papers` and read back from `GET /papers/{id}/glance`; its
+  tokens come from its `ai_runs` row, no stream), `image` (POST /papers/{id}/threads with
+  kind image and a figure anchor, v03-IMAGE-SPEC.md) and `board_ask` (an excerpt node on the
+  paper's board, then POST /boards/{b}/nodes/{n}/asks).
 
 What it does, in order:
   1. a fresh data root under --out; the worker and the API (no agent yet) start; one user registers;
      the PDFs upload over HTTP and are waited to `ready`; fixed passages are minted as real Anchors
-     from the parsed IR (papertree_anchoring, as the reader's capture does);
+     from the parsed IR (papertree_anchoring, as the reader's capture does); the figure anchors
+     (a PageSelector, one ShapeSelector quad and the float's BlockSelector, no TextQuote) are minted
+     from the IR's `figure` blocks;
   2. per arm: the agent starts (the MiniMax key is in ITS environment only, read from the macOS
-     Keychain item `minimax_api_key`, never printed or written), the API restarts,
-     then explain x passages x repeats, ask (+ a follow-up that says "that"), and summary (regenerate)
-     run and are measured; the agent and API stop;
+     Keychain item `minimax_api_key`, never printed or written), the API restarts; glance runs
+     first, then explain x passages x repeats, ask (+ a follow-up that says "that"), summary
+     (regenerate), image and board_ask run and are measured; the agent and API stop;
   3. every run is one JSON line in runs.jsonl; every answer text is in answers/.
 
 Stops at once on a MiniMax token-plan error (2056/2062), or past --max-runs / --max-cost.
@@ -28,6 +48,7 @@ import sqlite3
 import subprocess
 import sys
 import time
+import uuid
 from pathlib import Path
 from typing import Any
 
@@ -40,45 +61,61 @@ SECRET = "bench-" + os.urandom(8).hex()
 PASSWORD = "correct horse battery staple"
 ALLOWED_ENV = ["PATH", "HOME", "USER", "LOGNAME", "SHELL", "TMPDIR", "LANG", "LC_ALL", "TZ"]
 
-# arm name -> (model id, flash effort per kind (None = n/a), kinds it runs)
+# arm name -> (model id or None = the shipped per-kind policy, effort or None = the shipped one)
 ARMS: dict[str, dict[str, Any]] = {
-    "m3": {"model": "MiniMax-M3", "effort": None, "kinds": ["explain", "ask", "summary"]},
-    "flash-low": {
-        "model": "MiniMax-M3.1-Flash",
-        "effort": "low",
-        "kinds": ["explain", "ask", "summary"],
-    },
-    "flash-medium": {
-        "model": "MiniMax-M3.1-Flash",
-        "effort": "medium",
-        "kinds": ["summary"],
-    },
+    "default": {"model": None, "effort": None},
 }
 
+# slug -> corpus file
 PAPERS = {
-    "yolo": "yolo-1506.02640.pdf",
-    "ddpm": "ddpm-2006.11239.pdf",
+    "resnet": "resnet-cvpr-2col.pdf",
+    "attention": "attention-is-all-you-need.pdf",
+    "bert": "bert-2col.pdf",
 }
 # Fixed prompts. `needle` picks the passage: the first body paragraph containing it.
 EXPLAIN = {
-    "yolo": [
-        ("y1", "reframe object detection as a single regression"),
-        ("y2", "Fast YOLO is the fastest"),
+    "resnet": [
+        ("r1", "a degradation problem has been exposed"),
+        ("r2", "denoting the desired underlying mapping"),
+        ("r3", "shortcut connections in Eqn.(1) introduce neither"),
     ],
-    "ddpm": [
-        ("d1", "discards the weighting in Eq. (12)"),
-        ("d2", "progressive lossy code that mirrors"),
+    "attention": [
+        ("a1", "We call our particular attention"),
+        ("a2", "we employ h = 8 parallel attention layers"),
+        ("a3", "Recurrent models typically factor computation"),
+    ],
+    "bert": [
+        ("b1", "we do not use traditional left-to-right"),
+        ("b2", "we simply mask some percentage of the input tokens"),
+        ("b3", "a downside is that we are creating a mismatch"),
     ],
 }
 ASK = {
-    "yolo": (
-        "How fast is YOLO compared to the other detectors in this paper, and why?",
-        "What does it give up in exchange for that?",
+    "resnet": (
+        "What is the degradation problem and how do residual connections address it?",
+        "Does that add any parameters or computation?",
     ),
-    "ddpm": (
-        "How is the training objective of the diffusion model defined here?",
-        "Why do the authors prefer that over the exact variational bound?",
+    "attention": (
+        "Why do the authors scale the dot products in attention?",
+        "What goes wrong without that?",
     ),
+    "bert": (
+        "What are BERT's two pre-training tasks?",
+        "Why does the second one matter?",
+    ),
+}
+# Figure targets: (key, slug, 0-based page, an approximate box in PDF points). The float is the IR
+# `figure` block on that page that overlaps the box most; its own bbox and id make the anchor.
+IMAGES = [
+    ("resnet-fig1", "resnet", 0, (309.0, 224.0, 545.0, 302.0)),
+    ("resnet-fig2", "resnet", 1, (129.0, 85.0, 204.0, 154.0)),
+    ("attention-fig1", "attention", 2, (196.0, 72.0, 415.0, 394.0)),
+]
+# Board asks: the first explain passage of each paper becomes an excerpt card, then one question.
+BOARD = {
+    "resnet": "Why would adding layers raise training error rather than lower it?",
+    "attention": "What does that scaling change in practice?",
+    "bert": "What does masking do that left-to-right training cannot?",
 }
 MARKER = re.compile(r"\[(b\d+(?:\s*,\s*b\d+)*)\]")
 
@@ -140,7 +177,7 @@ class Stack:
         )
         time.sleep(1.5)
 
-    def start_api(self, model: str, with_agent: bool, tag: str) -> None:
+    def start_api(self, with_agent: bool, tag: str) -> None:
         env = {
             "PAPERTREE_DATA_ROOT": str(self.data),
             "PAPERTREE_HOST": "127.0.0.1",
@@ -155,7 +192,7 @@ class Stack:
         self.procs["api"] = self.procs[f"api-{tag}"]
         self._wait("api", f"{self.api}/healthz", lambda b: b.get("ok") is True)
 
-    def start_agent(self, model: str, effort: str | None, tag: str) -> None:
+    def start_agent(self, model: str | None, effort: str | None, tag: str) -> None:
         key = subprocess.run(
             ["security", "find-generic-password", "-s", "minimax_api_key", "-w"],
             capture_output=True,
@@ -167,8 +204,9 @@ class Stack:
             "PAPERTREE_AGENT_PORT": str(self.agent_port),
             "PAPERTREE_API_INTERNAL_URL": self.api,
             "PAPERTREE_MINIMAX_API_KEY": key,  # the agent's environment only
-            "PAPERTREE_MODEL": model,
         }
+        if model:
+            env["PAPERTREE_MODEL"] = model
         if effort:
             env["PAPERTREE_MODEL_EFFORT"] = effort
         self._start(
@@ -233,7 +271,7 @@ class Client:
             r.raise_for_status()
             p = r.json()
             if p["processing"] in ("ready", "partial", "failed"):
-                return p
+                return dict(p)
             time.sleep(3)
         raise RuntimeError("paper not ready")
 
@@ -241,8 +279,28 @@ class Client:
         """One browser SSE call, timed on this side of the wire."""
         t0 = time.perf_counter()
         events: list[dict[str, Any]] = []
+        text: list[str] = []
+        try:
+            return self._stream(method, path, body, t0, events, text)
+        except httpx.TimeoutException:
+            return {
+                "http_status": 0,
+                "json": {"error": "client_timeout_180s"},
+                "events": events,
+                "text": "".join(text),
+                "client_total_ms": (time.perf_counter() - t0) * 1000,
+            }
+
+    def _stream(
+        self,
+        method: str,
+        path: str,
+        body: dict[str, Any],
+        t0: float,
+        events: list[dict[str, Any]],
+        text: list[str],
+    ) -> dict[str, Any]:
         first_text = None
-        text = []
         with self.http.stream(
             method, path, json=body, headers=self.headers, timeout=httpx.Timeout(180, connect=5)
         ) as r:
@@ -289,7 +347,7 @@ def mint_passages(
 ) -> dict[str, Any]:
     """Real Anchor v1 for the first body paragraph containing each needle, from the parsed IR."""
     from papertree_anchoring import capture_anchor, index_document
-    from papertree_document_ir import Paper
+    from papertree_document_ir import Paper  # type: ignore[import-untyped]
 
     r = client.http.get(f"/papers/{paper_id}/ir", headers=client.headers)
     r.raise_for_status()
@@ -333,6 +391,68 @@ def find_db(data: Path) -> Path:
     return found[0]
 
 
+def mint_image_anchor(
+    client: Client,
+    paper_id: str,
+    text_anchor: dict[str, Any],
+    page: int,
+    box: tuple[float, float, float, float],
+) -> dict[str, Any]:
+    """An image Anchor v1 (v03-IMAGE-SPEC.md): targetKind `figure`, the float's BlockSelector, one
+    PageSelector, one ShapeSelector with one quad, no TextQuote. The float is the IR `figure` block on
+    `page` that overlaps `box` most; its own bbox is the quad. `text_anchor` lends the paper's `doc`."""
+    r = client.http.get(f"/papers/{paper_id}/ir", headers=client.headers)
+    r.raise_for_status()
+    ir = r.json()
+
+    def overlap(b: list[float]) -> float:
+        w = min(b[2], box[2]) - max(b[0], box[0])
+        h = min(b[3], box[3]) - max(b[1], box[1])
+        return max(w, 0.0) * max(h, 0.0)
+
+    figures = [
+        b
+        for b in ir["blocks"]
+        if b["type"] == "figure" and b["page_index"] == page and b.get("bbox")
+    ]
+    block = max(figures, key=lambda b: overlap(b["bbox"]))
+    if overlap(block["bbox"]) <= 0:
+        raise RuntimeError(f"no figure block on page {page} overlaps {box}")
+    pg = ir["pages"][page]
+    return {
+        "anchorVersion": 1,
+        "offsetUnit": "unicode",
+        "id": str(uuid.uuid4()),
+        "doc": text_anchor["doc"],
+        "targetKind": "figure",
+        "provenanceClass": "source",
+        "selectors": [
+            {
+                "type": "BlockSelector",
+                "blockId": block["block_id"],
+                "blockTextHash": block.get("content_hash") or "",
+            },
+            {"type": "PageSelector", "index": page},
+            {
+                "type": "ShapeSelector",
+                "pageIndex": page,
+                "quads": [list(block["bbox"])],
+                "polygons": [],
+                "pageWidth": pg["width"],
+                "pageHeight": pg["height"],
+                "rotation": pg["rotation"],
+                "userUnit": pg["user_unit"],
+                "cropBox": pg["crop_box"],
+            },
+        ],
+        "created": {
+            "mode": "source",
+            "at": time.strftime("%Y-%m-%dT%H:%M:%S.000Z", time.gmtime()),
+            "client": "ab-bench",
+        },
+    }
+
+
 class Bench:
     def __init__(self, args: argparse.Namespace) -> None:
         self.args = args
@@ -346,6 +466,7 @@ class Bench:
         self.cost = 0.0
         self.papers: dict[str, str] = {}
         self.passages: dict[str, dict[str, Any]] = {}
+        self.images: dict[str, dict[str, Any]] = {}
 
     # -- measuring -------------------------------------------------------------------------
     def record(
@@ -372,17 +493,16 @@ class Bench:
             "prompt_id": prompt_id,
             "rep": rep,
             "http_status": res["http_status"],
-            "status": done.get("status"),
+            "status": done.get("status") or ("client_timeout" if res["http_status"] == 0 else None),
             "error": done.get("error") or (res.get("json") if res["http_status"] != 200 else None),
-            "model_reported": usage.get(
-                "model"
-            ),  # the API's RunSummary.model: the agent-reported model
+            "model_reported": usage.get("model"),
             "first_text_ms": usage.get("first_text_ms"),
             "latency_ms": usage.get("latency_ms"),
             "client_first_text_ms": res.get("client_first_text_ms"),
             "client_total_ms": res.get("client_total_ms"),
             "input_tokens": usage.get("input_tokens"),
             "output_tokens": usage.get("output_tokens"),
+            "cache_read_tokens": usage.get("cache_read_tokens"),
             "reasoning_tokens": usage.get("reasoning_tokens"),
             "cost_usd_est": usage.get("cost_usd_est"),
             "tool_calls": usage.get("tool_calls"),
@@ -400,10 +520,7 @@ class Bench:
         name = f"{arm}__{kind}__{paper}__{prompt_id}__r{rep}"
         row["answer_file"] = f"answers/{name}.txt"
         (self.out / row["answer_file"]).write_text(text, encoding="utf-8")
-        with self.runs_file.open("a") as handle:
-            handle.write(json.dumps(row) + "\n")
-        self.n_runs += 1
-        self.cost += float(row["cost_usd_est"] or 0)
+        self.append(row)
         log(
             f"{name}: {row['status']} first={row['first_text_ms']} total={row['latency_ms']} "
             f"out={row['output_tokens']} cites={row['citations_minted']} ${row['cost_usd_est']}"
@@ -411,45 +528,45 @@ class Bench:
         err = json.dumps(row["error"]) if row["error"] else ""
         if re.search(r"2056|2062|token plan|usage limit", err, re.I):
             raise SystemExit("STOP: MiniMax token-plan limit reached; report now")
-        if self.n_runs >= self.args.max_runs or self.cost >= self.args.max_cost:
-            raise SystemExit(f"STOP: cap reached (runs={self.n_runs}, cost={self.cost:.3f})")
+        self.check_caps()
         return row
 
-    def settle_supported(self, rows: list[dict[str, Any]]) -> None:
-        """v0.1 bench only: ai_citations.supported was dropped by 0015 (#351), so against a current
-        database the query fails and the caller logs it; the db_supported_* columns stay empty."""
+    def append(self, row: dict[str, Any]) -> None:
+        with self.runs_file.open("a") as handle:
+            handle.write(json.dumps(row) + "\n")
+        self.n_runs += 1
+        self.cost += float(row.get("cost_usd_est") or 0)
+
+    def check_caps(self) -> None:
+        if self.n_runs >= self.args.max_runs or self.cost >= self.args.max_cost:
+            raise SystemExit(f"STOP: cap reached (runs={self.n_runs}, cost={self.cost:.3f})")
+
+    def settle_runs(self, rows: list[dict[str, Any]]) -> None:
+        """Cross-check each streamed run against its `ai_runs` row (model, kind, status, code path).
+        No grounding verdict is read: those columns are gone (#351, migration 0015)."""
         db = find_db(self.stack.data)
         time.sleep(self.args.verify_wait)
-        for row in rows:
-            if not row.get("message_id"):
-                continue
-            conn = sqlite3.connect(f"file:{db}?mode=ro", uri=True)
-            try:
+        conn = sqlite3.connect(f"file:{db}?mode=ro", uri=True)
+        try:
+            for row in rows:
+                if not row.get("run_id"):
+                    continue
                 got = conn.execute(
-                    "SELECT supported FROM ai_citations WHERE message_id = ?", (row["message_id"],)
-                ).fetchall()
-                run = conn.execute(
-                    "SELECT model, status, code_path FROM ai_runs WHERE run_id = ?",
+                    "SELECT model, kind, status, code_path FROM ai_runs WHERE run_id = ?",
                     (row["run_id"],),
                 ).fetchone()
-            finally:
-                conn.close()
-            vals = [g[0] for g in got]
-            row["db_citations"] = len(vals)
-            row["db_supported_true"] = sum(1 for v in vals if v == 1)
-            row["db_supported_false"] = sum(1 for v in vals if v == 0)
-            row["db_supported_null"] = sum(1 for v in vals if v is None)
-            row["db_run"] = list(run) if run else None
+                row["db_run"] = list(got) if got else None
+        finally:
+            conn.close()
 
     # -- the workload ------------------------------------------------------------------------
     def setup(self) -> None:
         self.stack.start_worker()
-        self.stack.start_api("MiniMax-M3", with_agent=False, tag="setup")
+        self.stack.start_api(with_agent=False, tag="setup")
         self.client.register(f"ab-{int(time.time())}@example.com")
         pdfs = Path(self.args.pdf_dir)
         for slug, name in PAPERS.items():
-            pid = self.client.upload(pdfs / name)
-            self.papers[slug] = pid
+            self.papers[slug] = self.client.upload(pdfs / name)
         for slug, pid in self.papers.items():
             p = self.client.wait_ready(pid)
             log(f"{slug}: {p['processing']} pages={p.get('page_count')}")
@@ -458,27 +575,127 @@ class Bench:
             self.passages[slug] = mint_passages(
                 self.client, pid, EXPLAIN[slug], self.out / f"paragraphs-{slug}.txt"
             )
+        for key, slug, page, box in IMAGES:
+            text_anchor = self.passages[slug][EXPLAIN[slug][0][0]]["anchor"]
+            self.images[key] = {
+                "slug": slug,
+                "anchor": mint_image_anchor(self.client, self.papers[slug], text_anchor, page, box),
+            }
         (self.out / "passages.json").write_text(
             json.dumps(
                 {
-                    s: {k: {"needle": v["needle"], "text": v["text"]} for k, v in d.items()}
-                    for s, d in self.passages.items()
+                    "passages": {
+                        s: {k: {"needle": v["needle"], "text": v["text"]} for k, v in d.items()}
+                        for s, d in self.passages.items()
+                    },
+                    "images": {k: v["anchor"] for k, v in self.images.items()},
                 },
                 indent=1,
             )
         )
         self.stack.stop("api")
 
-    def arm(self, name: str, kinds: list[str]) -> None:
+    def run_glance(self, name: str) -> list[dict[str, Any]]:
+        """The At-a-glance sheet of each paper: started by a library read, polled until `ready` or
+        `none`; tokens, cost and latency come from the paper's `glance` `ai_runs` row."""
+        rows: list[dict[str, Any]] = []
+        t0 = time.perf_counter()
+        pending = dict(self.papers)
+        states: dict[str, str] = {}
+        done_at: dict[str, float] = {}
+        deadline = time.time() + 240
+        while pending and time.time() < deadline:
+            self.client.http.get("/papers", headers=self.client.headers)  # starts missing sheets
+            for slug, pid in list(pending.items()):
+                r = self.client.http.get(f"/papers/{pid}/glance", headers=self.client.headers)
+                state = (
+                    r.json().get("state")
+                    if r.status_code in (200, 202)
+                    else f"http_{r.status_code}"
+                )
+                if state in ("ready", "none") or str(state).startswith("http_"):
+                    states[slug] = str(state)
+                    done_at[slug] = (time.perf_counter() - t0) * 1000
+                    del pending[slug]
+            time.sleep(1.0)
+        db = find_db(self.stack.data)
+        time.sleep(self.args.verify_wait)
+        conn = sqlite3.connect(f"file:{db}?mode=ro", uri=True)
+        conn.row_factory = sqlite3.Row
+        try:
+            runs = [
+                dict(x)
+                for x in conn.execute("SELECT * FROM ai_runs WHERE kind = 'glance'").fetchall()
+            ]
+        finally:
+            conn.close()
+        slug_of = {pid: slug for slug, pid in self.papers.items()}
+        runs.sort(key=lambda x: str(x.get("started_at", "")))
+        # One row per glance RUN (a failed run and its retry are two rows), matched to its paper by
+        # `paper_id`; `glance_state` is where the paper's sheet ended (ready | none | timeout).
+        for run in runs:
+            slug = slug_of.get(str(run.get("paper_id")), "?")
+            ok = run.get("status") == "done"
+            rows.append(
+                {
+                    "arm": name,
+                    "kind": "glance",
+                    "paper": slug,
+                    "prompt_id": "glance",
+                    "rep": 1,
+                    "http_status": 200,
+                    "status": "complete" if ok else f"error:{run.get('error_code')}",
+                    "error": None if ok else run.get("error_code"),
+                    "glance_state": states.get(slug, "timeout"),
+                    "client_total_ms": done_at.get(slug),
+                    "load_avg": os.getloadavg()[0],
+                    "run_id": run.get("run_id"),
+                    "model_reported": run.get("model"),
+                    "first_text_ms": run.get("first_text_ms"),
+                    "latency_ms": run.get("latency_ms"),
+                    "input_tokens": run.get("input_tokens"),
+                    "output_tokens": run.get("output_tokens"),
+                    "cache_read_tokens": run.get("cache_read_tokens"),
+                    "reasoning_tokens": run.get("reasoning_tokens"),
+                    "cost_usd_est": run.get("cost_usd_est"),
+                    "tool_calls": run.get("tool_calls"),
+                }
+            )
+        for slug in self.papers:
+            if slug not in {r["paper"] for r in rows}:
+                rows.append(
+                    {
+                        "arm": name,
+                        "kind": "glance",
+                        "paper": slug,
+                        "prompt_id": "glance",
+                        "rep": 1,
+                        "http_status": 200,
+                        "status": f"no_run:{states.get(slug, 'timeout')}",
+                        "load_avg": os.getloadavg()[0],
+                    }
+                )
+        for row in rows:
+            self.append(row)
+            log(
+                f"glance {row['paper']}: {row['status']} total={row.get('latency_ms')} ${row.get('cost_usd_est')}"
+            )
+        return rows
+
+    def arm(self, name: str) -> None:
         spec = ARMS[name]
         self.stack.start_agent(spec["model"], spec["effort"], name)
-        self.stack.start_api(spec["model"], with_agent=True, tag=name)
+        self.stack.start_api(with_agent=True, tag=name)
         health = httpx.get(f"{self.stack.agent}/healthz").json()
         (self.out / f"healthz-{name}.json").write_text(json.dumps(health, indent=1))
         rows: list[dict[str, Any]] = []
+        reps = self.args.repeats
+        kinds = set(self.args.kinds.split(","))
         try:
+            if "glance" in kinds:
+                self.run_glance(name)
             if "explain" in kinds:
-                for rep in range(1, self.args.repeats + 1):
+                for rep in range(1, reps + 1):
                     for slug, pid in self.papers.items():
                         for key, _ in EXPLAIN[slug]:
                             res = self.client.stream(
@@ -491,52 +708,89 @@ class Bench:
                                 raise SystemExit("smoke done")
                             time.sleep(self.args.pace)
             if "ask" in kinds:
-                for slug, pid in self.papers.items():
-                    q1, q2 = ASK[slug]
-                    res = self.client.stream(
-                        "POST", f"/papers/{pid}/threads", {"kind": "ask", "question": q1}
-                    )
-                    rows.append(self.record(name, "ask", slug, "q1", 1, res))
-                    tid = (ev(res["events"], "run") or {}).get("thread_id")
-                    if tid:
-                        res2 = self.client.stream(
-                            "POST", f"/papers/{pid}/threads/{tid}/messages", {"question": q2}
+                for rep in range(1, reps + 1):
+                    for slug, pid in self.papers.items():
+                        q1, q2 = ASK[slug]
+                        res = self.client.stream(
+                            "POST", f"/papers/{pid}/threads", {"kind": "ask", "question": q1}
                         )
-                        rows.append(self.record(name, "ask", slug, "q2-followup", 1, res2))
-                    time.sleep(self.args.pace)
+                        rows.append(self.record(name, "ask", slug, "q1", rep, res))
+                        tid = (ev(res["events"], "run") or {}).get("thread_id")
+                        if tid:
+                            res2 = self.client.stream(
+                                "POST", f"/papers/{pid}/threads/{tid}/messages", {"question": q2}
+                            )
+                            rows.append(self.record(name, "followup", slug, "q2", rep, res2))
+                        time.sleep(self.args.pace)
             if "summary" in kinds:
-                for slug, pid in self.papers.items():
-                    res = self.client.stream("POST", f"/papers/{pid}/summary", {"regenerate": True})
-                    extra: dict[str, Any] = {}
-                    if res["http_status"] == 200 and not res["events"]:
-                        extra["note"] = "non-stream"
-                    row = self.record(name, "summary", slug, "summary", 1, res, extra)
-                    s = self.client.http.get(f"/papers/{pid}/summary", headers=self.client.headers)
-                    if s.status_code == 200:
-                        summ = s.json().get("summary") or {}
-                        bullets = summ.get("bullets", [])
-                        row["summary_state"] = s.json().get("state")
-                        row["bullets"] = len(bullets)
-                        row["bullets_with_citation"] = sum(1 for b in bullets if b.get("citations"))
-                        row["bullets_supported"] = sum(
-                            1 for b in bullets if b.get("supported") is True
+                for rep in range(1, reps + 1):
+                    for slug, pid in self.papers.items():
+                        res = self.client.stream(
+                            "POST", f"/papers/{pid}/summary", {"regenerate": True}
                         )
-                        row["bullets_unsupported"] = sum(
-                            1 for b in bullets if b.get("supported") is False
+                        extra: dict[str, Any] = {}
+                        if res["http_status"] == 200 and not res["events"]:
+                            extra["note"] = "non-stream"
+                        row = self.record(name, "summary", slug, "summary", rep, res, extra)
+                        s = self.client.http.get(
+                            f"/papers/{pid}/summary", headers=self.client.headers
                         )
-                        row["bullets_unverified"] = sum(
-                            1 for b in bullets if b.get("supported") is None
+                        if s.status_code == 200:
+                            summ = s.json().get("summary") or {}
+                            bullets = summ.get("bullets", [])
+                            row["summary_state"] = s.json().get("state")
+                            row["bullets"] = len(bullets)
+                            row["bullets_with_citation"] = sum(
+                                1 for b in bullets if b.get("citations")
+                            )
+                            (self.out / row["answer_file"]).write_text(
+                                json.dumps(summ, indent=1, ensure_ascii=False), encoding="utf-8"
+                            )
+                        rows.append(row)
+                        time.sleep(self.args.pace)
+            if "image" in kinds:
+                for rep in range(1, reps + 1):
+                    for key, img in self.images.items():
+                        pid = self.papers[img["slug"]]
+                        res = self.client.stream(
+                            "POST",
+                            f"/papers/{pid}/threads",
+                            {"kind": "image", "anchor": img["anchor"]},
                         )
-                        (self.out / row["answer_file"]).write_text(
-                            json.dumps(summ, indent=1, ensure_ascii=False), encoding="utf-8"
+                        rows.append(self.record(name, "image", img["slug"], key, rep, res))
+                        time.sleep(self.args.pace)
+            if "board_ask" in kinds:
+                for rep in range(1, reps + 1):
+                    for slug, pid in self.papers.items():
+                        anchor = self.passages[slug][EXPLAIN[slug][0][0]]["anchor"]
+                        node_id = "nod_" + uuid.uuid4().hex[:16]
+                        made = self.client.http.post(
+                            f"/papers/{pid}/board/nodes",
+                            json={
+                                "node_id": node_id,
+                                "kind": "excerpt",
+                                "x": 0,
+                                "y": 0,
+                                "w": 360,
+                                "h": 220,
+                                "source_anchor": anchor,
+                            },
+                            headers=self.client.headers,
                         )
-                    rows.append(row)
-                    time.sleep(self.args.pace)
+                        made.raise_for_status()
+                        board_id = made.json()["board"]["board_id"]
+                        res = self.client.stream(
+                            "POST",
+                            f"/boards/{board_id}/nodes/{node_id}/asks",
+                            {"question": BOARD[slug]},
+                        )
+                        rows.append(self.record(name, "board_ask", slug, "board-q", rep, res))
+                        time.sleep(self.args.pace)
         finally:
             try:
-                self.settle_supported(rows)
+                self.settle_runs(rows)
             except Exception as exc:  # noqa: BLE001 - report, don't hide
-                log(f"settle_supported failed: {exc!r}")
+                log(f"settle_runs failed: {exc!r}")
             with (self.out / f"runs-final-{name}.json").open("w") as handle:
                 json.dump(rows, handle, indent=1)
             self.stack.stop("api", "agent")
@@ -545,7 +799,7 @@ class Bench:
         try:
             self.setup()
             for name in self.args.arms.split(","):
-                self.arm(name, ARMS[name]["kinds"])
+                self.arm(name)
         finally:
             self.stack.stop_all()
             log(f"done: runs={self.n_runs} est_cost=${self.cost:.3f}")
@@ -554,12 +808,13 @@ class Bench:
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", required=True)
-    ap.add_argument("--pdf-dir", default=str(REPO / "research/benchmarks/fresh/pdfs"))
-    ap.add_argument("--api-port", type=int, default=18140)
-    ap.add_argument("--agent-port", type=int, default=18240)
-    ap.add_argument("--arms", default="m3,flash-low,flash-medium")
-    ap.add_argument("--repeats", type=int, default=3)
-    ap.add_argument("--max-runs", type=int, default=40)
+    ap.add_argument("--pdf-dir", default=str(REPO / "research/benchmarks/corpus"))
+    ap.add_argument("--api-port", type=int, default=8302)
+    ap.add_argument("--agent-port", type=int, default=8402)
+    ap.add_argument("--arms", default="default")
+    ap.add_argument("--kinds", default="glance,explain,ask,summary,image,board_ask")
+    ap.add_argument("--repeats", type=int, default=2)
+    ap.add_argument("--max-runs", type=int, default=120)
     ap.add_argument("--max-cost", type=float, default=3.0)
     ap.add_argument("--pace", type=float, default=2.0)
     ap.add_argument("--verify-wait", type=float, default=8.0)
