@@ -3,9 +3,10 @@
  * planks (a plank per row at scale) on a desktop, books lying flat on a phone. A click, Enter or
  * Space on ANY book takes it off its plank and opens it (`features/book`, one motion); there is
  * no card in between, so the book that opens is always the one that was clicked, on any plank.
- * A book that cannot be opened yet (queued, being read, failed) is read instead, as Read always
- * was. It also decides where focus goes when the control that had it disappears: after the key
- * hints are dismissed (to the shelf) and when the layout changes under it (`useShelfFocus`).
+ * Every paper of the person's opens its spread, whatever state it is in; only a sample, which has
+ * no server, is read instead (v0.3 #337). It also decides where focus goes when the control that
+ * had it disappears: after the key hints are dismissed (to the shelf) and when the layout changes
+ * under it (`useShelfFocus`).
  */
 'use client';
 

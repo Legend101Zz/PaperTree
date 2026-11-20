@@ -119,9 +119,12 @@ same papers as a ruled catalogue, Topics shows each topic as a card, and the Map
   spine, on any plank, takes that book off its plank and opens it (v0.3 #337, `features/book`: one motion of
   880 ms landing on the opened spread with focus on Read; a click or any key skips to the end; Esc, a click outside
   or "Put it back" puts it back in 420 ms and returns focus to the spine). There is no card in between, so the book
-  that opens is always the one that was clicked (#336). A book that cannot be opened yet (queued, being read,
-  failed, a sample) is read instead, as Read always was; Retry and Remove for it are the Table's ("N need a look"
-  leads there). After "Got it" focus is on the shelf. A search dims what does not match and lights what does,
+  that opens is always the one that was clicked (#336). Every paper of the person's opens its spread, whatever its
+  state: a queued, being-read or failed one shows its status sentence there (a failed one Retry and Remove instead
+  of Read); only a sample, which has no server, is read directly. The spread's Delete hides the book at once and
+  offers Undo for 10 s before the request goes (`hooks/usePendingDelete.ts`, `DeleteUndoToast.tsx`: Undo puts the
+  spine back where it was; a hidden page, a closed view or a second delete sends the pending one now, with
+  `keepalive`). After "Got it" focus is on the shelf. A search dims what does not match and lights what does,
   without reordering anything; the hint row under the plank says what the keys do.
 - **Touch:** on a phone width or a coarse pointer every control in the header, title row and hints is 44 px
   (`useTouchTargets`); on a desktop they keep frame 01's 36–40 px. The spines keep their 26–48 px widths
@@ -208,6 +211,7 @@ ribbon, no year means no year on the spine.
   popover, topic, "…" menu), `TableMenus.tsx` (Columns, Filter), `RemoveConfirm.tsx` and
   `table.css`.
 - `hooks/useLibrary.ts`: the data layer (query, polling, upload, cancel's re-read, retry, delete);
+  `hooks/usePendingDelete.ts`: the spread's deferred delete (the 10 s Undo, the flush on page hide);
   `hooks/useUploadQueue.ts`: the upload queue (progress, Cancel, refusals).
 - `components/LibraryView.tsx`: the page; `LibraryHeader.tsx` (with `SearchField.tsx`, `AddPapers.tsx`),
   `UploadRow.tsx`, `LibraryTitle.tsx`, `ShelfSection.tsx` (with `Shelf.tsx`, `Spine.tsx`, `ShelfPlank.tsx`,

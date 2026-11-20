@@ -51,7 +51,7 @@ test('shelf → Enter → the spread → Figure 1 as the plate → Esc → Read'
   await expect(page.locator('[data-card-paper-id]')).toHaveCount(0);
   await expect(book).toHaveAttribute('data-pulled', 'true');
   await expect(dialog).toHaveAttribute('data-book-stage', 'open');
-  await expect(dialog.getByRole('button', { name: /^Read / })).toBeFocused();
+  await expect(dialog.getByRole('button', { name: /^(Read|Continue at p\. \d+) / })).toBeFocused();
   await expect(dialog.locator('[data-book-meta]')).toContainText(
     '2017 · arXiv 1706.03762 · 15 pages',
   );
@@ -99,7 +99,7 @@ test('shelf → Enter → the spread → Figure 1 as the plate → Esc → Read'
   // ── Read opens the reader; the abstract's tab flashes the abstract there ──
   await book.click();
   await expect(dialog).toHaveAttribute('data-book-stage', 'open');
-  await dialog.getByRole('button', { name: /^Read / }).click();
+  await dialog.getByRole('button', { name: /^(Read|Continue at p\. \d+) / }).click();
   await page.waitForURL(`**/paper/${paperId}/read`);
   await page.goto('/dashboard');
   await book.click();
@@ -107,6 +107,101 @@ test('shelf → Enter → the spread → Figure 1 as the plate → Esc → Read'
   await dialog.getByRole('link', { name: /^p\. 1, Abstract/ }).click();
   await page.waitForURL(`**/paper/${paperId}/read?from=book&at=abstract`);
   await expect(page.locator('svg [data-flash] polygon').first()).toBeAttached({ timeout: 60_000 });
+});
+
+test('the spread’s ⋯ menu: Esc order, Rename persists, Delete → Undo restores, Delete goes after 10 s', async ({
+  page,
+  stack,
+}) => {
+  test.skip(
+    !existsSync(ATTENTION),
+    'SKIPPED: the corpus PDF attention-is-all-you-need.pdf is absent. Run research/benchmarks/fetch_corpus.sh.',
+  );
+  test.setTimeout(600_000);
+  const token = await register(stack.apiUrl, `e2e-337-${String(Date.now())}@papertree.test`);
+  const paperId = await upload(stack.apiUrl, token, ATTENTION);
+  await waitParsed(stack.apiUrl, token, paperId);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await tokenInit(page, token);
+  await page.goto('/dashboard');
+  const book = page.locator(`[aria-label="Your shelf"] button[data-paper-id="${paperId}"]`);
+  await expect(book).toHaveAttribute('data-spine-state', 'ready', { timeout: 60_000 });
+  const dialog = page.getByRole('dialog', { name: 'Attention Is All You Need' });
+  // The book's name follows a rename, so after it the dialog is found by its role alone: it is the
+  // only one on the page.
+  const open = page.getByRole('dialog');
+  const more = () => open.getByRole('button', { name: /^More: rename, topic, delete/ });
+  const deletes: string[] = [];
+  page.on('request', (r) => {
+    if (r.method() === 'DELETE' && r.url().endsWith(`/papers/${paperId}`)) deletes.push(r.url());
+  });
+
+  // ── ⋯ is reached by keyboard; Esc closes the menu first, the second Esc puts the book back ──
+  await book.focus();
+  await page.keyboard.press('Enter');
+  await expect(dialog).toHaveAttribute('data-book-stage', 'open');
+  await more().focus();
+  await page.keyboard.press('Enter');
+  await expect(dialog.getByRole('menuitem', { name: 'Rename…' })).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(dialog.getByRole('menu')).toHaveCount(0);
+  await expect(dialog).toBeVisible();
+  await expect(more()).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(dialog).toHaveCount(0);
+  await expect(book).toBeFocused();
+
+  // ── Rename: Enter saves (PATCH), the spine and the title follow, and it survives a reload ──
+  await page.keyboard.press('Enter');
+  await expect(dialog).toHaveAttribute('data-book-stage', 'open');
+  await more().click();
+  await dialog.getByRole('menuitem', { name: 'Rename…' }).click();
+  const field = dialog.getByRole('textbox', { name: 'Title' });
+  await expect(field).toBeFocused();
+  const patched = page.waitForResponse(
+    (r) => r.url().endsWith(`/papers/${paperId}`) && r.request().method() === 'PATCH',
+  );
+  await field.fill('  My Attention  ');
+  await page.keyboard.press('Enter');
+  expect((await patched).status()).toBe(200);
+  const renamed = page.getByRole('dialog', { name: 'My Attention' });
+  await expect(renamed.getByRole('heading', { name: 'My Attention' })).toBeVisible();
+  // Saved: the field is gone and focus is back on ⋯. Until then an Esc would be the field's own
+  // "cancel", so wait on the focused element, not on time.
+  await expect(renamed.getByRole('textbox', { name: 'Title' })).toHaveCount(0);
+  await expect(more()).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(renamed).toHaveCount(0);
+  await page.reload();
+  await expect(book).toHaveAttribute('aria-label', /My Attention/);
+
+  // ── Delete asks nothing: the book closes, the spine goes, Undo brings it back untouched ──
+  await book.click();
+  await more().click();
+  await open.getByRole('menuitem', { name: /^Delete this paper/ }).click();
+  const toast = page.getByText(/^Deleted “My Attention”/);
+  await expect(toast).toBeVisible();
+  await expect(book).toHaveCount(0);
+  await page.getByRole('button', { name: 'Undo' }).click();
+  await expect(book).toBeVisible();
+  await expect(book).toBeFocused();
+  expect(deletes).toEqual([]); // nothing was sent while Undo was on offer
+
+  // ── Delete again and let the 10 s run out: only then does the request go ──
+  await book.click();
+  await more().click();
+  const gone = page.waitForResponse(
+    (r) => r.url().endsWith(`/papers/${paperId}`) && r.request().method() === 'DELETE',
+    { timeout: 30_000 },
+  );
+  await open.getByRole('menuitem', { name: /^Delete this paper/ }).click();
+  await expect(book).toHaveCount(0);
+  expect(deletes).toEqual([]);
+  expect((await gone).status()).toBe(204);
+  const listed = (await (
+    await fetch(`${stack.apiUrl}/papers`, { headers: { Authorization: `Bearer ${token}` } })
+  ).json()) as { paper_id: string }[];
+  expect(listed.map((p) => p.paper_id)).not.toContain(paperId);
 });
 
 /** axe-core's serious and critical violations on the page (axe from apps/web's devDependencies). */

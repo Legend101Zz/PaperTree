@@ -183,7 +183,9 @@ export function authorLine(authors: readonly string[]): string | null {
  * @param paper - The paper.
  * @returns The 1-based page and the count, or null when not reading or the count is unknown.
  */
-export function readingPage(paper: ShelfPaper): { page: number; of: number } | null {
+export function readingPage(
+  paper: Pick<ShelfPaper, 'reading' | 'pageCount'>,
+): { page: number; of: number } | null {
   const reading = paper.reading;
   if (reading === null || reading === undefined || reading.state !== 'reading') return null;
   const of = reading.page_count ?? paper.pageCount;

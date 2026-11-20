@@ -93,7 +93,7 @@ test('thirteen books stand as spines; the keyboard walks them; Space opens one, 
   const book = page.locator('[role="dialog"][data-book-stage]');
   await expect(page.locator('[data-card-paper-id]')).toHaveCount(0);
   await expect(book).toHaveAttribute('data-book-stage', 'open');
-  await expect(book.getByRole('button', { name: /^Read / })).toBeFocused();
+  await expect(book.getByRole('button', { name: /^(Read|Continue at p\. \d+) / })).toBeFocused();
   await expect(chosen).toHaveAttribute('data-pulled', 'true');
   await page.screenshot({ path: shot('s2e-book-out-1440.png') });
   await page.keyboard.press('Escape');

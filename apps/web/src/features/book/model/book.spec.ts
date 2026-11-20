@@ -14,9 +14,12 @@ import {
   countsLine,
   figureOneOffer,
   figuresLine,
+  isReadIn,
   metaLine,
   plateCaption,
+  readLabel,
   shelvedLine,
+  statusSentence,
   summaryLine,
 } from './book';
 
@@ -188,12 +191,51 @@ describe('the right page', () => {
     expect(summaryLine(null)).toEqual({ button: 'Summary', line: '' });
   });
 
-  it('opens only a book whose parse is in, and never a sample', () => {
-    expect(canOpenBook({ processing: 'complete' })).toBe(true);
-    expect(canOpenBook({ processing: 'partial' })).toBe(true);
+  it('opens every book of the person, whatever its state, and never a sample', () => {
+    expect(canOpenBook({})).toBe(true);
+    expect(canOpenBook({ isSample: false })).toBe(true);
+    expect(canOpenBook({ isSample: true })).toBe(false);
+  });
+
+  it('knows which papers are read in, so the spread can ask for their facts', () => {
+    expect(isReadIn({ processing: 'complete' })).toBe(true);
+    expect(isReadIn({ processing: 'partial' })).toBe(true);
     for (const processing of ['pending', 'parsing', 'failed'] as const) {
-      expect(canOpenBook({ processing })).toBe(false);
+      expect(isReadIn({ processing })).toBe(false);
     }
-    expect(canOpenBook({ processing: 'complete', isSample: true })).toBe(false);
+  });
+
+  it('says a status sentence for every state that is not simply ready', () => {
+    expect(statusSentence({ processing: 'complete' })).toBeNull();
+    expect(statusSentence({ processing: 'pending' })).toMatch(/waiting for its turn/i);
+    expect(statusSentence({ processing: 'parsing' })).toMatch(/reading this paper now/i);
+    // The old catalogue card's reason sentences come through, and never a raw error code.
+    expect(
+      statusSentence({ processing: 'failed', failureReason: 'This file could not be read.' }),
+    ).toBe('This file could not be read.');
+    expect(statusSentence({ processing: 'failed' })).toMatch(/could not read this paper/i);
+    expect(
+      statusSentence({ processing: 'partial', partialReason: 'Some parts are missing.' }),
+    ).toBe('Some parts are missing.');
+    expect(statusSentence({ processing: 'partial' })).toMatch(/some parts/i);
+  });
+
+  it('says Continue at the page once reading has started, else Read', () => {
+    const reading = (state: 'reading' | 'finished', lastPage: number, pages: number | null) => ({
+      pageCount: 15,
+      reading: {
+        last_page: lastPage,
+        furthest_page: lastPage,
+        page_count: pages,
+        state,
+        opened_at: 'n',
+        finished_at: null,
+      },
+    });
+    expect(readLabel({ pageCount: 15, reading: null })).toBe('Read');
+    expect(readLabel(reading('reading', 3, 15))).toBe('Continue at p. 4');
+    expect(readLabel(reading('finished', 14, 15))).toBe('Read');
+    // A count the server has not got yet cannot place the person: plain Read.
+    expect(readLabel({ ...reading('reading', 3, null), pageCount: 0 })).toBe('Read');
   });
 });

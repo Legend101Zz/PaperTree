@@ -4,8 +4,12 @@
  * flies to the middle growing into a cover, the cover swings open and you land on the two-page
  * spread. A click or any key while it plays skips to the end; Esc, a click outside or "Put it
  * back" run it backwards in 420 ms and the shelf focuses the spine again. Reduced motion is a
- * cross-fade. Focus lands on Read once the spread is open. Focus is trapped in the dialog and the
- * library behind it is inert.
+ * cross-fade. Focus lands on Read (or Retry, for a failed paper) once the spread is open. Focus is
+ * trapped in the dialog and the library behind it is inert.
+ *
+ * Delete (the spread's ⋯ menu) plays the same 420 ms reverse and then hands the book to the
+ * library instead of putting it back: the spine does not return, the shelf shows the Undo toast.
+ * With reduced motion, or a spine that cannot be measured, nothing is played: the book just goes.
  */
 'use client';
 
@@ -25,6 +29,7 @@ import { useFocusTrap } from '../hooks/useFocusTrap';
 import { cancelAll, finishAll, play, useReducedMotion } from '../hooks/useBookMotion';
 import { putBack as putBackMotion, takeOut, TO_READER, type Box } from '../model/motion';
 import './book.css';
+import './spread.css';
 import { BookCover } from './BookCover';
 import { BookSpread } from './BookSpread';
 
@@ -43,8 +48,14 @@ export interface PulledBookProps {
   readonly from: Box | null;
   /** The library behind the veil: inert while the book is out. */
   readonly behind: HTMLElement | null;
+  /** Where the spine is now, for the way back (a topic chosen here moves it); null: as it was. */
+  readonly where?: () => Box | null;
   /** After the put-back motion: the shelf unmounts this and focuses the spine. */
   readonly onPutBack: () => void;
+  /** After the reverse played for a Delete: the library stages the delete and unmounts this. */
+  readonly onDelete: () => void;
+  /** Retry on a failed paper. */
+  readonly onRetry: () => Promise<unknown>;
   readonly onRead: () => void;
   readonly onSummary: () => void;
 }
@@ -54,7 +65,7 @@ export interface PulledBookProps {
  *
  * @example
  * <PulledBook book={book} cloth="transformers" labelled={false} from={box} behind={library}
- *   onPutBack={back} onRead={read} onSummary={summary} />
+ *   onPutBack={back} onDelete={drop} onRetry={retry} onRead={read} onSummary={summary} />
  */
 export function PulledBook({
   book,
@@ -62,7 +73,10 @@ export function PulledBook({
   labelled,
   from,
   behind,
+  where,
   onPutBack,
+  onDelete,
+  onRetry,
   onRead,
   onSummary,
 }: PulledBookProps): ReactNode {
@@ -79,6 +93,11 @@ export function PulledBook({
   // was skipped must not be finished twice, and a put-back must not open the book again.
   const moment = useRef<Phase | 'reading' | 'gone'>('opening');
   const running = useRef(new Set<Animation>());
+  // What happens when the reverse has played: the shelf's put-back, or a Delete's hand-over.
+  const afterBack = useRef<(() => void) | null>(null);
+  // The latest `where`: a new function each render must not replay the motion.
+  const whereRef = useRef(where);
+  whereRef.current = where;
   // Read once: a later re-measure or a change of preference must not replay a motion. `page` is
   // the cover's resting box, measured while nothing is transformed and kept for the way back.
   const start = useRef({ from, reduced });
@@ -96,12 +115,22 @@ export function PulledBook({
   // together, so the first promise to settle for the CURRENT moment says it is over.
   useLayoutEffect(() => {
     if (phase === 'open') {
+      // Read, or Retry for a failed paper; a disabled Read (still being read) leaves focus on the
+      // dialog, which is labelled by the title.
       spread.current
-        ?.querySelector<HTMLElement>('[data-book-read]')
+        ?.querySelector<HTMLElement>('[data-book-primary]:not([aria-disabled="true"])')
         ?.focus({ preventScroll: true });
       return;
     }
-    const { from: spine, reduced: less } = start.current;
+    const { from: opened, reduced: less } = start.current;
+    // Going back, the spine may have moved since the book came out (a new topic regroups the
+    // shelf): the slab and the flight aim at where it is now.
+    const now = phase === 'closing' ? (whereRef.current?.() ?? null) : null;
+    const spine = now ?? opened;
+    if (now !== null && slab.current !== null) {
+      slab.current.style.left = `${String(now.left)}px`;
+      slab.current.style.top = `${String(now.top)}px`;
+    }
     const box = flyer.current?.getBoundingClientRect();
     if (page.current === null && box !== undefined) {
       page.current = { left: box.left, top: box.top, width: box.width, height: box.height };
@@ -117,7 +146,7 @@ export function PulledBook({
     void Promise.all(parts).then(() => {
       if (moment.current !== phase) return;
       if (phase === 'opening') go('open');
-      else onPutBack();
+      else (afterBack.current ?? onPutBack)();
     });
   }, [phase, go, onPutBack]);
   // Unmounted (put back, read, or the book left the library): nothing may act any more.
@@ -139,6 +168,18 @@ export function PulledBook({
     cancelAll(running.current);
     go('closing');
   }, [go]);
+  const remove = useCallback(() => {
+    if (moment.current !== 'open') return;
+    if (!flies) {
+      // Reduced motion (or nothing to fly back to): no reverse, the book just goes.
+      moment.current = 'gone';
+      onDelete();
+      return;
+    }
+    cancelAll(running.current);
+    afterBack.current = onDelete;
+    go('closing');
+  }, [flies, go, onDelete]);
   const read = useCallback(() => {
     if (moment.current !== 'open') return;
     moment.current = 'reading';
@@ -213,6 +254,8 @@ export function PulledBook({
           onRead={read}
           onSummary={onSummary}
           onPutBack={back}
+          onDelete={remove}
+          onRetry={onRetry}
         />
         {flies && phase !== 'open' ? (
           // The right page's size, hinged at the gutter: the cover that flies in and swings open.

@@ -230,8 +230,10 @@ export function useLibrary(online: boolean) {
   );
 
   const remove = useCallback(
-    async (paperId: string) => {
-      await papersApi.remove(paperId);
+    async (paperId: string, options?: { readonly keepalive?: boolean }) => {
+      await (options === undefined
+        ? papersApi.remove(paperId)
+        : papersApi.remove(paperId, options));
       queryClient.setQueryData<readonly ApiLibraryPaper[]>(PAPERS_KEY, (old) =>
         (old ?? []).filter((row) => row.paper_id !== paperId),
       );

@@ -42,3 +42,30 @@ export function authorsShort(authors: readonly string[]): string | null {
   if (authors.length === 1) return first;
   return authors.length === 2 ? `${first} and ${second ?? ''}` : `${first} et al.`;
 }
+
+/** The longest title the delete toast prints whole. */
+const TOAST_TITLE_MAX = 60;
+
+/**
+ * What the delete toast says: "Deleted “Attention Is All You Need”, with your 3 highlights and 2
+ * threads". The work that goes with the paper is named so the person knows what Undo holds; a
+ * zero is left out, and a paper with none says only the first half.
+ *
+ * @param book - The deleted book.
+ * @returns The sentence (no final stop: the toast has buttons after it).
+ */
+export function deletedMessage(
+  book: Pick<LibraryBook, 'title' | 'highlightCount' | 'threadCount'>,
+): string {
+  const title = book.title.trim();
+  const shown = title.length > TOAST_TITLE_MAX ? `${title.slice(0, TOAST_TITLE_MAX - 1)}…` : title;
+  const counts = [
+    book.highlightCount > 0
+      ? `${String(book.highlightCount)} highlight${book.highlightCount === 1 ? '' : 's'}`
+      : null,
+    (book.threadCount ?? 0) > 0
+      ? `${String(book.threadCount)} thread${book.threadCount === 1 ? '' : 's'}`
+      : null,
+  ].filter((part): part is string => part !== null);
+  return `Deleted “${shown}”${counts.length === 0 ? '' : `, with your ${counts.join(' and ')}`}`;
+}

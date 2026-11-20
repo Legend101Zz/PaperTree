@@ -597,6 +597,18 @@ class PaperFigure(Wire):
     anchor: AnchorV1 | None
 
 
+#: A paper's name as its owner gives it: 1 to 300 characters AFTER trimming (`papertree_db
+#: .PAPER_TITLE_MAX`). Enforced here and by the data layer, not by a CHECK (0012).
+PaperTitle = Annotated[str, BeforeValidator(_trimmed), Field(min_length=1, max_length=300)]
+
+
+class PaperRename(Wire):
+    """`PATCH /papers/{id}` (v0.3 #337): the name the library shows for this paper from now on.
+    The parsed title is kept; this one wins over it and over the filename."""
+
+    title: PaperTitle
+
+
 class PlatePut(Wire):
     """`PUT /papers/{id}/plate`: the Anchor of one of the paper's figures (from `…/figures`)."""
 

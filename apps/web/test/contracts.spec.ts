@@ -83,6 +83,7 @@ import type {
   ReadingProgress,
   Message,
   MessageDiagram,
+  PaperRename,
   PassageLocator,
   ResolutionWire,
   RunErrorCode,
@@ -693,6 +694,7 @@ const KEYS_ARE_EXACT: true[] = [
   true satisfies Equal<keyof PaperAbstract, SchemaKeys<'papers', 'PaperAbstract'>>,
   true satisfies Equal<OptionalKeys<PaperAbstract>, Opt<'papers.PaperAbstract'>>,
   true satisfies Equal<keyof PlatePut, SchemaKeys<'papers', 'PlatePut'>>,
+  true satisfies Equal<keyof PaperRename, SchemaKeys<'papers', 'PaperRename'>>,
   true satisfies Equal<keyof LibraryLink, SchemaKeys<'papers', 'LibraryLink'>>,
   true satisfies Equal<OptionalKeys<LibraryLink>, Opt<'papers.LibraryLink'>>,
   true satisfies Equal<keyof LibraryReference, SchemaKeys<'papers', 'LibraryReference'>>,
@@ -1143,6 +1145,7 @@ describe('contracts.spec — lib/api/types.ts against contracts/api (exported fr
       anchor: null,
     } satisfies PaperAbstract);
     expectValid('papers', 'PlatePut', { anchor: CITATION_ANCHOR } satisfies PlatePut);
+    expectValid('papers', 'PaperRename', { title: 'My notes' } satisfies PaperRename);
     expectValid('highlights', 'Highlight', HIGHLIGHT);
     expectValid('threads', 'RunSummary', RUN);
     expectValid('threads', 'Citation', CITATION);

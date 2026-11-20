@@ -112,14 +112,18 @@ test.describe('S8: reduced motion, every moment (faux agent)', () => {
     await page.keyboard.press('Enter');
     // One cross-fade of 120 ms, then the spread: no cover flies, no spine turns.
     await expect(spread).toHaveAttribute('data-book-stage', 'open');
-    await expect(spread.getByRole('button', { name: /^Read / })).toBeFocused();
+    await expect(
+      spread.getByRole('button', { name: /^(Read|Continue at p\. \d+) / }),
+    ).toBeFocused();
     expectWithin('take out and open', await takeAnimations(page));
     await page.keyboard.press('Escape');
     await expect(spread).toHaveCount(0);
     await expect(book).toBeFocused();
     expectWithin('put back', await takeAnimations(page));
     await page.keyboard.press('Enter');
-    await expect(spread.getByRole('button', { name: /^Read / })).toBeFocused();
+    await expect(
+      spread.getByRole('button', { name: /^(Read|Continue at p\. \d+) / }),
+    ).toBeFocused();
     // A second take-out, already held to the bound above: drop it, so "Read" is alone.
     await takeAnimations(page);
     await page.keyboard.press('Enter');

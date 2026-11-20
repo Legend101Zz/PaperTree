@@ -90,7 +90,7 @@ test('search lights the shelf, the keyboard walks it, a drop anywhere uploads', 
   await expect(opened).toBeVisible();
   await expect(page.locator('[data-card-paper-id]')).toHaveCount(0);
   await expect(book).toHaveAttribute('data-pulled', 'true');
-  await expect(opened.getByRole('button', { name: /^Read / })).toBeFocused();
+  await expect(opened.getByRole('button', { name: /^(Read|Continue at p\. \d+) / })).toBeFocused();
   await page.screenshot({ path: shot('s2d-book-open-1440.png') });
   await page.keyboard.press('Escape');
   await expect(opened).toHaveCount(0);

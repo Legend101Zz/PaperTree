@@ -84,6 +84,7 @@ from .migrate import MigrationResult, migrate
 from .notebook import NotebookMixin
 from .plate import PlateMixin
 from .reading import ReadingMixin
+from .title import TitleMixin
 from .topics import TopicsMixin
 
 __all__ = [
@@ -643,6 +644,7 @@ class DatabaseCore:
 class PaperTreeDb(
     TopicsMixin,
     PlateMixin,
+    TitleMixin,
     LibraryMixin,
     ReadingMixin,
     HighlightsMixin,

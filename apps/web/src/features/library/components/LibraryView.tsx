@@ -5,7 +5,8 @@
  * Continue (above the shelf at every size), then the shelf (spines on planks, a plank per row at
  * scale) with the hint row under the plank, or Topics, the Map or the Table; an empty library
  * shows the accession slip. PDFs drop anywhere. A click on a spine takes the book off the shelf
- * and opens it (`useBookOnShelf`, v0.3 #337: no card in between). The shelf stays mounted (hidden)
+ * and opens it (`useBookOnShelf`, v0.3 #337: no card in between). Its Delete hides the book and
+ * offers Undo for 10 s before the request goes (`usePendingDelete`). The shelf stays mounted (hidden)
  * under the others, so its focus and scroll survive a switch; `useViewNavigation` moves between
  * them. At phone width (#199, frame 08a) the books lie flat under their holders and the Map puts
  * its list first.
@@ -17,6 +18,7 @@
  */
 'use client';
 
+import { Toast } from '@papertree/ui';
 import { useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -28,6 +30,7 @@ import { useBookOnShelf, useMe } from '@/features/book';
 import { useAuthStore } from '@/store/authStore';
 
 import { useContinue } from '../hooks/useContinue';
+import { usePendingDelete } from '../hooks/usePendingDelete';
 import { useLibrary, useOnline } from '../hooks/useLibrary';
 import { usePhoneLayout } from '../hooks/usePhoneLayout';
 import { useTableView } from '../hooks/useTableView';
@@ -35,13 +38,14 @@ import { useTopics } from '../hooks/useTopics';
 import { useTouchTargets } from '../hooks/useTouchTargets';
 import { useUploadQueue } from '../hooks/useUploadQueue';
 import { useViewNavigation } from '../hooks/useViewNavigation';
-import { libraryStats, matchPapers, type Arrangement } from '../model/shelf';
+import { libraryStats, matchPapers, readingPage, type Arrangement } from '../model/shelf';
 import { readingNow, shelfLayout } from '../model/states';
 import { readerHref } from '../model/table';
 import './library.css';
 // The phone's page-wide rules too (header, tabs, hints, the Map's list), not only the stacks'.
 import './phone.css';
 import { AccessionSlip } from './AccessionSlip';
+import { DeleteUndoToast } from './DeleteUndoToast';
 import { DropAnywhere } from './AddPapers';
 import { LibraryHeader } from './LibraryHeader';
 import { LibraryTitle, type LibraryViewName } from './LibraryTitle';
@@ -82,7 +86,10 @@ export function LibraryView(): ReactNode {
   const { user, logout } = useAuthStore();
   const me = useMe(); // the library's name, for the header's initial (#200)
   const online = useOnline();
-  const { books, own, query, upload, afterCancel, retry, remove } = useLibrary(online);
+  const { books: stocked, own, query, upload, afterCancel, retry, remove } = useLibrary(online);
+  // A deleted paper leaves the shelf at once and the server 10 s later, unless Undo comes first.
+  const pending = usePendingDelete(stocked, remove);
+  const books = pending.visible;
   const queue = useUploadQueue({ onUpload: upload, onCancelled: afterCancel });
   const [search, setSearch] = useState('');
   const [arrangement, setArrangement] = useState<Arrangement>('topic');
@@ -115,9 +122,31 @@ export function LibraryView(): ReactNode {
   }, [chip, setChip, stats]);
   const read = useCallback((paperId: string) => router.push(readerHref(paperId)), [router]);
   const resume = useContinue(read);
-  // A book that cannot be opened yet (queued, being read, failed) is read instead: Source mode
-  // works for it, and Retry and Delete are in the Table, where "N need a look" leads.
-  const { open, overlay } = useBookOnShelf(books, read);
+  // Read on the spread resumes at the place once reading has started (the "Continue at p. n" it
+  // says), as Continue in Reading now does.
+  const readBook = useCallback(
+    (paperId: string) => {
+      const book = books.find((b) => b.id === paperId);
+      if (book !== undefined && readingPage(book) !== null) resume(book);
+      else read(paperId);
+    },
+    [books, read, resume],
+  );
+  const { stage } = pending;
+  const stageDelete = useCallback(
+    (paperId: string) => {
+      const book = books.find((b) => b.id === paperId);
+      if (book !== undefined) stage(book);
+    },
+    [books, stage],
+  );
+  // Every paper of the person's opens its spread, whatever state it is in (a queued, being-read or
+  // failed one shows its status there); only a sample, which has no server, is read directly.
+  const { open, overlay } = useBookOnShelf(books, {
+    onRead: readBook,
+    onDelete: stageDelete,
+    onRetry: retry,
+  });
   const takeOut = useCallback(
     (paperId: string) => {
       if (!open(paperId)) read(paperId);
@@ -249,6 +278,16 @@ export function LibraryView(): ReactNode {
       </div>
       {/* Beside the library, not in it: the library goes inert while the book is out. */}
       {overlay}
+      {pending.undoable === null ? null : (
+        <DeleteUndoToast
+          book={pending.undoable}
+          onUndo={pending.undo}
+          onDismiss={pending.dismiss}
+        />
+      )}
+      {pending.failure === null ? null : (
+        <Toast message={pending.failure} onDismiss={pending.clearFailure} />
+      )}
     </>
   );
 }
