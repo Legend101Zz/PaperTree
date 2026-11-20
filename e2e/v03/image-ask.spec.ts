@@ -80,18 +80,6 @@ async function drawnInToken(page: Page, selector: string, token: string): Promis
 }
 
 test.describe('v0.3 #348 - select an image and ask about it', () => {
-  // Each test opens its own reader context on a rendered PDF; close it when the test ends, so six
-  // of them are not all alive (and painting) by the last test of the file.
-  const opened: { close(): Promise<void> }[] = [];
-  const open = async (...args: Parameters<typeof openReader>): ReturnType<typeof openReader> => {
-    const reader = await open(...args);
-    opened.push(reader.context);
-    return reader;
-  };
-  test.afterEach(async () => {
-    await Promise.all(opened.splice(0).map((context) => context.close().catch(() => undefined)));
-  });
-
   test.skip(
     !existsSync(PDF),
     `SKIPPED: ${PDF} is absent. The corpus PDFs are fetched, not committed - run ` +
@@ -104,7 +92,7 @@ test.describe('v0.3 #348 - select an image and ask about it', () => {
   }) => {
     test.skip(stack.agent !== 'running', 'SKIPPED: the e2e stack has no agent.');
     test.setTimeout(900_000);
-    const { page } = await open(
+    const { page } = await openReader(
       browser,
       stack.apiUrl,
       PDF,
@@ -147,7 +135,7 @@ test.describe('v0.3 #348 - select an image and ask about it', () => {
   }) => {
     test.skip(stack.agent !== 'running', 'SKIPPED: the e2e stack has no agent.');
     test.setTimeout(900_000);
-    const { page } = await open(
+    const { page } = await openReader(
       browser,
       stack.apiUrl,
       PDF,
@@ -197,7 +185,7 @@ test.describe('v0.3 #348 - select an image and ask about it', () => {
   }) => {
     test.skip(stack.agent !== 'running', 'SKIPPED: the e2e stack has no agent.');
     test.setTimeout(900_000);
-    const { page, paperId, token } = await open(
+    const { page, paperId, token } = await openReader(
       browser,
       stack.apiUrl,
       PDF,
@@ -273,7 +261,7 @@ test.describe('v0.3 #348 - select an image and ask about it', () => {
   }) => {
     test.skip(stack.agent !== 'running', 'SKIPPED: the e2e stack has no agent.');
     test.setTimeout(900_000);
-    const { page } = await open(
+    const { page } = await openReader(
       browser,
       stack.apiUrl,
       PDF,
@@ -302,7 +290,7 @@ test.describe('v0.3 #348 - select an image and ask about it', () => {
     stack,
   }) => {
     test.setTimeout(600_000);
-    const { page } = await open(
+    const { page } = await openReader(
       browser,
       stack.apiUrl,
       PDF,
@@ -332,7 +320,7 @@ test.describe('v0.3 #348 - select an image and ask about it', () => {
     stack,
   }) => {
     test.setTimeout(600_000);
-    const { page } = await open(
+    const { page } = await openReader(
       browser,
       stack.apiUrl,
       PDF,
