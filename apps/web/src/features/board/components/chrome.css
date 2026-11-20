@@ -500,3 +500,10 @@
     padding: 40px 20px 20px;
   }
 }
+
+/* React Flow's credit stays visible but never takes a click meant for a card under it
+   (a card's Fold / ··· row can sit in the board's bottom-right corner). */
+.react-flow__attribution {
+  pointer-events: none;
+  opacity: 0.55;
+}
