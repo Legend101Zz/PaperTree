@@ -134,15 +134,18 @@ test.describe('v0.2 steps 6–8: select → Explain → the source line flashes 
     await page.screenshot({ path: shot('v02-trace-02-peek-1440.png') });
 
     await page1.click();
-    const flash = page.locator('svg [data-flash="true"] polygon.pt-flash');
+    // `flash` (1.7 s) then `linger` until the reader's next action: match the outline in either phase.
+    const flash = page.locator('svg [data-flash] polygon.pt-flash');
     await expect(flash.first()).toBeVisible({ timeout: 10_000 });
     // No floating margin tab: the passage flashes on its own.
     await expect(page.locator('[data-flash-tab], .pt-flash-tab')).toHaveCount(0);
-    // After the 240 ms scroll the flashed passage is on screen.
-    await page.waitForTimeout(500);
-    const box = await flash.first().boundingBox();
-    expect((box?.y ?? -1) >= 0 && (box?.y ?? 1e9) < 900).toBe(true);
-    expect(box).not.toBeNull();
+    // The flashed passage is on screen once the scroll has settled: poll the box, never sleep.
+    await expect
+      .poll(async () => {
+        const y = (await flash.first().boundingBox({ timeout: 5_000 }))?.y ?? -1;
+        return y >= 0 && y < 900;
+      })
+      .toBe(true);
     await page.screenshot({ path: shot('v02-trace-03-flash-1440.png') });
 
     // After in 180 + hold 900 + out 600 (from the end of the scroll) the ring and wash are over,

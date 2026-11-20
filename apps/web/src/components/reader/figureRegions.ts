@@ -1,6 +1,15 @@
 /**
  * reader/figureRegions: where a page's figures are, for the dark and sepia page (#345).
  *
+ * `figureMats` turns those boxes into mats that NEVER cover text which is not the figure's. The
+ * mat is opaque, so two things were wrong with a bare box plus a fixed 10 px of padding: the
+ * parser emits a figure's own labels ("F(x)", "identity", "x") as separate text blocks that
+ * straddle or sit just outside the figure box (half of a word under the mat), and a caption starts
+ * a few points under the box, inside the padding. So: a short label block that is inside, straddling
+ * or within `LABEL_REACH_PT` of the box is part of the figure and the region grows to hold it whole;
+ * anything else (captions, headings, body text) is an obstacle, and each side's padding stops short
+ * of it (`gaps`), down to none; an obstacle that cuts into the box from outside trims the box.
+ *
  * Source recolours the whole PDF canvas, which is right for type and wrong for a plot or a photo.
  * The figure regions are the parser's `figure` and `image` boxes (the same blocks Guided shows as
  * crops, `guidedFigures`); `PageMats` draws the page's original pixels back over them on a mat.
@@ -22,6 +31,31 @@ function overlap(a: BBox, b: BBox): number {
   const w = Math.min(a[2], b[2]) - Math.max(a[0], b[0]);
   const h = Math.min(a[3], b[3]) - Math.max(a[1], b[1]);
   return w > 0 && h > 0 ? w * h : 0;
+}
+
+/** How far outside the box a short text block may be and still count as one of the figure's labels. */
+const LABEL_REACH_PT = 6;
+/** A label's short side is at most this (about one line of type), its long sides a fraction of the figure's. */
+const LABEL_SHORT_SIDE_PT = 16;
+const LABEL_MAX_FRACTION = 0.4;
+/** How much of a block must lie inside the box for it to belong to the figure. */
+const LABEL_INSIDE = 0.5;
+/** An outside block may trim at most this fraction of the box (a caption grazing its edge). */
+const MAX_TRIM = 0.3;
+/** The most padding any side is ever asked for, in IR points; the token (`--pt-pdf-mat-pad`) is the real size. */
+export const MAT_REACH_PT = 24;
+/** Clear air left between a mat and the text it stops short of, in IR points. */
+const CLEARANCE_PT = 0.5;
+
+/** Block types that are never part of a figure's drawing: they are the page's own text. */
+const NOT_A_LABEL = /caption|heading|header|footer|title|table|equation|footnote|reference|list/i;
+
+/** A mat: the pixels to keep (`box`) and how much padding each side may have (`gaps`). */
+export interface MatRegion {
+  /** The figure plus its own labels, IR points, y down. */
+  readonly box: BBox;
+  /** Free padding top, right, bottom, left in IR points, 0 to `MAT_REACH_PT`: space with no other text in it. */
+  readonly gaps: readonly [number, number, number, number];
 }
 
 /**
@@ -50,4 +84,135 @@ export function figureRegions(blocks: readonly IndexedBlock[]): readonly BBox[] 
         return b > a * 1.05 || (b >= a / 1.05 && at < index);
       }),
   );
+}
+
+function width(b: BBox): number {
+  return b[2] - b[0];
+}
+function height(b: BBox): number {
+  return b[3] - b[1];
+}
+
+/** Is `o` a short run of text (not a paragraph) that this figure could own? */
+function isLabelSized(o: BBox, box: BBox): boolean {
+  return (
+    Math.min(width(o), height(o)) <= LABEL_SHORT_SIDE_PT &&
+    width(o) <= LABEL_MAX_FRACTION * width(box) &&
+    height(o) <= LABEL_MAX_FRACTION * height(box)
+  );
+}
+
+function reaches(o: BBox, box: BBox): boolean {
+  return (
+    o[0] < box[2] + LABEL_REACH_PT &&
+    o[2] > box[0] - LABEL_REACH_PT &&
+    o[1] < box[3] + LABEL_REACH_PT &&
+    o[3] > box[1] - LABEL_REACH_PT
+  );
+}
+
+/** Which blocks of `others` are this figure's own labels. */
+function labelsOf(box: BBox, others: readonly IndexedBlock[]): readonly IndexedBlock[] {
+  return others.filter((o) => {
+    if (NOT_A_LABEL.test(o.type) || area(o.bbox) <= 0) return false;
+    const inside = overlap(o.bbox, box) / area(o.bbox);
+    if (inside >= 0.98) return true; // wholly inside: drawn within the figure, whatever it is
+    if (!isLabelSized(o.bbox, box)) return false;
+    return inside >= LABEL_INSIDE || reaches(o.bbox, box);
+  });
+}
+
+function union(a: BBox, b: BBox): BBox {
+  return [Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.max(a[2], b[2]), Math.max(a[3], b[3])];
+}
+
+/** Trims the box where a block from OUTSIDE it grazes in (a caption a point or two too high). */
+function trimmed(box: BBox, obstacles: readonly BBox[]): BBox {
+  const out: [number, number, number, number] = [box[0], box[1], box[2], box[3]];
+  for (const o of obstacles) {
+    if (overlap(out, o) <= 0) continue;
+    const toBottom = o[1] >= out[1] + height(out) / 2 && o[3] > out[3];
+    const toTop = o[3] <= out[1] + height(out) / 2 && o[1] < out[1];
+    const toRight = o[0] >= out[0] + width(out) / 2 && o[2] > out[2];
+    const toLeft = o[2] <= out[0] + width(out) / 2 && o[0] < out[0];
+    if (toBottom && out[3] - o[1] <= MAX_TRIM * height(out)) out[3] = o[1];
+    else if (toTop && o[3] - out[1] <= MAX_TRIM * height(out)) out[1] = o[3];
+    else if (toRight && out[2] - o[0] <= MAX_TRIM * width(out)) out[2] = o[0];
+    else if (toLeft && o[2] - out[0] <= MAX_TRIM * width(out)) out[0] = o[2];
+  }
+  return out;
+}
+
+/** The free padding on each side of `box`: it stops `CLEARANCE_PT` short of any obstacle. */
+function gapsAround(box: BBox, obstacles: readonly BBox[]): [number, number, number, number] {
+  // [top, right, bottom, left]
+  const gaps: [number, number, number, number] = [
+    MAT_REACH_PT,
+    MAT_REACH_PT,
+    MAT_REACH_PT,
+    MAT_REACH_PT,
+  ];
+  const padded = (): BBox => [
+    box[0] - gaps[3],
+    box[1] - gaps[0],
+    box[2] + gaps[1],
+    box[3] + gaps[2],
+  ];
+  const limit = (side: 0 | 1 | 2 | 3, distance: number): void => {
+    gaps[side] = Math.max(0, Math.min(gaps[side], distance - CLEARANCE_PT));
+  };
+  for (const o of obstacles) {
+    if (overlap(padded(), o) <= 0) continue;
+    const overX = o[0] < box[2] && o[2] > box[0];
+    const overY = o[1] < box[3] && o[3] > box[1];
+    // Where the block is relative to the box, by the side it extends past (a block grazing in
+    // from outside has already trimmed the box, so it only ever touches the padding).
+    const dBelow = o[1] - box[3];
+    const dAbove = box[1] - o[3];
+    const dRight = o[0] - box[2];
+    const dLeft = box[0] - o[2];
+    if (overX && overY) {
+      // still touching the box (a block too large to trim): no padding where it pokes out
+      if (o[3] > box[3]) gaps[2] = 0;
+      if (o[1] < box[1]) gaps[0] = 0;
+      if (o[2] > box[2]) gaps[1] = 0;
+      if (o[0] < box[0]) gaps[3] = 0;
+    } else if (overX) {
+      if (dBelow >= 0) limit(2, dBelow);
+      else limit(0, dAbove);
+    } else if (overY) {
+      if (dRight >= 0) limit(1, dRight);
+      else limit(3, dLeft);
+    } else {
+      // a corner: stop short on whichever side keeps more padding
+      const dx = dRight >= 0 ? dRight : dLeft;
+      const dy = dBelow >= 0 ? dBelow : dAbove;
+      if (dx >= dy) limit(dRight >= 0 ? 1 : 3, dx);
+      else limit(dBelow >= 0 ? 2 : 0, dy);
+    }
+  }
+  return gaps;
+}
+
+/**
+ * The mats for one page: each figure region grown to hold its own labels, trimmed where outside text
+ * grazes it, with the padding each side can have without covering any other text.
+ *
+ * @param blocks - The page's blocks (`IndexedDocument.byPage`).
+ * @returns One mat per outermost figure, in block order.
+ *
+ * @example
+ * // a figure at y 200..400 with its caption starting at y 404
+ * figureMats(blocks)[0].gaps[2]; // 3.5: the bottom padding stops short of the caption
+ */
+export function figureMats(blocks: readonly IndexedBlock[]): readonly MatRegion[] {
+  const figures = figureRegions(blocks);
+  const others = blocks.filter((b) => !FIGURE_TYPES.has(b.type) && area(b.bbox) > 0);
+  return figures.map((figure) => {
+    const owned = labelsOf(figure, others);
+    const grown = owned.reduce<BBox>((acc, b) => union(acc, b.bbox), figure);
+    const rest = others.filter((b) => !owned.includes(b)).map((b) => b.bbox);
+    const box = trimmed(grown, rest);
+    return { box, gaps: gapsAround(box, rest) };
+  });
 }

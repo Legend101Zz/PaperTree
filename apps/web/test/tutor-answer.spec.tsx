@@ -171,7 +171,7 @@ describe('the tutor answer in the Explain panel', () => {
     expect(document.querySelector('[data-diagram-pending]')?.getAttribute('aria-hidden')).toBe(
       'true',
     );
-    handle?.push(text('t":"end"}\n```\nAfter.'));
+    handle?.push(text('t","label":"Layers","after":["A"],"cite":null}\n{"t":"end"}\n```\nAfter.'));
     await waitFor(() => expect(document.querySelector('[data-diagram-inline]')).not.toBeNull());
     expect(document.querySelector('[data-diagram-pending]')).toBeNull();
     handle?.push(done());

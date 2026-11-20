@@ -40,6 +40,7 @@ import { alignedItems } from './stampTextLayer';
 import { attachSelectionEnd } from './textLayerSelection';
 
 import { irToCssScale, pageCssSize, usePdfDocument } from './PdfDocumentProvider';
+import type { MatRegion } from './figureRegions';
 import { PageMats } from './PageMats';
 
 import './pdfPage.css';
@@ -69,10 +70,10 @@ export interface PdfPageProps {
   readonly onRenderError?: (error: Error) => void;
   /**
    * Boxes (IR points, y down) that keep their own colours on a dark or sepia page: the page's
-   * figures and images, from `figureRegions`. The page is recoloured live by CSS; these are drawn
+   * figures and images, from `figureMats`. The page is recoloured live by CSS; these are drawn
    * back from the same canvas on a mat (`PageMats`). Unused on a light page.
    */
-  readonly figureRegions?: readonly BBox[];
+  readonly figureRegions?: readonly MatRegion[];
   /**
    * Called once per successful text-layer build, with the divs and the items they were built from.
    *
