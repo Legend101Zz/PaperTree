@@ -152,7 +152,10 @@ test('cards, pins and a thread that persists with its ports', async ({ browser, 
   await clickEdge(page);
   const linkBar = page.getByRole('group', { name: 'Selected link' });
   await expect(linkBar).toBeVisible();
-  await page.mouse.click(stageBox.x + stageBox.width - 24, stageBox.y + 24); // the empty board
+  // The empty board, BELOW the selected link's bar: the bar spans the stage's top edge (8 px in,
+  // ~50 px tall, `.pt-cv__edgebar`), so a click up there lands on the bar, not on the pane.
+  const bar = (await linkBar.boundingBox())!;
+  await page.mouse.click(stageBox.x + 24, bar.y + bar.height + 24);
   await expect(linkBar).toBeHidden();
   await context.close();
 });
