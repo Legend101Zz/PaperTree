@@ -13,6 +13,7 @@ import { useCallback, useMemo, type DragEvent, type ReactNode } from 'react';
 
 import { hitsItem, type PaintItem } from '@/components/reader/HighlightOverlay';
 import { setDraggedPassage } from '@/features/split/model/passageDrag';
+import { floatCardBody } from '@/lib/imageAnchor';
 
 import { ImageLayer, type FrameDrag } from '../components/ImageLayer';
 import { floatsOnPage } from '../model/floats';
@@ -102,8 +103,8 @@ export function useImageSelection(args: UseImageSelectionArgs): ImageSelection {
       onDragStart: (event: DragEvent<HTMLElement>) => {
         setDraggedPassage({
           anchor: anchorForPick(doc, pick),
-          // The caption is what the card will say; a region has none.
-          text: pick.float?.caption ?? '',
+          // The caption is what the card will say (else its numbered name); a region has none.
+          text: pick.float === null ? '' : floatCardBody(pick.float.caption, pick.float.label),
           image: true,
         });
         event.dataTransfer.effectAllowed = 'copy';

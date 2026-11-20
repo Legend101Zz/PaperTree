@@ -9,10 +9,12 @@ import { indexDocument, resolveAnchor, type PaperSource } from '@papertree/ancho
 
 import {
   buildImageAnchor,
+  floatCardBody,
   imageAlt,
   imageBoxOf,
   isImageAnchor,
   longLabel,
+  pictureNameOf,
   shortLabel,
 } from '@/lib/imageAnchor';
 
@@ -102,5 +104,28 @@ describe('labels and alt text', () => {
     );
     expect(imageAlt('Figure 1', 'Figure 1. Training error.')).toBe('Figure 1. Training error.');
     expect(imageAlt('Selected area', null, null)).toBe('Selected area');
+  });
+});
+
+describe('what a picked picture is called', () => {
+  const figure = buildImageAnchor({ ...BASE, kind: 'figure' });
+  const area = buildImageAnchor({ ...BASE, kind: 'figure_region' });
+
+  it('a figure is named by its number, or plain "Figure" without one; an area is a "Selected area"', () => {
+    expect(pictureNameOf(figure, 'Figure 2. Residual learning')).toEqual({
+      thing: 'figure',
+      label: 'Figure 2',
+    });
+    expect(pictureNameOf(figure, '')).toEqual({ thing: 'figure', label: 'Figure' });
+    expect(pictureNameOf(area, '')).toEqual({ thing: 'area', label: 'Selected area' });
+    expect(pictureNameOf(null, 'x')).toBeNull();
+  });
+
+  it('a float with no caption stores its numbered name as the card body, so the card knows its figure', () => {
+    expect(floatCardBody('Figure 2. Residual learning', 'Figure 2')).toBe(
+      'Figure 2. Residual learning',
+    );
+    expect(floatCardBody(null, 'Figure 2')).toBe('Figure 2');
+    expect(floatCardBody(null, 'Figure')).toBe('');
   });
 });

@@ -7,7 +7,7 @@
  * request body and that list, all pure. The last level chosen on a board is remembered per board
  * in `localStorage`; the storage is passed in, so tests need no browser.
  */
-import { isImageAnchor } from '@/lib/imageAnchor';
+import { isImageAnchor, pictureNameOf } from '@/lib/imageAnchor';
 
 import { firstLine, firstSentence } from './answerText';
 import { spanWords } from './spans';
@@ -308,9 +308,11 @@ export function whatTheAiWillRead<N extends AskReadNode>(
     .flatMap((node) => childrenOf(tree, node.node_id))
     .filter((c) => c.kind === 'explanation' && !readIds.has(c.node_id) && !path.includes(c))
     .map(labelOf);
+  const rootPicture = pictureNameOf(path[0]?.source_anchor, path[0]?.body);
+  const rootWord = rootPicture === null ? 'passage' : rootPicture.thing;
   const pathLabel = uses.path
     ? path.length <= 1
-      ? 'this passage'
+      ? `this ${rootWord}`
       : `this path (${String(path.length)} cards)`
     : 'this card only';
   return { items, paper: PAPER_SENTENCES[uses.paper], notRead, pathLabel };

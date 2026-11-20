@@ -6,7 +6,7 @@
  *     panel, a tutor-shaped answer;
  *   - Alt+drag a rectangle over Figure 1 -> resize it -> Ask... with a question -> a `figure_region`
  *     thread;
- *   - Send to board -> Board beside -> an image card with its crop, caption and "Fig. 2 . p. 2";
+ *   - Send to board -> Board beside -> an image card with its crop, caption and "Figure 2 . p. 2";
  *     an ask on it grows an answer to its right, and words in that answer branch again;
  *   - a figure and a paragraph together (Shift) -> `with_text_anchor`;
  *   - the dark page keeps the figure's colours and the selection is drawn in the page's own tokens
@@ -204,7 +204,7 @@ test.describe('v0.3 #348 - select an image and ask about it', () => {
     const card = pane.locator('.react-flow__node-excerpt');
     await expect(card).toHaveCount(1);
     await expect(card.locator('img')).toBeVisible({ timeout: 30_000 });
-    await expect(card).toContainText('Fig. 2 · p. 2');
+    await expect(card).toContainText('Figure 2 · p. 2');
     await expect(card).toContainText('Residual learning');
 
     await card.getByRole('button', { name: 'Ask about this card' }).click();

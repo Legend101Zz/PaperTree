@@ -82,7 +82,7 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('an excerpt whose anchor is a picture', () => {
-  it('shows the crop of its page and rectangle, its caption, and "Fig. 4 · p. 6"', async () => {
+  it('shows the crop of its page and rectangle, its caption, and "Figure 4 · p. 6"', async () => {
     mount(image());
     const img = await picture();
     expect(img.getAttribute('src')).toBe(CROP.url);
@@ -93,15 +93,15 @@ describe('an excerpt whose anchor is a picture', () => {
     );
     expect(screen.getByText(CAPTION)).toBeTruthy();
     expect(
-      screen.getByRole('button', { name: 'Show Fig. 4 · p. 6 in the paper' }).textContent,
-    ).toBe('Fig. 4 · p. 6');
+      screen.getByRole('button', { name: 'Show Figure 4 · p. 6 in the paper' }).textContent,
+    ).toBe('Figure 4 · p. 6');
     expect(screen.getByRole('group', { name: 'Picture from the paper' })).toBeTruthy();
   });
 
   it('the source opens the paper on it, and the Ask edge opens the ask box, as on a passage', async () => {
     const branch = mount(image());
     await picture();
-    fireEvent.click(screen.getByRole('button', { name: /Show Fig\. 4/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Show Figure 4/ }));
     expect(branch.openSource).toHaveBeenCalledWith('img');
     fireEvent.click(screen.getByRole('button', { name: 'Ask about this card' }));
     expect(branch.control.openAsk).toHaveBeenCalledWith('img');

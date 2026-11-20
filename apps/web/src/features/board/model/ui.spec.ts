@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
+import { askAnchorFixture } from './imageFixtures';
 import { buildTree } from './tree';
 import { node, resetClock } from './treeFixtures';
 import { CALM, breadcrumbOf, escapeStep, onPathIds, type BoardUi } from './ui';
@@ -96,5 +97,17 @@ describe('path focus', () => {
       'so a block can just do nothing?',
     ]);
     expect(breadcrumbOf(tree, 'b').map((c) => c.id)).toEqual(['p', 'a', 'b']);
+  });
+
+  it('names a picture’s root for the picture: "Figure 2", "Figure", "Selected area"', () => {
+    const figure = (body: string, kind: 'figure' | 'figure_region') => ({
+      ...node({ id: 'img', body }),
+      source_anchor: { ...askAnchorFixture(1), targetKind: kind },
+    });
+    const first = (row: ReturnType<typeof figure>) =>
+      breadcrumbOf(buildTree([row]), 'img')[0]?.label;
+    expect(first(figure('Figure 2', 'figure'))).toBe('Figure 2');
+    expect(first(figure('', 'figure'))).toBe('Figure');
+    expect(first(figure('', 'figure_region'))).toBe('Selected area');
   });
 });

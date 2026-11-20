@@ -20,7 +20,7 @@ import { useCallback, useEffect, useMemo } from 'react';
 import { useReaderActions } from '@/components/reader/actions';
 import { holdScroll } from '@/components/reader/scrollHold';
 import { defaultAnchorId } from '@/components/reader/useSelectionCapture';
-import { buildImageAnchor, type ImageAsk } from '@/lib/imageAnchor';
+import { buildImageAnchor, floatCardBody, type ImageAsk } from '@/lib/imageAnchor';
 
 import { pickLabel, type ImagePick } from '../model/imagePick';
 
@@ -123,7 +123,8 @@ export function useImageActions(args: UseImageActionsArgs): SelectionActions | n
       const anchor = anchorOf();
       if (anchor === null || pick === null) return;
       holdScroll(root);
-      const caption = pick.float?.caption ?? '';
+      const caption =
+        pick.float === null ? '' : floatCardBody(pick.float.caption, pick.float.label);
       clear();
       const beside = how === 'beside' && onOpenBoard !== undefined;
       actions

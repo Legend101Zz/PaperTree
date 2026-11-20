@@ -176,6 +176,45 @@ export function longLabel(caption: string | null): string | null {
   return short.replace(/^Fig\./, 'Figure').replace(/^Alg\./, 'Algorithm');
 }
 
+/** What a picked picture is, said in a word: a figure (a whole float) or an area (a drawn rectangle). */
+export interface PictureName {
+  readonly thing: 'figure' | 'area';
+  /** "Figure 2", "Table 1", "Figure" (the number is not known), or "Selected area". */
+  readonly label: string;
+}
+
+/**
+ * What a picture is called, from its anchor and the words stored with it. A whole float is a
+ * figure, named by the number its caption (or label) opens with ("Figure 2"), or plain "Figure"
+ * when none is known; a drawn rectangle is a "Selected area", whatever words came with it.
+ *
+ * @param anchor The anchor, or null.
+ * @param body The words stored with the picture: its caption, or the bare label ("Figure 2").
+ * @returns The name, or null when the anchor is not an image anchor.
+ */
+export function pictureNameOf(
+  anchor: Anchor | null | undefined,
+  body: string | null | undefined,
+): PictureName | null {
+  if (!isImageAnchor(anchor) || anchor === null || anchor === undefined) return null;
+  if (anchor.targetKind === 'figure_region') return { thing: 'area', label: 'Selected area' };
+  return { thing: 'figure', label: longLabel(body?.trim() ?? null) ?? 'Figure' };
+}
+
+/**
+ * What a whole float stores as the body of its board card: its caption, else its bare name when
+ * the name carries a number ("Figure 2"), so the card can say which figure it is when the parser
+ * linked no caption; else nothing.
+ *
+ * @param caption The caption the parser linked, or null.
+ * @param label The float's label ("Figure 2", or "Figure" when no number was read).
+ * @returns The body.
+ */
+export function floatCardBody(caption: string | null, label: string): string {
+  if (caption !== null && caption !== '') return caption;
+  return longLabel(label) === null ? '' : label;
+}
+
 /**
  * The picture's alt text: the caption and, when there is one, a short description (the first
  * answer's TL;DR line).

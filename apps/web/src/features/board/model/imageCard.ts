@@ -7,14 +7,7 @@
  * The card carries no crop URL: the web asks `crop-url` per card, so the stored node stays the
  * anchor and the words.
  */
-import {
-  imageAlt,
-  imageBoxOf,
-  isImageAnchor,
-  longLabel,
-  shortLabel,
-  type ImageBox,
-} from '@/lib/imageAnchor';
+import { imageAlt, imageBoxOf, pictureNameOf, type ImageBox } from '@/lib/imageAnchor';
 
 import { firstLine } from './answerText';
 
@@ -26,9 +19,9 @@ export interface ImageCardView {
   readonly at: ImageBox;
   /** The caption, or null when the picture has none (a free region). */
   readonly caption: string | null;
-  /** "Figure 4", "Table 2", or "Selected area". */
+  /** "Figure 4", "Table 2", "Figure" (no number known), or "Selected area". */
   readonly label: string;
-  /** The quiet source line: "Fig. 4 · p. 6", or "Selected area · p. 6". */
+  /** The quiet source line: "Figure 4 · p. 6", "Figure · p. 6", or "Selected area · p. 6". */
   readonly source: string;
   /** The picture's alt text: the caption, then a short description when an answer gives one. */
   readonly alt: string;
@@ -60,17 +53,20 @@ export function imageCardOf(
   body: string,
   finalText?: string | null,
 ): ImageCardView | null {
-  if (!isImageAnchor(anchor) || anchor === null) return null;
+  const name = pictureNameOf(anchor, body);
+  if (name === null || anchor === null) return null;
   const at = imageBoxOf(anchor);
   if (at === null) return null;
-  const caption = body.replace(/\s+/g, ' ').trim() || null;
-  const label = longLabel(caption) ?? 'Selected area';
-  const short = shortLabel(caption) ?? label;
+  const words = body.replace(/\s+/g, ' ').trim();
+  const { label } = name;
+  // A body that is only the figure's name ("Figure 2", stored when the parser linked no caption)
+  // names the card; it is not a caption to print under the picture.
+  const caption = words === '' || words === label ? null : words;
   return {
     at,
     caption,
     label,
-    source: `${short} · p. ${String(at.page + 1)}`,
+    source: `${label} · p. ${String(at.page + 1)}`,
     alt: imageAlt(label, caption, describeFrom(finalText)),
   };
 }

@@ -17,9 +17,9 @@ const CAPTION = 'Figure 4. Training on CIFAR-10. Dashed lines denote training er
 describe('imageCardOf', () => {
   const anchor = askAnchorFixture(5);
 
-  it('is "Fig. 4 · p. 6" with the caption, and the page it is cropped from', () => {
+  it('is "Figure 4 · p. 6" with the caption, and the page it is cropped from', () => {
     const view = imageCardOf(anchor, CAPTION);
-    expect(view?.source).toBe('Fig. 4 · p. 6');
+    expect(view?.source).toBe('Figure 4 · p. 6');
     expect(view?.label).toBe('Figure 4');
     expect(view?.caption).toBe(CAPTION);
     expect(view?.at.page).toBe(5);
@@ -58,6 +58,16 @@ describe('imageCardOf', () => {
       source: 'Selected area · p. 3',
     });
     expect(view?.alt).toBe('Selected area');
+  });
+
+  it('a picked figure with no caption is "Figure · p. 2", not "Selected area"', () => {
+    const view = imageCardOf(askAnchorFixture(1), '');
+    expect(view).toMatchObject({ caption: null, label: 'Figure', source: 'Figure · p. 2' });
+  });
+
+  it('a picked figure whose body is only its name says "Figure 2 · p. 2" and prints no caption', () => {
+    const view = imageCardOf(askAnchorFixture(1), 'Figure 2');
+    expect(view).toMatchObject({ caption: null, label: 'Figure 2', source: 'Figure 2 · p. 2' });
   });
 
   it('is null for a passage’s anchor and for none', () => {
