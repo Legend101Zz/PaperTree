@@ -211,8 +211,10 @@ test('branch a conversation: ask, branch from words, focus a path, tidy, fold, o
   expect(after.third.y - before.third.y).toBeGreaterThan(40);
   await expect
     .poll(async () => {
+      // The dragged card is the answer that grew from the first answer's words (not the first
+      // answer itself, and not the note kept on the same words).
       const n = (await getBoard(stack.apiUrl, token, paperId)).nodes.find(
-        (x) => x.node_id === stored.node_id || x.parent_id === stored.node_id,
+        (x) => x.parent_id === stored.node_id && x.kind === 'explanation',
       );
       return (n?.offset_y ?? 0) > 40;
     })
