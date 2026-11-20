@@ -166,6 +166,10 @@ test('the spread’s ⋯ menu: Esc order, Rename persists, Delete → Undo resto
   expect((await patched).status()).toBe(200);
   const renamed = page.getByRole('dialog', { name: 'My Attention' });
   await expect(renamed.getByRole('heading', { name: 'My Attention' })).toBeVisible();
+  // Saved: the field is gone and focus is back on ⋯. Until then an Esc would be the field's own
+  // "cancel", so wait on the focused element, not on time.
+  await expect(renamed.getByRole('textbox', { name: 'Title' })).toHaveCount(0);
+  await expect(more()).toBeFocused();
   await page.keyboard.press('Escape');
   await expect(renamed).toHaveCount(0);
   await page.reload();

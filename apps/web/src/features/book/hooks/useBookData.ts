@@ -168,7 +168,10 @@ export function useRenamePaper(paperId: string) {
       client.setQueryData<readonly LibraryPaper[]>(PAPERS_KEY, (old) =>
         (old ?? []).map((existing) => (existing.paper_id === row.paper_id ? row : existing)),
       );
-      return client.invalidateQueries({ queryKey: PAPERS_KEY });
+      // Not returned: the mutation settles (and the field closes) when the PATCH is answered, not
+      // when the list has been re-read. A returned promise is awaited before the caller's own
+      // `onSuccess`, which kept the rename field, and so Esc's "cancel", alive for a whole refetch.
+      void client.invalidateQueries({ queryKey: PAPERS_KEY });
     },
   });
 }
