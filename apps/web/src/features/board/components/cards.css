@@ -383,6 +383,7 @@
 /* Its edge is drawn in both schemes: by day `--pt-card-edge` is transparent (the card's shadow
    draws its edge, and a glance has none), so the glance takes the frame's outline (3:1 on linen). */
 .pt-bc--glance {
+  cursor: grab; /* a glance is its own drag handle (model/display DRAG_HANDLE) */
   padding: 12px 16px;
   overflow: hidden;
   background: var(--pt-call-slip);

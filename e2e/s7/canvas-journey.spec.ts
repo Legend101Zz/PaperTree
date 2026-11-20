@@ -46,6 +46,29 @@ async function mouseDrag(
   await page.mouse.up();
 }
 
+/**
+ * A point on the EMPTY pane (the hit element is the pane itself), searched from the lower part of
+ * the board. A v0.3 card's body takes no pan (its words stay selectable), so a pan or a wheel zoom
+ * that starts on a card does nothing: the journey must start on the bare pane wherever the Tidy
+ * layout put the cards.
+ */
+async function emptyPanePoint(
+  page: import('@playwright/test').Page,
+): Promise<{ x: number; y: number }> {
+  const point = await page.evaluate(() => {
+    for (let y = 860; y >= 300; y -= 20) {
+      for (let x = 160; x <= 1400; x += 20) {
+        if (document.elementFromPoint(x, y)?.classList.contains('react-flow__pane')) {
+          return { x, y };
+        }
+      }
+    }
+    return null;
+  });
+  if (point === null) throw new Error('no empty pane point to pan from');
+  return point;
+}
+
 test.describe('Journey D: the canvas', () => {
   test.use({ actionTimeout: 20_000 });
   test('send, drag, connect, note, group, reload, delete, open source', async ({
@@ -283,8 +306,10 @@ test.describe('Journey D: the canvas', () => {
 
     // ── 8. pan and zoom: saved on the END only ──
     calls.length = 0;
-    await mouseDrag(page, { x: 700, y: 840 }, { x: 640, y: 800 });
-    await page.mouse.move(720, 600);
+    const bare = await emptyPanePoint(page);
+    await mouseDrag(page, bare, { x: bare.x - 40, y: bare.y - 20 });
+    // The wheel zooms where the pointer is, so it stays on the point the pan ended on (bare pane).
+    await page.mouse.move(bare.x - 40, bare.y - 20);
     await page.mouse.wheel(0, -240);
     await page.waitForTimeout(1500);
     const viewportPatches = calls.filter(
