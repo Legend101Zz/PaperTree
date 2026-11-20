@@ -260,6 +260,17 @@ export function SourcePane(props: SourcePaneProps) {
     highlightDisabledReason: unavailable,
   });
 
+  // The pages on screen are the board beside's business only (the faint amber edge): with no board
+  // beside, the page list is not asked, and the callback is one stable function, not a new closure
+  // per render (the list republishes its visible pages whenever the callback changes).
+  const reportPages = props.onVisiblePages;
+  const besideOpen = props.boardBeside === true;
+  const onVisibleChange = useCallback(
+    (visible: { readonly pages: readonly number[] }): void => reportPages?.(visible.pages),
+    [reportPages],
+  );
+  const visibleChange = besideOpen && reportPages !== undefined ? onVisibleChange : undefined;
+
   // A selection dragged out of the page is a passage in the air: the board beside (the split view,
   // #344) shows where it would land and takes it at the drop. Only when there is a board to take it.
   useTextDragToBoard(root, capture, props.onOpenBoard !== undefined);
@@ -386,9 +397,7 @@ export function SourcePane(props: SourcePaneProps) {
         onTextLayer={onTextLayer}
         figureRegionsOf={(pageIndex) => figuresByPage.get(pageIndex)}
         onViewportResize={props.onViewportResize}
-        {...(props.onVisiblePages === undefined
-          ? {}
-          : { onVisibleChange: (visible) => props.onVisiblePages?.(visible.pages) })}
+        {...(visibleChange === undefined ? {} : { onVisibleChange: visibleChange })}
         initialPosition={props.initialPosition}
         onPositionChange={props.onPositionChange}
         renderOverlay={(pageIndex, meta) => (

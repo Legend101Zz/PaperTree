@@ -21,8 +21,10 @@ import {
   pointsFor,
   register,
   reveal,
+  setMessageText,
   shotPath,
   upload,
+  userId,
   waitParsed,
   yoloPdf,
 } from '../s4/support';
@@ -307,7 +309,13 @@ test.describe('W3UI round 2 (YOLO)', () => {
     const board = await getBoard(stack.apiUrl, token, paperId);
     const nodes = (
       board as unknown as {
-        nodes: { node_id: string; kind: string; version: number; body: string }[];
+        nodes: {
+          node_id: string;
+          kind: string;
+          version: number;
+          body: string;
+          source_message_id: string | null;
+        }[];
       }
     ).nodes;
     const cards = nodes.filter((n) => n.kind === 'explanation');
@@ -316,20 +324,17 @@ test.describe('W3UI round 2 (YOLO)', () => {
       cards.some((c) => /\[b\d+\]/.test(c.body)),
       'the stored body keeps its handles',
     ).toBe(true);
-    const boardId = (board as unknown as { board: { board_id: string } }).board.board_id;
-    // Give the first card the markdown the live model writes (the stored words, edited by the test).
-    const first = cards[0] as { node_id: string; version: number };
-    const patched = await api(
-      stack.apiUrl,
-      token,
-      'PATCH',
-      `/boards/${boardId}/nodes/${first.node_id}`,
-      {
-        version: first.version,
-        body: MARKDOWN_ANSWER,
-      },
+    // Give the first card the markdown the live model writes. Since v0.3 a board answer card
+    // shows its message's stored final text (which wins over the card's own `body`), so the
+    // markdown is written onto that message, the stored words edited by the test.
+    const first = cards[0] as { source_message_id: string | null };
+    expect(first.source_message_id).not.toBeNull();
+    setMessageText(
+      stack.dataRoot,
+      await userId(stack.apiUrl, token),
+      first.source_message_id as string,
+      MARKDOWN_ANSWER,
     );
-    expect(patched.status).toBe(200);
 
     for (const screen of SCREENS) {
       for (const theme of THEMES) {
