@@ -158,7 +158,10 @@ test('branch a conversation: ask, branch from words, focus a path, tidy, fold, o
   await word.dblclick();
   await expect(menu).toBeVisible();
   await page.keyboard.press('4');
-  await expect(page.locator('.react-flow__node-note')).toHaveCount(1);
+  // A kept note hangs from the words it was kept on, so it is a `branchnote` card (model/flow
+  // `flowType`); the plain `note` type is the loose note of the v0.2 board.
+  await expect(page.locator('.react-flow__node-branchnote')).toHaveCount(1);
+  await expect(page.locator('.react-flow__node-branchnote')).toContainText(/\S/);
   await expect(answerCards(page)).toHaveCount(2);
 
   // Click the new card: path focus, a breadcrumb, the other branches dim, a Follow up stub.
