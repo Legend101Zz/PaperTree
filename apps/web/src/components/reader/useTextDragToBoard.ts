@@ -6,7 +6,7 @@
  * what is being dragged when the drag starts and clears it when it ends. A picked picture's chip has
  * its own drag (`useImageSelection`), and is left alone here.
  */
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 
 import { setDraggedPassage } from '@/features/split/model/passageDrag';
 
@@ -24,12 +24,18 @@ export function useTextDragToBoard(
   capture: (kind?: 'text') => SelectionCapture | null,
   enabled: boolean,
 ): void {
+  // `capture` changes whenever the selection state does, and a native drag changes it (the
+  // pointercancel it raises reconciles the selection): the listeners must not be torn down, nor the
+  // passage in the air forgotten, in the middle of the very drag that set it. So they read the
+  // latest `capture` through a ref and the passage is cleared only on unmount.
+  const latest = useRef(capture);
+  latest.current = capture;
   useEffect(() => {
     if (root === null || !enabled) return undefined;
     const start = (event: DragEvent): void => {
       if (event.target instanceof Element && event.target.closest('[data-pt-imgui]') !== null)
         return;
-      const captured = capture('text');
+      const captured = latest.current('text');
       if (captured === null) return;
       setDraggedPassage({ anchor: captured.anchor, text: captured.selection.text });
       if (event.dataTransfer !== null) {
@@ -43,7 +49,7 @@ export function useTextDragToBoard(
     return () => {
       root.removeEventListener('dragstart', start);
       root.removeEventListener('dragend', end);
-      setDraggedPassage(null);
     };
-  }, [root, capture, enabled]);
+  }, [root, enabled]);
+  useEffect(() => () => setDraggedPassage(null), []);
 }

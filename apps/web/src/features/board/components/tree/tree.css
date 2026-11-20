@@ -433,10 +433,13 @@
   opacity: 0.3;
 }
 
-/* The ask box is not a card: it floats in board coordinates where the layout put it. */
+/* The ask box is not a card: it floats in board coordinates where the layout put it. React Flow's
+   viewport takes no pointer (`pointer-events: none`, each node turns it back on), so the layer
+   must, or every click on the box falls through to the pane under it. */
 .pt-ask-layer {
   position: absolute;
   z-index: 40;
+  pointer-events: auto;
 }
 
 /* ── the ask box ────────────────────────────────────────────────────────────────────────────── */
