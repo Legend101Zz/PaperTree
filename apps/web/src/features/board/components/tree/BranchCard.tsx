@@ -19,7 +19,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 
 import { rootOnVisiblePage } from '../../model/edge';
 import { useBranch } from '../BranchContext';
-import { FallbackHandles } from '../CardPins';
+import { HiddenPins } from '../CardPins';
 
 import type { CanvasNode } from '@/lib/api/types';
 
@@ -162,9 +162,10 @@ export function BranchCard({
           />
         </svg>
       </button>
-      {/* No brass pins: a branch is joined by the tree's own lines. A stored v0.2 thread that
-          touches this card still draws, on the hidden handles. */}
-      <FallbackHandles />
+      {/* No brass pins: a branch is joined by the tree's own lines. A thread that touches this card
+          (made with the toolbar's Thread, or stored) still draws, on the hidden handles named by
+          its own pins. */}
+      <HiddenPins kind={kind} />
     </div>
   );
 }
