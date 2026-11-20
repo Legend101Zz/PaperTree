@@ -355,7 +355,8 @@ function Board({ paperId }: { readonly paperId: string }) {
               )}
 
               {branch.control.ui.menu === null ? null : <SpanMenu menu={branch.control.ui.menu} />}
-              <Breadcrumb />
+              {/* The selected link's bar owns the stage's top edge: the path waits behind it. */}
+              {selectedEdge?.data === undefined ? <Breadcrumb /> : null}
               {ctl.status === 'loading' ? (
                 <BoardLoading />
               ) : ctl.status === 'error' ? (

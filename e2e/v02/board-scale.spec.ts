@@ -155,10 +155,13 @@ test('a settled 500-card board makes 0 requests, and one card drags inside a fra
   test.info().annotations.push({ type: 'drag frames (ms)', description: JSON.stringify(drag) });
   expect(drag.frames).toBeGreaterThan(5);
   expect(drag.p95).toBeLessThan(250);
-  // The drag reached the card: the server has it somewhere else now (it started at 3600, 2000).
+  // The drag reached the card: the server has it somewhere else now. v0.3: a passage is a tree
+  // root, so the layout owns its place (x, y stay 3600, 2000) and the drag is stored as an offset
+  // on top of it, to the right and down as the mouse went.
   const moved = async () =>
     (await getBoard(stack.apiUrl, token, paperId)).nodes.find((n) => n.node_id === ids[262]);
-  await expect.poll(async () => (await moved())?.x).toBeGreaterThan(3600);
+  await expect.poll(async () => (await moved())?.offset_x ?? 0).toBeGreaterThan(0);
+  expect((await moved())?.offset_y ?? 0).toBeGreaterThan(0);
 
   // ── at about 100 %: the keyboard thread walk never leaves focus on a card out of view ──
   for (let i = 0; i < 9; i += 1) await (await boardTool(page, 'Zoom in')).click();
