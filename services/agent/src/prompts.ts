@@ -238,37 +238,47 @@ const CHECK_EXAMPLE = [
 ].join('\n');
 
 /**
- * The inline ```diagram instruction of an explain / ask answer (v0.3). One concrete 5-part figure
- * with a branch and a join, so the model sees what "parts" and `after` mean; a bare line grammar
- * got a one-box figure (live check 2026-11-20). The topic is another paper's, and every label is a
- * word (a single-letter label is rejected, diagram.ts).
+ * The inline figure instruction of an explain / ask answer: one ```mermaid fence, the model
+ * choosing the Mermaid type that fits the idea (a flowchart for every idea looked the same). The
+ * web draws it with Mermaid, themed by the app, so the model is told to leave colours, HTML and
+ * links out; services/agent/src/mermaid.ts checks what it wrote. One short example (a flowchart
+ * with a subgraph) on another paper's topic, every label a word. The older ```diagram fence is
+ * still read by the web and the tidy step, but no longer asked for.
  */
 export const INLINE_DIAGRAM = [
-  'When the mechanism is a flow of 4 or more parts (a block, pipeline, loop), add one ```diagram ' +
-    'fence in "## How it works": a box-and-arrow figure of 4-8 parts, one per step or component ' +
-    '(never a single box), each "after" listing the earlier parts (A = first line) that feed it; ' +
-    'kind: input, step, output or concept. Maths in $…$, no backslash. ' +
-    'Skip it for a plain definition. Example:',
-  '```diagram',
-  '{"t":"plate","title":"Hybrid search"}',
-  '{"t":"part","label":"Query","text":"what the user types","kind":"input","after":[],"cite":null}',
-  '{"t":"part","label":"Keyword index","text":"exact word matches","kind":"step","after":["A"],"cite":null}',
-  '{"t":"part","label":"Vector index","text":"similar meaning","kind":"step","after":["A"],"cite":null}',
-  '{"t":"part","label":"Merge","text":"combine both ranked lists","kind":"step","after":["B","C"],"cite":null}',
-  '{"t":"part","label":"Results","text":"the final top ten","kind":"output","after":["D"],"cite":null}',
+  'When a picture explains it better than words, add one ```mermaid fence in "## How it works" ' +
+    'of the type that fits: flowchart (pipelines, architectures: a subgraph per component, ' +
+    'labelled edges), sequenceDiagram (steps over time: client/server, encoder/decoder, training ' +
+    "loop), stateDiagram-v2 (phases), mindmap (how concepts relate), timeline (an idea's " +
+    'history), quadrantChart (trade-offs), xychart-beta (a trend: numbers only from the ' +
+    'passages), classDiagram or erDiagram (structures). 6-15 nodes if the mechanism warrants it, ' +
+    'fewer if simple. Labels are words, never one letter; maths plain ("y = F(x) + x"); no $, ' +
+    'HTML, click, links, style or colours. Skip it for a plain definition. Example:',
+  '```mermaid',
+  'flowchart LR',
+  '  subgraph search["Two indexes"]',
+  '    keyword["Keyword index"]',
+  '    vector["Vector index"]',
+  '  end',
+  '  query["User query"] --> keyword',
+  '  query --> vector',
+  '  keyword -->|"ranked list"| merge["Merge"]',
+  '  vector -->|"ranked list"| merge',
+  '  merge --> results["Top ten results"]',
   '```',
 ].join('\n');
 
 /**
- * The ```diagram rule for this request (the board's Uses line sets `diagram`): `never` refuses the
- * fence, `always` requires one, and the default (`may`) is INLINE_DIAGRAM's "when it helps".
+ * The figure rule for this request (the board's Uses line sets `diagram`): `never` refuses the
+ * fence, `always` requires one (the model still picks the type), and the default (`may`) is
+ * INLINE_DIAGRAM's "when it helps".
  */
 function diagramRule(request: RunRequest): string {
-  if (request.diagram === 'never') return 'No ```diagram fence: the reader asked for no diagram.';
+  if (request.diagram === 'never') return 'No ```mermaid fence: the reader asked for no diagram.';
   if (request.diagram === 'always') {
     return (
-      'The reader asked for a diagram: exactly one ```diagram fence in "## How it works", whatever ' +
-      'the mechanism, in the format below.\n' +
+      'The reader asked for a diagram: exactly one ```mermaid fence in "## How it works", ' +
+      'whatever the mechanism, of the type that fits the idea best.\n' +
       INLINE_DIAGRAM
     );
   }

@@ -816,6 +816,21 @@ const answerWith = (check: string): string =>
     check,
   ].join('\n');
 
+const withFence = (body: string): string =>
+  `## TL;DR\nIt adds the input back.\n## How it works\nThe block outputs $y = F(x) + x$ [b1].\n\`\`\`mermaid\n${body}\n\`\`\``;
+
+describe('the mermaid fence in final_text', () => {
+  test('a good fence reaches the stored text, an unsafe one never does', async () => {
+    const good = 'flowchart LR\n  a["Input"] --> b["Layers"]\n  b --> c["Sum"]';
+    const kept = doneOf((await postRun(agent.url, explain([{ text: [withFence(good)] }]))).events);
+    assert.match(kept['final_text'], /```mermaid\nflowchart LR/);
+    const bad = 'flowchart LR\n  a["Input"] --> b["Layers"]\n  click a "https://x.example"';
+    const gone = doneOf((await postRun(agent.url, explain([{ text: [withFence(bad)] }]))).events);
+    assert.doesNotMatch(gone['final_text'], /mermaid|click/);
+    assert.deepEqual(gone['markers'], ['b1']);
+  });
+});
+
 describe('the answer fences in final_text (v0.3, #339)', () => {
   const CHECK =
     '```check\nprompt: If $F(x) = 0$ the output is ___.\naccept: x | input\nright: Right.\nhint: Try it.\n```';

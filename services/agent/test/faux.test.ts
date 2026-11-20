@@ -43,14 +43,14 @@ describe('the default brain answers in the v0.3 shape', () => {
     return (turn.text ?? []).join('');
   };
 
-  test('four sections, one inline maths, one handle, a diagram fence, no check by default', () => {
+  test('four sections, one inline maths, one handle, a mermaid fence, no check by default', () => {
     const text = run({});
     for (const heading of ['## TL;DR', '## In plain words', '## How it works', '## In the paper']) {
       assert.ok(text.includes(heading), heading);
     }
     assert.equal((text.match(/\$[^$\n]+\$/g) ?? []).length, 1);
     assert.deepEqual(text.match(/\[b\d+\]/g), ['[b3]']);
-    assert.match(text, /^```diagram\n\{"t":"plate"/m);
+    assert.match(text, /^```mermaid\nflowchart LR\n {2}subgraph /m, 'an explain draws a flowchart');
     assert.match(text, /The selected passage says: /);
     assert.doesNotMatch(text, /```check/);
   });
@@ -103,8 +103,8 @@ describe('the default brain on a board ask (#343)', () => {
   });
 
   test('diagram: never writes no diagram fence; the tutor shape is otherwise the same', () => {
-    assert.doesNotMatch(run({ diagram: 'never' } as Partial<RunRequest>), /```diagram/);
-    assert.match(run({ diagram: 'always' } as Partial<RunRequest>), /```diagram/);
+    assert.doesNotMatch(run({ diagram: 'never' } as Partial<RunRequest>), /```mermaid/);
+    assert.match(run({ diagram: 'always' } as Partial<RunRequest>), /```mermaid\nsequenceDiagram/);
     assert.match(
       run({}),
       /## TL;DR[\s\S]*## In plain words[\s\S]*## How it works[\s\S]*## In the paper/,
