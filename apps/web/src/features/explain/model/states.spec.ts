@@ -196,6 +196,7 @@ describe('the daily cap (#204, frame 04c)', () => {
           diagram: bucket(2, 0.004),
           topic: bucket(0, 0),
           image: bucket(0, 0),
+          glance: bucket(0, 0),
         },
       }),
     ).toEqual([

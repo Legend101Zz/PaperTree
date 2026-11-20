@@ -14,15 +14,18 @@ import {
   foldForSearch,
   libraryStats,
   matchPapers,
+  packPlanks,
+  PLANK_BAY,
   needsALook,
-  placeCard,
   readingPage,
   shelfStep,
   spineHeight,
   spineName,
+  spineTag,
   spineState,
   spineTitle,
   spineWidth,
+  type ShelfGroup,
   type ShelfPaper,
 } from './shelf';
 
@@ -52,31 +55,46 @@ function reading(overrides: Partial<ReadingProgress> = {}): ReadingProgress {
 }
 
 describe('spine width', () => {
-  it('follows the curve fitted to frame 01, to the pixel', () => {
-    // Frame 01: U-Net 8 pp → 33, YOLO 10 → 35, Attention 15 → 39, BERT 16 → 40, A3C 19 → 42,
-    // ViT 22 → 45, DDPM 25 → 47.
-    const frame: [number, number][] = [
-      [8, 33],
-      [10, 35],
-      [15, 39],
-      [16, 40],
-      [19, 42],
-      [22, 45],
-      [25, 47],
+  it('is 34 px plus 1.5 px per page (V3-AI-NOTES §6.1)', () => {
+    const line: [number, number][] = [
+      [8, 46],
+      [10, 49],
+      [15, 57],
+      [20, 64],
+      [30, 79],
     ];
-    for (const [pages, width] of frame) expect(spineWidth(pages)).toBe(width);
+    for (const [pages, width] of line) expect(spineWidth(pages)).toBe(width);
   });
 
-  it('is capped at 48 px however long the paper is', () => {
-    expect(spineWidth(34)).toBe(SPINE_MAX_WIDTH);
-    expect(spineWidth(400)).toBe(48);
+  it("stays within a few px of the prototype's spines (V3-34 / P4-journey)", () => {
+    // Attention 15 → 58, BERT 16 → 60, Sentence-BERT 11 → 50, ResNet 12 → 54, Neural ODEs 18 → 62,
+    // SuperGLUE 29 → 78, FlashAttention 34 → 88.
+    const drawn: [number, number][] = [
+      [15, 58],
+      [16, 60],
+      [11, 50],
+      [12, 54],
+      [18, 62],
+      [29, 78],
+      [34, 88],
+    ];
+    for (const [pages, width] of drawn) {
+      expect(Math.abs(spineWidth(pages) - width)).toBeLessThanOrEqual(3);
+    }
+  });
+
+  it('is capped at 88 px however long the paper is, which a 34-page paper is within 3 px of', () => {
+    expect(SPINE_MAX_WIDTH).toBe(88);
+    expect(spineWidth(36)).toBe(SPINE_MAX_WIDTH);
+    expect(spineWidth(400)).toBe(88);
+    expect(SPINE_MAX_WIDTH - spineWidth(34)).toBeLessThanOrEqual(3);
   });
 
   it('uses the default only while the page count is unknown', () => {
     expect(spineWidth(0)).toBe(SPINE_DEFAULT_WIDTH);
     expect(spineWidth(Number.NaN)).toBe(SPINE_DEFAULT_WIDTH);
     // A counted paper keeps its width through a Retry or re-parse (kraft wrap and all).
-    expect(spineWidth(29)).toBe(48);
+    expect(spineWidth(29)).toBe(78);
   });
 });
 
@@ -85,8 +103,8 @@ describe('spine height', () => {
     const ids = ['ppr_A', 'ppr_B', 'ppr_G9AYN750E5MG1NRBMGSQJ4N5JM', ''];
     for (const id of ids) {
       expect(spineHeight(id)).toBe(spineHeight(id));
-      expect(spineHeight(id)).toBeGreaterThanOrEqual(262);
-      expect(spineHeight(id)).toBeLessThanOrEqual(318);
+      expect(spineHeight(id)).toBeGreaterThanOrEqual(217);
+      expect(spineHeight(id)).toBeLessThanOrEqual(251);
       // A library at scale stands shorter spines (01f, #196).
       expect(spineHeight(id, true)).toBeGreaterThanOrEqual(150);
       expect(spineHeight(id, true)).toBeLessThanOrEqual(179);
@@ -367,11 +385,101 @@ describe('stats and need a look', () => {
   });
 });
 
-describe('catalogue card placement', () => {
-  it('points at the spine and stays inside the band', () => {
-    expect(placeCard(123, 1280, 480)).toEqual({ left: 81, pointer: 42 });
-    expect(placeCard(20, 1280, 480)).toEqual({ left: 0, pointer: 20 });
-    expect(placeCard(1270, 1280, 480)).toEqual({ left: 800, pointer: 468 });
-    expect(placeCard(200, 358, 480)).toEqual({ left: 0, pointer: 200 });
+describe('the spine tag', () => {
+  it('is the full title over author, year, pages and state, as the prototype prints it', () => {
+    const resnet = paper({
+      id: 'r',
+      title: ' Deep Residual Learning for Image Recognition ',
+      authors: ['Kaiming He', 'Xiangyu Zhang'],
+      year: 2015,
+      pageCount: 12,
+    });
+    expect(spineTag(resnet)).toEqual({
+      title: 'Deep Residual Learning for Image Recognition',
+      line: 'He and Zhang · 2015 · 12 pages · not started',
+    });
+  });
+
+  it('leaves out what is not known, and says where the person is while reading', () => {
+    expect(spineTag(paper({ id: 'x', title: 'Untitled', pageCount: 0, authors: [] })).line).toBe(
+      'not started',
+    );
+    const reading = paper({ id: 'a', authors: ['Ashish Vaswani', 'Noam Shazeer', 'Niki Parmar'] });
+    expect(
+      spineTag({
+        ...reading,
+        year: 2017,
+        pageCount: 15,
+        reading: {
+          last_page: 3,
+          furthest_page: 3,
+          page_count: 15,
+          opened_at: '2026-10-10T00:00:00Z',
+          finished_at: null,
+          state: 'reading',
+        },
+      }).line,
+    ).toBe('Vaswani et al. · 2017 · 15 pages · reading now, p. 4 of 15');
+  });
+});
+
+describe('planks', () => {
+  const group = (key: string, label: string, n: number): ShelfGroup => ({
+    key,
+    label,
+    papers: Array.from({ length: n }, (_, i) => paper({ id: `${key}${String(i)}`, pageCount: 15 })),
+  });
+  // The prototype's nine: four, one, one, then three.
+  const nine = [
+    group('t', 'Transformers & attention', 4),
+    group('l', 'Language', 1),
+    group('u', 'Agents', 1),
+    group('v', 'Vision & detection', 3),
+  ];
+
+  it('stands nine books as 6 + 3 on two planks at 1440 px, the last group wrapping', () => {
+    const planks = packPlanks(nine, 1280);
+    expect(planks.map((p) => p.map((g) => g.key))).toEqual([['t', 'l', 'u'], ['v']]);
+    expect(planks.map((p) => p.reduce((n, g) => n + g.papers.length, 0))).toEqual([6, 3]);
+  });
+
+  it("stands the prototype's own nine, at the widths its page counts give, as 6 + 3", () => {
+    // V3-34 / P4-journey: Attention 15, BERT 16, Sentence-BERT 11 and FlashAttention 34 under
+    // Transformers; SuperGLUE 29 under Language; Adam 15; ResNet 12, Neural ODEs 18 and a 22-page
+    // paper under Vision. The fat spines (34 pp is 85 px) must not push the Vision group up.
+    const pages = (key: string, label: string, counts: number[]): ShelfGroup => ({
+      key,
+      label,
+      papers: counts.map((count, i) => paper({ id: `${key}${String(i)}`, pageCount: count })),
+    });
+    const prototype = [
+      pages('t', 'Transformers & attention', [15, 16, 11, 34]),
+      pages('l', 'Language', [29]),
+      pages('o', 'Optimization', [15]),
+      pages('v', 'Vision & detection', [12, 18, 22]),
+    ];
+    const planks = packPlanks(prototype, 1280);
+    expect(planks.map((p) => p.map((g) => g.key))).toEqual([['t', 'l', 'o'], ['v']]);
+    expect(planks.map((p) => p.reduce((n, g) => n + g.papers.length, 0))).toEqual([6, 3]);
+  });
+
+  it('keeps the order, fills a plank only up to its bay, and wraps sooner in a narrower window', () => {
+    expect(PLANK_BAY).toBeLessThan(1280);
+    expect(packPlanks(nine, 900).map((p) => p.length)).toEqual([3, 1]);
+    expect(packPlanks(nine, 300).map((p) => p.map((g) => g.key))).toEqual([
+      ['t'],
+      ['l', 'u'],
+      ['v'],
+    ]);
+    expect(
+      packPlanks(nine, 1280)
+        .flat()
+        .map((g) => g.key),
+    ).toEqual(['t', 'l', 'u', 'v']);
+  });
+
+  it('is one plank before it is measured, and none for an empty shelf', () => {
+    expect(packPlanks(nine, 0)).toEqual([nine]);
+    expect(packPlanks([], 1280)).toEqual([]);
   });
 });

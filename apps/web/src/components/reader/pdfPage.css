@@ -54,13 +54,21 @@
 }
 
 .pt-reader .papertree-mat {
+  /* each side: the token's padding, or the free space on that side if less (set per mat by
+   * PageMats from the parse), so the opaque mat never covers text that is not the figure's */
+  --pt-mat-t: min(var(--pt-pdf-mat-pad), var(--pt-mat-gap-t, 1000px));
+  --pt-mat-r: min(var(--pt-pdf-mat-pad), var(--pt-mat-gap-r, 1000px));
+  --pt-mat-b: min(var(--pt-pdf-mat-pad), var(--pt-mat-gap-b, 1000px));
+  --pt-mat-l: min(var(--pt-pdf-mat-pad), var(--pt-mat-gap-l, 1000px));
   position: absolute;
   box-sizing: content-box;
-  /* the box is the figure; the mat is `--pt-pdf-mat-pad` of mat colour round it */
-  padding: var(--pt-pdf-mat-pad);
-  margin: calc(-1 * var(--pt-pdf-mat-pad));
+  /* the box is the figure; the mat is the padding round it */
+  padding: var(--pt-mat-t) var(--pt-mat-r) var(--pt-mat-b) var(--pt-mat-l);
+  margin: calc(-1 * var(--pt-mat-t)) calc(-1 * var(--pt-mat-r)) calc(-1 * var(--pt-mat-b))
+    calc(-1 * var(--pt-mat-l));
   background: var(--pt-pdf-mat);
-  border: 1px solid var(--pt-pdf-mat-edge);
+  /* an inset edge: a border would add a pixel outside the padding, where text may be */
+  box-shadow: inset 0 0 0 1px var(--pt-pdf-mat-edge);
   border-radius: 2px;
 }
 

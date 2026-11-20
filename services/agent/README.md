@@ -40,8 +40,8 @@ compaction off, cache warming off, telemetry off and the §3.1 retry settings.
 ## Model policy (ADR-003)
 
 `src/models.ts` decides which model answers which kind of run. `PAPERTREE_MODEL` sets one model for
-every kind (`explain`, `ask`, `summary`, `diagram`, `topic`, `image`); `PAPERTREE_MODEL_<KIND>` overrides one kind; an
-unknown model id or effort refuses to boot, naming the variable. **Shipped defaults** (ADR-003 "Revision 2026-11-19"): Flash for every kind, at effort `low` for `explain`, `diagram` and `topic` and `medium` for `ask`, `summary` and `image` (`DEFAULT_EFFORTS`; the image ask, v0.3 #348, is shown a crop of a figure and never sent to a model that lacks `image` input). (A faux agent reports M3 until a `PAPERTREE_MODEL*` variable is set.) `MiniMax-M3` stays selectable as
+every kind (`explain`, `ask`, `summary`, `diagram`, `topic`, `glance`, `image`); `PAPERTREE_MODEL_<KIND>` overrides one kind; an
+unknown model id or effort refuses to boot, naming the variable. **Shipped defaults** (ADR-003 "Revision 2026-11-19"): Flash for every kind, at effort `low` for `explain`, `diagram`, `topic` and `glance` and `medium` for `ask`, `summary` and `image` (`DEFAULT_EFFORTS`; the image ask, v0.3 #348, is shown a crop of a figure and never sent to a model that lacks `image` input). (A faux agent reports M3 until a `PAPERTREE_MODEL*` variable is set.) `MiniMax-M3` stays selectable as
 the fallback: `PAPERTREE_MODEL=MiniMax-M3`.
 
 **MiniMax-M3.1-Flash** (GA; the old `-Preview` id is retired and not accepted) is not in Pi's catalog; the agent registers it as a custom model
@@ -49,7 +49,7 @@ through the SDK's own `registerProvider` (no network, no `models.json`), with `f
 Its thinking cannot be switched off (the API answers 400 "requires adaptive thinking" to
 `thinking: {type: "disabled"}` and to effort `none`), so a Flash request is always
 `thinking: {type: "adaptive"}` + `output_config: {effort: low | medium | high}`, never `disabled`
-(`PAPERTREE_MODEL_EFFORT[_<KIND>]`; default per kind: explain, diagram and topic `low`, ask and summary `medium`). M3 keeps its budget-based low thinking and is sent
+(`PAPERTREE_MODEL_EFFORT[_<KIND>]`; default per kind: explain, diagram, topic and glance `low`, ask and summary `medium`). M3 keeps its budget-based low thinking and is sent
 no effort. Flash narrates before a tool call; the agent already drops the text of a message that ends
 in tool use, and a Flash-shaped stream is tested (`test/models.test.ts`).
 
@@ -180,7 +180,7 @@ scripts; nothing here needs them.
   follow-up (as the recordings have it). The seed passages and the datamark are in the SYSTEM prompt,
   rebuilt each run.
 - `kind` and `prompt_version` must pair (`explain`/`explain-v1`, `ask`/`ask-v1`,
-  `summary`/`summary-v1`, `diagram`/`diagram-v1`, `topic`/`topic-v1`), and `tool.base_url` must end
+  `summary`/`summary-v1`, `diagram`/`diagram-v1`, `topic`/`topic-v1`, `glance`/`glance-v1`), and `tool.base_url` must end
   with the run id; the schema allows both.
   `limits.deadline_ms` and `limits.idle_ms` must be at most 2,147,483,647 (Node's longest timer);
   the schema sets no maximum.
@@ -189,6 +189,15 @@ scripts; nothing here needs them.
 reason}` (`src/topic.ts`). An answer that does not fit ends the run `error` (`internal`) with the
   text kept: a bad answer is "no suggestion", never a retry. Faux: `[faux:topic-existing]`,
   `[faux:topic-new]`, `[faux:topic-bad]` on a line of the question.
+- A `glance` run (v0.3 #337, the spread's "At a glance" sheet) has no tools: the seed is the summary's
+  digest (the handles are the passages it cites), `question` starts with the fixed glance question, and
+  the answer is ONE JSON object (`src/glance.ts`): `gist` (at most 20 words), `problem` / `idea` / `how` /
+  `limits` (each `{text, cite}`, at most 30 words, `cite` a digest handle or null), `results` (at most two
+  `{value, measures}` numbers, a `note`, a `cite`), `read_first`, and five `words` `{term, gloss}`; maths
+  as `$…$`. A text over its cap is trimmed on a word boundary (a maths span is one word), a list over its
+  cap is cut, and anything that does not fit (a missing or extra key, fewer than five terms) ends the run
+  `error` (`internal`) with the text kept: no glance, never a retry. Faux: a canned sheet (`FAUX_GLANCE`),
+  or `[faux:glance-bad]`.
 - Paper-derived text the API has not datamarked — the title and the selection's section name — is
   flattened to one line (no controls, no datamark look-alikes, ≤ 300 characters) and datamarked
   word by word in the system prompt; passage and page labels are flattened. The quote in the user

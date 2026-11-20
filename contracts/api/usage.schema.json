@@ -46,11 +46,14 @@
         "topic": {
           "$ref": "#/$defs/UsageBucket"
         },
+        "glance": {
+          "$ref": "#/$defs/UsageBucket"
+        },
         "image": {
           "$ref": "#/$defs/UsageBucket"
         }
       },
-      "required": ["explain", "ask", "summary", "diagram", "topic", "image"],
+      "required": ["explain", "ask", "summary", "diagram", "topic", "glance", "image"],
       "title": "UsageByKind",
       "type": "object"
     },

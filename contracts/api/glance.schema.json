@@ -1,0 +1,185 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "PaperTree API contract: glance",
+  "description": "GENERATED from services/api/python/papertree_api/schemas.py by `uv run python -m papertree_api.contracts export` (contracts.md §0). Do not edit: change the model and re-export. Models: Glance, GlanceStatus, GlanceBlock, GlanceResults, GlanceNumber, GlanceWord.",
+  "$defs": {
+    "Glance": {
+      "additionalProperties": false,
+      "description": "The sheet. Maths in any text is `$…$`. Every cap of `glance.py` is already applied.",
+      "properties": {
+        "gist": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "problem": {
+          "$ref": "#/$defs/GlanceBlock"
+        },
+        "idea": {
+          "$ref": "#/$defs/GlanceBlock"
+        },
+        "how": {
+          "$ref": "#/$defs/GlanceBlock"
+        },
+        "results": {
+          "$ref": "#/$defs/GlanceResults"
+        },
+        "limits": {
+          "$ref": "#/$defs/GlanceBlock"
+        },
+        "read_first": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "words": {
+          "items": {
+            "$ref": "#/$defs/GlanceWord"
+          },
+          "maxItems": 5,
+          "minItems": 5,
+          "type": "array"
+        },
+        "model": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "generation": {
+          "maximum": 9223372036854775807,
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "gist",
+        "problem",
+        "idea",
+        "how",
+        "results",
+        "limits",
+        "read_first",
+        "words",
+        "model",
+        "generation"
+      ],
+      "title": "Glance",
+      "type": "object"
+    },
+    "GlanceBlock": {
+      "additionalProperties": false,
+      "description": "Problem, Idea, How it works or Limits: the words, and the page they come from (the quiet\n`p. 3 ›` link), or null when the model cited no passage.",
+      "properties": {
+        "text": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "page": {
+          "anyOf": [
+            {
+              "maximum": 100000,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": ["text", "page"],
+      "title": "GlanceBlock",
+      "type": "object"
+    },
+    "GlanceNumber": {
+      "additionalProperties": false,
+      "description": "A large number under Results: its value and what it measures.",
+      "properties": {
+        "value": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "measures": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": ["value", "measures"],
+      "title": "GlanceNumber",
+      "type": "object"
+    },
+    "GlanceResults": {
+      "additionalProperties": false,
+      "properties": {
+        "numbers": {
+          "items": {
+            "$ref": "#/$defs/GlanceNumber"
+          },
+          "maxItems": 2,
+          "type": "array"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "page": {
+          "anyOf": [
+            {
+              "maximum": 100000,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": ["numbers", "note", "page"],
+      "title": "GlanceResults",
+      "type": "object"
+    },
+    "GlanceStatus": {
+      "additionalProperties": false,
+      "description": "`GET /papers/{id}/glance`. `ready`: 200 with the sheet. `making`: 202, no sheet yet (a run is\nwriting it; ask again). `none`: 200, no sheet and none coming (the model is not configured, the\ndaily cap is reached, or the run failed): the spread shows the abstract alone.",
+      "properties": {
+        "state": {
+          "enum": ["ready", "making", "none"],
+          "type": "string"
+        },
+        "glance": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Glance"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": ["state", "glance"],
+      "title": "GlanceStatus",
+      "type": "object"
+    },
+    "GlanceWord": {
+      "additionalProperties": false,
+      "properties": {
+        "term": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "gloss": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": ["term", "gloss"],
+      "title": "GlanceWord",
+      "type": "object"
+    }
+  }
+}

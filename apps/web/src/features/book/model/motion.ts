@@ -1,30 +1,43 @@
 /**
- * book/model/motion — the pull-out and the opening as Web Animations keyframes (#200, DESIGN.md §6,
- * ADR-004 §2.10: CSS 3D + WAAPI, no library). Pure, so the timings and the reduced path are tested
- * without a browser. The durations mirror the `--pt-dur-*` and `--pt-ease-*` tokens: a script
- * cannot read a custom property's time.
+ * book/model/motion — taking a book off the shelf and opening it, as Web Animations keyframes
+ * (v0.3 R4 prototype, DESIGN.md §6, ADR-004 §2.10: CSS 3D + WAAPI, no library). Pure, so the
+ * timings and the reduced path are tested without a browser. The durations mirror the `--pt-dur-*`
+ * and `--pt-ease-*` tokens: a script cannot read a custom property's time.
  *
- *   pull out   lift 120 -> turn 200 -> settle 80, the lift curve   reduced: cross-fade in 120
- *   open       the cover swings 480                                 reduced: one 120 cross-fade
- *   put back   the reverse lift, 200                                reduced: fade out 120
- *   read       cross-fade to the reader 120                         (the same both ways)
+ * One click, one sequence of 880 ms (the five phases the owner approved):
+ *
+ *   slide out        120   the spine lifts out of its row
+ *   turn             160   it turns to face you
+ *   travel and grow  220   it flies to the middle of the screen, growing to page size
+ *   cover swings     280   the cover opens on its hinge, the spread appears under it
+ *   settle           100   the opened book comes to rest
+ *
+ *   put back         420   the reverse, quicker: the cover closes, the book flies to its slot
+ *   reduced motion   120   one cross-fade each way, nothing moves
+ *   read             120   the book cross-fades into the reader
  */
 
-/** DESIGN.md §6, in ms. */
-export const PULL_LIFT_MS = 120;
-export const PULL_TURN_MS = 200;
-export const PULL_SETTLE_MS = 80;
-export const OPEN_MS = 480;
-export const PUT_BACK_MS = 200;
+/** The five phases, in ms. */
+export const SLIDE_MS = 120;
+export const TURN_MS = 160;
+export const TRAVEL_MS = 220;
+export const SWING_MS = 280;
+export const SETTLE_MS = 100;
+/** Their sum: the whole take-out-and-open. */
+export const TAKE_OUT_MS = SLIDE_MS + TURN_MS + TRAVEL_MS + SWING_MS + SETTLE_MS;
+/** The reverse, which is quicker: nobody waits to put a book away. */
+export const PUT_BACK_MS = 420;
 export const QUICK_MS = 120;
 
-/** `--pt-ease-lift`. */
+/** `--pt-ease-lift` and `--pt-ease-out`. */
 export const EASE_LIFT = 'cubic-bezier(0.3, 0, 0.2, 1)';
-/** `--pt-ease-out`. */
 export const EASE_OUT = 'cubic-bezier(0.2, 0.7, 0.3, 1)';
 
-/** The book's resting pose, turned a little towards the light (frame 02a). */
-export const REST = 'perspective(1600px) rotateY(16deg) rotateZ(-1deg)';
+/** How far the spine lifts before it turns, and how much it grows doing so (px, factor). */
+const LIFT_PX = 22;
+const LIFT_SCALE = 1.04;
+/** The depth the turn and the swing are drawn at. */
+const PERSPECTIVE = 'perspective(2600px)';
 
 /** A rectangle, as `getBoundingClientRect` gives it. */
 export interface Box {
@@ -40,102 +53,170 @@ export interface Motion {
   readonly options: KeyframeAnimationOptions;
 }
 
+/** What moves when a book comes off the shelf or goes back: each is its own element. */
+export interface BookMotion {
+  /** The spine's cloth, lifting and turning away (null when nothing flies). */
+  readonly slab: Motion | null;
+  /** The cover, flying to the page and swinging open (null when nothing flies). */
+  readonly cover: Motion | null;
+  /** The two pages, appearing under the cover. */
+  readonly spread: Motion;
+  /** The veil over the library. */
+  readonly veil: Motion;
+}
+
+/** The phase boundaries as fractions of the whole, for the take-out. */
+const OUT = {
+  slide: SLIDE_MS / TAKE_OUT_MS,
+  turn: (SLIDE_MS + TURN_MS) / TAKE_OUT_MS,
+  travel: (SLIDE_MS + TURN_MS + TRAVEL_MS) / TAKE_OUT_MS,
+  swing: (SLIDE_MS + TURN_MS + TRAVEL_MS + SWING_MS) / TAKE_OUT_MS,
+} as const;
+
+/** The put-back's boundaries as fractions of its 420 ms: close 180, fly 185, turn away 55. */
+const BACK = { closed: 180 / PUT_BACK_MS, flown: 365 / PUT_BACK_MS } as const;
+
 /**
- * Where the book starts: the spine's box mapped onto the cover's, edge-on.
+ * Where the spine is, as the cover's start: the spine's centre mapped onto the cover's hinge edge
+ * (the cover turns about its left edge), at the spine's height.
  *
  * @param spine - The spine's box on the shelf.
- * @param cover - The cover's resting box.
- * @returns The first keyframe's transform.
+ * @param page - The cover's resting box (the right page).
+ * @returns The `translate() scale()` that puts the cover's left edge on the spine.
  */
-function fromSpine(spine: Box, cover: Box): string {
-  const dx = spine.left + spine.width / 2 - (cover.left + cover.width / 2);
-  const dy = spine.top + spine.height / 2 - (cover.top + cover.height / 2);
-  const s = cover.height > 0 ? spine.height / cover.height : 1;
-  return `translate(${dx.toFixed(1)}px, ${dy.toFixed(1)}px) scale(${s.toFixed(3)}) perspective(1600px) rotateY(80deg)`;
+function atSpine(spine: Box, page: Box): string {
+  const dx = spine.left + spine.width / 2 - page.left;
+  const dy = spine.top + spine.height / 2 - (page.top + page.height / 2);
+  const s = page.height > 0 ? spine.height / page.height : 1;
+  return `translate(${dx.toFixed(1)}px, ${dy.toFixed(1)}px) scale(${s.toFixed(3)})`;
 }
 
 /**
- * The pull-out: the spine lifts out of the row, turns face-out and settles.
+ * A cover pose. Every keyframe has this one shape, so the browser interpolates each part.
  *
- * @param spine - The spine's box on the shelf, or null when it cannot be measured (lift in place).
- * @param cover - The pulled cover's resting box.
- * @param reduced - `prefers-reduced-motion: reduce`.
- * @returns The cover's animation.
+ * @param place - The `translate() scale()` that puts the cover somewhere.
+ * @param turn - How far it is turned about its hinge, in degrees (0 faces you).
+ * @returns The `transform` value.
  */
-export function pullOut(spine: Box | null, cover: Box, reduced: boolean): Motion {
-  if (reduced) {
-    return {
-      keyframes: [{ opacity: 0 }, { opacity: 1 }],
-      options: { duration: QUICK_MS, easing: 'linear', fill: 'backwards' },
-    };
-  }
-  const total = PULL_LIFT_MS + PULL_TURN_MS + PULL_SETTLE_MS;
-  const start = spine === null ? `translateY(24px) ${REST}` : fromSpine(spine, cover);
-  return {
-    keyframes: [
-      { transform: start, offset: 0 },
-      { transform: `translateY(-18px) ${start}`, offset: PULL_LIFT_MS / total },
-      { transform: `translateY(-8px) ${REST}`, offset: (PULL_LIFT_MS + PULL_TURN_MS) / total },
-      { transform: REST, offset: 1 },
-    ],
-    options: { duration: total, easing: EASE_LIFT, fill: 'backwards' },
+function pose(place: string, turn: number): string {
+  return `${place} ${PERSPECTIVE} rotateY(${String(turn)}deg)`;
+}
+
+/**
+ * The cross-fade of reduced motion, and of a book whose spine cannot be measured.
+ *
+ * @param reverse - Fade out (putting the book back) rather than in.
+ * @returns The spread and the veil fading; nothing flies.
+ */
+function crossFade(reverse: boolean): BookMotion {
+  const keyframes: Keyframe[] = reverse
+    ? [{ opacity: 1 }, { opacity: 0 }]
+    : [{ opacity: 0 }, { opacity: 1 }];
+  const options: KeyframeAnimationOptions = {
+    duration: QUICK_MS,
+    easing: 'linear',
+    fill: reverse ? 'forwards' : 'backwards',
   };
+  return { slab: null, cover: null, spread: { keyframes, options }, veil: { keyframes, options } };
 }
 
 /**
- * The opening: the cover swings open on its hinge while the spread comes up under it.
+ * The take-out-and-open: slide out 120, turn 160, travel and grow 220, cover swings 280, settle
+ * 100. The spread is hidden until the cover is across it, so the book opens to what is under it.
  *
+ * @param spine - The spine's box on the shelf, or null when it cannot be measured (cross-fade).
+ * @param page - The right page's resting box, where the cover lands.
  * @param reduced - `prefers-reduced-motion: reduce`.
- * @returns The cover's swing (null under reduced motion: there is no cover to swing) and the
- *   spread's arrival.
+ * @returns The motion of each part.
  */
-export function openBook(reduced: boolean): { cover: Motion | null; spread: Motion } {
-  if (reduced) {
-    return {
-      cover: null,
-      spread: {
-        keyframes: [{ opacity: 0 }, { opacity: 1 }],
-        options: { duration: QUICK_MS, easing: 'linear', fill: 'backwards' },
-      },
-    };
-  }
+export function takeOut(spine: Box | null, page: Box, reduced: boolean): BookMotion {
+  if (reduced || spine === null) return crossFade(false);
+  const start = atSpine(spine, page);
+  const options = { duration: TAKE_OUT_MS, easing: 'linear', fill: 'both' } as const;
+  const lifted = `translateY(-${String(LIFT_PX)}px) scale(${String(LIFT_SCALE)})`;
   return {
+    slab: {
+      keyframes: [
+        { transform: 'none', opacity: 1, offset: 0, easing: EASE_LIFT },
+        { transform: lifted, opacity: 1, offset: OUT.slide, easing: EASE_LIFT },
+        { transform: `${lifted} ${PERSPECTIVE} rotateY(-90deg)`, opacity: 1, offset: OUT.turn },
+        { transform: `${lifted} ${PERSPECTIVE} rotateY(-90deg)`, opacity: 0, offset: OUT.turn },
+        { transform: `${lifted} ${PERSPECTIVE} rotateY(-90deg)`, opacity: 0, offset: 1 },
+      ],
+      options,
+    },
     cover: {
       keyframes: [
-        { transform: REST, opacity: 1 },
-        { transform: 'perspective(1600px) rotateY(-150deg)', opacity: 0 },
+        { transform: pose(start, 90), offset: 0 },
+        { transform: pose(start, 90), offset: OUT.slide, easing: EASE_LIFT },
+        { transform: pose(start, 0), offset: OUT.turn, easing: EASE_OUT },
+        {
+          transform: pose('translate(0px, 0px) scale(1)', 0),
+          offset: OUT.travel,
+          easing: EASE_LIFT,
+        },
+        { transform: pose('translate(0px, 0px) scale(1)', -180), offset: OUT.swing },
+        { transform: pose('translate(0px, 0px) scale(1)', -180), offset: 1 },
       ],
-      options: { duration: OPEN_MS, easing: EASE_LIFT, fill: 'forwards' },
+      options,
     },
     spread: {
       keyframes: [
-        { opacity: 0, transform: 'scale(0.96)' },
-        { opacity: 1, transform: 'none' },
+        { opacity: 0, offset: 0 },
+        { opacity: 0, offset: OUT.travel },
+        { opacity: 1, offset: OUT.travel + (OUT.swing - OUT.travel) * 0.5 },
+        { opacity: 1, offset: 1 },
       ],
-      options: { duration: OPEN_MS, easing: EASE_LIFT, fill: 'backwards' },
+      options,
+    },
+    veil: {
+      keyframes: [{ opacity: 0 }, { opacity: 1 }],
+      options: { duration: SLIDE_MS + TURN_MS, easing: 'linear', fill: 'backwards' },
     },
   };
 }
 
 /**
- * Putting the book back: it drops towards its slot and fades; the shelf takes it in.
+ * Putting the book back, in 420 ms: the cover closes, the book flies to its slot and turns edge-on,
+ * and the spine takes its place. Esc, a click outside and "Put it back" all run this.
  *
+ * @param spine - The spine's box on the shelf, or null when it cannot be measured (cross-fade).
+ * @param page - The right page's resting box, where the cover starts.
  * @param reduced - `prefers-reduced-motion: reduce`.
- * @returns The book's (or the spread's) leaving.
+ * @returns The motion of each part.
  */
-export function putBack(reduced: boolean): Motion {
-  if (reduced) {
-    return {
-      keyframes: [{ opacity: 1 }, { opacity: 0 }],
-      options: { duration: QUICK_MS, easing: 'linear', fill: 'forwards' },
-    };
-  }
+export function putBack(spine: Box | null, page: Box, reduced: boolean): BookMotion {
+  if (reduced || spine === null) return crossFade(true);
+  const end = atSpine(spine, page);
+  const options = { duration: PUT_BACK_MS, easing: 'linear', fill: 'forwards' } as const;
+  const home = 'translate(0px, 0px) scale(1)';
   return {
-    keyframes: [
-      { opacity: 1, transform: 'none' },
-      { opacity: 0, transform: 'translateY(32px) scale(0.92)' },
-    ],
-    options: { duration: PUT_BACK_MS, easing: EASE_LIFT, fill: 'forwards' },
+    slab: {
+      keyframes: [
+        { opacity: 0, transform: 'none', offset: 0 },
+        { opacity: 0, transform: 'none', offset: BACK.flown },
+        { opacity: 1, transform: 'none', offset: 1 },
+      ],
+      options,
+    },
+    cover: {
+      keyframes: [
+        { transform: pose(home, -180), offset: 0, easing: EASE_LIFT },
+        { transform: pose(home, 0), offset: BACK.closed, easing: EASE_LIFT },
+        { transform: pose(end, 0), offset: BACK.flown, easing: EASE_LIFT },
+        { transform: pose(end, 90), offset: 1 },
+      ],
+      options,
+    },
+    spread: {
+      keyframes: [
+        { opacity: 1, offset: 0 },
+        { opacity: 0, offset: BACK.closed },
+        { opacity: 0, offset: 1 },
+      ],
+      options,
+    },
+    veil: { keyframes: [{ opacity: 1 }, { opacity: 0 }], options },
   };
 }
 

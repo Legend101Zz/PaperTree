@@ -143,10 +143,11 @@ def test_0011_carries_every_ai_row_fk_cascade_and_trigger(tmp_path: Path, base: 
 
     with open_database(file) as db:
         result = db.migrate()
-        # 0011 applies after every migration below it; later slices' migrations follow it.
-        assert [v for v in result.applied if v <= 11][-1] == 11
+        # Later migrations (0012 and on) follow it; "last" is the last one up to 0011.
+        through_11 = tuple(v for v in result.applied if v <= 11)
+        assert through_11[-1] == 11, "0011 applies after every migration below it"
         if base == 10:
-            assert result.applied == (11, *(v for v in result.head if v > 11))
+            assert through_11 == (11,)
         assert any(path.name.endswith(".pre-0011.bak") for path in result.backups)
 
     conn = sqlite3.connect(file)

@@ -1,6 +1,7 @@
 /**
  * The library's states (#196): Reading now with Continue (frame 01), the empty library's accession
- * slip (01b) and a short library standing face-out (01c). Titles and authors are the corpus
+ * slip (01b), a short library standing as spines (v0.3: never face-out covers) and a library at
+ * scale (01f). Titles and authors are the corpus
  * papers' own (research/benchmarks/corpus and fresh/pdfs parses), never invented.
  */
 import axe from 'axe-core';
@@ -34,6 +35,13 @@ vi.mock('@/lib/api/papers', async (importOriginal) => ({
 // The library reads `GET /topics` for its stats line; this spec is not about topics (#310).
 vi.mock('@/lib/api/topics', async (importOriginal) =>
   (await import('./api-stubs')).withNoTopics(await importOriginal()),
+);
+// The opened book reads its figures, abstract and summary; this spec only needs it to open.
+vi.mock('@/features/book/api/bookApi', async (importOriginal) =>
+  (await import('./api-stubs')).withEmptyBook(await importOriginal()),
+);
+vi.mock('@/lib/api/summary', async (importOriginal) =>
+  (await import('./api-stubs')).withNoSummary(await importOriginal()),
 );
 
 function row(
@@ -200,15 +208,17 @@ describe('Reading now', () => {
     expect(JSON.parse(window.localStorage.getItem('papertree/reader/ppr_c1') ?? '')).toEqual(saved);
   });
 
-  it('is absent when nothing is in progress, and on a face-out shelf (01c)', async () => {
+  it('is absent when nothing is in progress, and above the shelf at every size (owner decision D)', async () => {
     await renderLibrary(corpusRows(14));
     expect(screen.queryByRole('region', { name: 'Reading now' })).toBeNull();
     cleanup();
-    // A short shelf carries Continue under each cover instead.
+    // A short shelf has the strip too, above its spines.
     await renderLibrary([ATTENTION, DDPM]);
     const stats = document.querySelector('.pt-libtitle__stats')?.textContent ?? '';
     expect(stats.replace(/\s+/g, ' ')).toContain('2 reading now');
-    expect(screen.queryByRole('region', { name: 'Reading now' })).toBeNull();
+    const strip = screen.getByRole('region', { name: 'Reading now' });
+    const shelf = screen.getByRole('toolbar', { name: 'Shelf' });
+    expect(strip.compareDocumentPosition(shelf) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 });
 
@@ -252,57 +262,38 @@ describe('the empty library', () => {
   });
 });
 
-describe('a short library stands face-out', () => {
-  it('draws covers, one tab stop, the arrows walk them and a click takes one down', async () => {
+describe('a short library stands as spines too (v0.3: never face-out covers)', () => {
+  it('draws spines, one tab stop, the arrows walk them and a click opens the book', async () => {
     await renderLibrary([ATTENTION, DDPM, YOLO]);
     const shelf = screen.getByRole('toolbar', { name: 'Shelf' });
-    const covers = books(shelf);
-    expect(covers).toHaveLength(3);
-    expect(covers.every((c) => c.classList.contains('pt-cover'))).toBe(true);
-    expect(covers.filter((c) => c.tabIndex === 0)).toHaveLength(1);
-    covers[0]?.focus();
-    fireEvent.keyDown(covers[0] as HTMLElement, { key: 'ArrowRight' });
-    expect(document.activeElement).toBe(covers[1]);
-    fireEvent.keyDown(covers[1] as HTMLElement, { key: 'End' });
-    expect(document.activeElement).toBe(covers[2]);
-    fireEvent.click(covers[2] as HTMLElement);
-    expect(covers[2]?.getAttribute('aria-expanded')).toBe('true');
-    expect(document.querySelector('[data-card-paper-id="ppr_yolo"]')).not.toBeNull();
+    const spines = books(shelf);
+    expect(spines).toHaveLength(3);
+    expect(spines.every((c) => c.classList.contains('pt-spine'))).toBe(true);
+    expect(document.querySelector('.pt-cover, [data-cover-caption]')).toBeNull();
+    expect(spines.filter((c) => c.tabIndex === 0)).toHaveLength(1);
+    spines[0]?.focus();
+    fireEvent.keyDown(spines[0] as HTMLElement, { key: 'ArrowRight' });
+    expect(document.activeElement).toBe(spines[1]);
+    fireEvent.keyDown(spines[1] as HTMLElement, { key: 'End' });
+    expect(document.activeElement).toBe(spines[2]);
+    fireEvent.click(spines[2] as HTMLElement);
+    expect(await screen.findByRole('dialog', { name: /^You Only Look Once/ })).toBeTruthy();
+    expect(spines[2]?.getAttribute('data-pulled')).toBe('true');
   });
 
-  it('puts Continue, or the state and Open, under each cover by its state', async () => {
-    const { container } = await renderLibrary([ATTENTION, YOLO, RESNET]);
-    const shelf = screen.getByRole('toolbar', { name: 'Shelf' });
-    const continueButton = within(shelf).getByRole('button', {
-      name: 'Continue reading Attention Is All You Need',
-    });
-    expect(continueButton.closest('[data-cover-caption]')?.textContent).toMatch(/p\. 4 of 15/);
-    const yolo = within(shelf).getByRole('button', { name: /^Open You Only Look Once/ });
-    expect(yolo.closest('[data-cover-caption]')?.textContent).toMatch(/Read/);
-    const resnet = within(shelf).getByRole('button', { name: /^Open Deep Residual/ });
-    expect(resnet.closest('[data-cover-caption]')?.textContent).toMatch(/Not started/);
-
-    // A caption's controls are ordinary tab stops: the arrows there belong to them.
-    resnet.focus();
-    fireEvent.keyDown(resnet, { key: 'ArrowLeft' });
-    expect(document.activeElement).toBe(resnet);
-    fireEvent.click(resnet);
-    expect(push).toHaveBeenCalledWith('/paper/ppr_res/read');
-    fireEvent.click(continueButton);
-    expect(push).toHaveBeenLastCalledWith('/paper/ppr_att/read');
-    expect(await axeViolations(container)).toEqual([]);
-  });
-
-  it('stands thirteen papers as spines again', async () => {
-    await renderLibrary(corpusRows(13));
-    const spines = books(screen.getByRole('toolbar', { name: 'Shelf' }));
-    expect(spines).toHaveLength(13);
-    expect(spines.every((s) => s.classList.contains('pt-spine'))).toBe(true);
+  it('stands one, twelve and thirteen papers as spines alike', async () => {
+    for (const count of [1, 12, 13]) {
+      await renderLibrary(corpusRows(count));
+      const spines = books(screen.getByRole('toolbar', { name: 'Shelf' }));
+      expect(spines).toHaveLength(count);
+      expect(spines.every((s) => s.classList.contains('pt-spine'))).toBe(true);
+      cleanup();
+    }
   });
 });
 
 describe('a library of spines (13 to 40 papers) at page level (review S2)', () => {
-  it('is one tab stop; the arrows walk it; a click takes a book down, Esc puts it back', async () => {
+  it('is one tab stop; the arrows walk it; a click takes a book out, Esc puts it back', async () => {
     await renderLibrary(corpusRows(13));
     const shelf = screen.getByRole('toolbar', { name: 'Shelf' });
     const spines = books(shelf);
@@ -314,70 +305,23 @@ describe('a library of spines (13 to 40 papers) at page level (review S2)', () =
     fireEvent.keyDown(spines[1] as HTMLElement, { key: 'End' });
     expect(document.activeElement).toBe(spines[12]);
     fireEvent.click(spines[12] as HTMLElement);
-    const card = await screen.findByRole('region', { name: /^Asynchronous Methods/ });
-    expect(document.activeElement).toBe(within(card).getByRole('button', { name: /^Read / }));
+    const book = await screen.findByRole('dialog', { name: /^Asynchronous Methods/ });
+    await waitFor(() =>
+      expect(document.activeElement).toBe(within(book).getByRole('button', { name: /^Read / })),
+    );
     fireEvent.keyDown(document.activeElement as HTMLElement, { key: 'Escape' });
-    expect(document.activeElement).toBe(spines[12]);
+    await waitFor(() => expect(document.activeElement).toBe(spines[12]));
   });
 });
 
 describe('focus survives a change of layout (review B2)', () => {
-  async function deleteByCard(paperId: string): Promise<void> {
-    fireEvent.click(bookOf(paperId) as HTMLElement);
-    const card = await waitFor(() => {
-      const found = document.querySelector<HTMLElement>(`[data-card-paper-id="${paperId}"]`);
-      if (found === null) throw new Error('no card');
-      return found;
-    });
-    fireEvent.click(within(card).getByRole('button', { name: /^Delete / }));
-    fireEvent.click(within(card).getByRole('button', { name: 'Delete paper' }));
-  }
-
-  it('Delete at 13 papers (spines → covers) lands on the next book, now a cover', async () => {
-    api.remove.mockResolvedValue(undefined);
-    await renderLibrary(corpusRows(13));
-    await deleteByCard('ppr_c5');
-    await waitFor(() => expect(bookOf('ppr_c6')?.classList.contains('pt-cover')).toBe(true));
-    expect(document.activeElement).toBe(bookOf('ppr_c6'));
-    expect(bookOf('ppr_c6')?.tabIndex).toBe(0);
-  });
-
-  it('Delete of the last book at 13 lands on the one before it', async () => {
-    api.remove.mockResolvedValue(undefined);
-    await renderLibrary(corpusRows(13));
-    await deleteByCard('ppr_c12');
-    await waitFor(() => expect(document.activeElement).toBe(bookOf('ppr_c11')));
-    expect(bookOf('ppr_c11')?.classList.contains('pt-cover')).toBe(true);
-  });
-
-  it('a 13th paper arriving while a cover has focus keeps focus on that paper, now a spine', async () => {
-    const { client } = await renderLibrary(corpusRows(12));
-    bookOf('ppr_c3')?.focus();
-    expect(document.activeElement?.classList.contains('pt-cover')).toBe(true);
-    await serverNowLists(client, corpusRows(13));
-    await waitFor(() => expect(bookOf('ppr_c3')?.classList.contains('pt-spine')).toBe(true));
-    expect(document.activeElement).toBe(bookOf('ppr_c3'));
-    expect(bookOf('ppr_c3')?.tabIndex).toBe(0);
-  });
-
-  it("a 13th paper arriving while a caption's Continue has focus moves it to that paper", async () => {
-    const rows = corpusRows(12).map((row, i) =>
-      i === 2 ? { ...row, reading: readingAt(3, 25, '2026-10-14T09:00:00Z') } : row,
-    );
-    const { client } = await renderLibrary(rows);
-    screen.getByRole('button', { name: /^Continue reading Denoising/ }).focus();
-    await serverNowLists(client, [...rows, ...corpusRows(13).slice(12)]);
-    await waitFor(() => expect(bookOf('ppr_c2')?.classList.contains('pt-spine')).toBe(true));
-    expect(document.activeElement).toBe(bookOf('ppr_c2'));
-  });
-
   it('never takes focus from where the person moved it', async () => {
-    const { client } = await renderLibrary(corpusRows(12));
+    const { client } = await renderLibrary(corpusRows(40));
     bookOf('ppr_c3')?.focus();
     const search = screen.getByRole('searchbox', { name: 'Search the library' });
     search.focus();
-    await serverNowLists(client, corpusRows(13));
-    await waitFor(() => expect(bookOf('ppr_c3')?.classList.contains('pt-spine')).toBe(true));
+    await serverNowLists(client, corpusRows(41));
+    await waitFor(() => expect(document.querySelector('.pt-rows')).not.toBeNull());
     expect(document.activeElement).toBe(search);
   });
 });
@@ -514,21 +458,14 @@ describe('a library at scale (01f)', () => {
     ).toEqual(['Unshelved, 60 papers']);
   });
 
-  it('Delete at 41 papers (rows → spines) lands on the next book, now on the one plank', async () => {
-    api.remove.mockResolvedValue(undefined);
-    await renderLibrary(corpusRows(41));
+  it('a paper leaving at 41 (rows → spines) keeps focus on the same book, now on the one plank', async () => {
+    const { client } = await renderLibrary(corpusRows(41));
     expect(document.querySelector('.pt-rows')).not.toBeNull();
-    fireEvent.click(bookOf('ppr_c20') as HTMLElement);
-    const card = await waitFor(() => {
-      const found = document.querySelector<HTMLElement>('[data-card-paper-id="ppr_c20"]');
-      if (found === null) throw new Error('no card');
-      return found;
-    });
-    fireEvent.click(within(card).getByRole('button', { name: /^Delete / }));
-    fireEvent.click(within(card).getByRole('button', { name: 'Delete paper' }));
+    bookOf('ppr_c20')?.focus();
+    await serverNowLists(client, corpusRows(41).slice(0, 40));
     await waitFor(() => expect(document.querySelector('.pt-rows')).toBeNull());
-    expect(document.activeElement).toBe(bookOf('ppr_c21'));
-    expect(bookOf('ppr_c21')?.tabIndex).toBe(0);
+    expect(document.activeElement).toBe(bookOf('ppr_c20'));
+    expect(bookOf('ppr_c20')?.tabIndex).toBe(0);
   });
 
   it('a 41st paper arriving while a spine has focus keeps it there, now in a row', async () => {

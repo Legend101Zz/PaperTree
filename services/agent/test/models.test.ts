@@ -52,9 +52,10 @@ describe('readPolicy(): env -> which model answers which kind', () => {
         p.summary.effort,
         p.topic.effort,
         p.diagram.effort,
+        p.glance.effort,
         p.image.effort,
       ],
-      ['low', 'medium', 'medium', 'low', 'low', 'medium'],
+      ['low', 'medium', 'medium', 'low', 'low', 'low', 'medium'],
     );
     assert.equal(FLASH_MODEL_ID, 'MiniMax-M3.1-Flash');
     assert.equal(p.explain.label, `minimax/${FLASH_MODEL_ID}`);
@@ -65,6 +66,7 @@ describe('readPolicy(): env -> which model answers which kind', () => {
       diagram: FLASH_MODEL_ID,
       topic: FLASH_MODEL_ID,
       image: FLASH_MODEL_ID,
+      glance: FLASH_MODEL_ID,
     });
     assert.deepEqual(DEFAULT_EFFORTS, {
       explain: 'low',
@@ -73,6 +75,7 @@ describe('readPolicy(): env -> which model answers which kind', () => {
       diagram: 'low',
       topic: 'low',
       image: 'medium',
+      glance: 'low',
     });
   });
 
@@ -89,7 +92,15 @@ describe('readPolicy(): env -> which model answers which kind', () => {
 
   test('PAPERTREE_MODEL=MiniMax-M3 is the whole-service fallback', () => {
     const p = readPolicy({ PAPERTREE_MODEL: M3_MODEL_ID });
-    for (const kind of ['explain', 'ask', 'summary', 'diagram', 'topic', 'image'] as const) {
+    for (const kind of [
+      'explain',
+      'ask',
+      'summary',
+      'diagram',
+      'topic',
+      'glance',
+      'image',
+    ] as const) {
       assert.equal(p[kind].id, M3_MODEL_ID);
       assert.equal(p[kind].effort, null);
     }
@@ -274,6 +285,7 @@ describe('Flash on the wire (mock Anthropic server)', () => {
       diagram: `minimax/${M3_MODEL_ID}`,
       topic: `minimax/${M3_MODEL_ID}`,
       image: `minimax/${M3_MODEL_ID}`,
+      glance: `minimax/${M3_MODEL_ID}`,
     });
     assert.deepEqual(body['effort'], {
       explain: 'low',
@@ -282,6 +294,7 @@ describe('Flash on the wire (mock Anthropic server)', () => {
       diagram: null,
       topic: null,
       image: null,
+      glance: null,
     });
     assert.equal(body['cost_basis'][FLASH_MODEL_ID], FLASH_COST_BASIS);
     assert.equal(body['model'], `minimax/${FLASH_MODEL_ID}`);

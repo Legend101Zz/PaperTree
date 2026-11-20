@@ -103,12 +103,20 @@ KNOWN_MODELS: Final = ("MiniMax-M3", "MiniMax-M3.1-Flash", "MiniMax-M3.1-Flash-P
 MODEL_PREFIX: Final = "minimax/"
 UNKNOWN_SDK: Final = "unknown"
 
-RunKind = Literal["explain", "ask", "summary", "diagram", "topic", "image"]
+RunKind = Literal["explain", "ask", "summary", "diagram", "topic", "glance", "image"]
 
 PROMPT_VERSIONS: Final[
     dict[
         RunKind,
-        Literal["explain-v1", "ask-v1", "summary-v1", "diagram-v1", "topic-v1", "image-v1"],
+        Literal[
+            "explain-v1",
+            "ask-v1",
+            "summary-v1",
+            "diagram-v1",
+            "topic-v1",
+            "glance-v1",
+            "image-v1",
+        ],
     ]
 ] = {
     "explain": "explain-v1",
@@ -117,6 +125,7 @@ PROMPT_VERSIONS: Final[
     "diagram": "diagram-v1",
     "topic": "topic-v1",
     "image": "image-v1",
+    "glance": "glance-v1",
 }
 
 #: contracts.md §8 `ai_runs.code_path` literals.
@@ -127,6 +136,7 @@ CODE_PATHS: Final[dict[RunKind, str]] = {
     "diagram": "api.threads.diagram>agent.v1.runs>pi.createAgentSession>minimax.anthropic-messages",
     "topic": "api.topics>agent.v1.runs>pi.createAgentSession>minimax.anthropic-messages",
     "image": "api.threads.image>agent.v1.runs>pi.createAgentSession>minimax.anthropic-messages",
+    "glance": "api.glance>agent.v1.runs>pi.createAgentSession>minimax.anthropic-messages",
 }
 
 #: contracts.md §3.2 "Limits by kind".
@@ -180,6 +190,20 @@ LIMITS: Final[dict[RunKind, AgentLimits]] = {
         max_turns=2,
         max_output_tokens=1024,
         max_retries=0,
+    ),
+    # The spread's "At a glance" sheet (v0.3 #337): one JSON object of about 400 words, no tools,
+    # written from the summary's digest (about 6,000 tokens in). It runs in the BACKGROUND when a
+    # paper is added, so the deadline can be longer than the topic's, but the reader may open the
+    # book at any moment, so it is not a minute either. 3,072 output tokens leave Flash's adaptive
+    # thinking room above the sheet's ~700. One provider retry (a 5xx is common on a cold paper);
+    # a bad answer is "no glance", never a retry.
+    "glance": AgentLimits(
+        deadline_ms=60_000,
+        idle_ms=30_000,
+        max_tool_calls=0,
+        max_turns=2,
+        max_output_tokens=3072,
+        max_retries=1,
     ),
     # The image ask (v0.3 #348): a vision run, an ask's budget with a longer first-token wait (the
     # model reads a crop before it writes; idle_ms 30 s) and a longer deadline (75 s).
@@ -1026,6 +1050,10 @@ RUN_RESERVE_USD: Final[dict[str, float]] = {
     # once the model has downsampled it) and the caption and a paragraph: about $0.003-0.006; the
     # reserve is an ask's, so a few at once cannot overshoot the cap.
     "image": 0.02,
+    # The glance Flash run (v0.3 #337): a digest of about 6,000 tokens in and about 3,000 out is
+    # about $0.003 on Flash rates ($0.01 on M3's, the override); the reserve is a summary's tenth
+    # twice over, so a cap near its edge waits instead of letting a library's worth start at once.
+    "glance": 0.02,
 }
 
 

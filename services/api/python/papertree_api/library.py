@@ -9,7 +9,8 @@ and which parse job an upload, a retry or a re-parse gets.
                  latest parse job decides: pending -> `queued`, running -> `reading`, any other
                  end -> `failed`. No job at all yet (the instant between an upload's
                  registration and its enqueue) is `queued`.
-    title        `metadata.title.value` of the promoted generation, else the original filename
+    title        the name the owner gave it (`PATCH /papers/{id}`), else
+                 `metadata.title.value` of the promoted generation, else the original filename
                  without `.pdf`, else the paper id (§2.2: `/Title` was empty in 4 of 4 papers);
                  on one line (YOLO's title block carries its own line break).
     job.step     the step it is in (running) or stopped at (dead-lettered); null otherwise.
@@ -79,6 +80,10 @@ def _one_line(text: str | None) -> str:
 
 
 def title_for(row: LibraryRow) -> str:
+    # The name the person gave it (0012) wins over everything the parser or the upload knew.
+    named = _one_line(row.custom_title)
+    if named:
+        return named
     title = _one_line(row.title)
     if title:
         return title

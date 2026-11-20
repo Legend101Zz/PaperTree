@@ -50,12 +50,12 @@ else:
     _Base = object
 
 THREAD_KINDS: Final = frozenset({"explain", "ask", "diagram"})
-#: Every kind 0017's CHECK allows (besides ``glance``, 0013's, built on another branch). ``topic``
-#: (the topic Flash run, #242) and ``image`` (the image ask, v0.3 #348) are runs of their own: a row
-#: of each is recorded, reserved for (``RUN_RESERVE_USD``) and counted in ``GET /usage`` like any
-#: other, so neither can break the spend cap or the usage read. An image thread is an ``ask`` thread
-#: (``THREAD_KINDS``) told apart by its run.
-RUN_KINDS: Final = frozenset({"explain", "ask", "summary", "diagram", "topic", "image"})
+#: Every kind 0017's CHECK allows. ``topic`` (the topic Flash run, #242), ``glance`` (the spread's
+#: "At a glance" sheet, v0.3 #337, 0013) and ``image`` (the image ask, v0.3 #348) are runs of their
+#: own: a row of each is recorded, reserved for (``RUN_RESERVE_USD``) and counted in ``GET /usage``
+#: like any other, so none can break the spend cap or the usage read. An image thread is an ``ask``
+#: thread (``THREAD_KINDS``) told apart by its run.
+RUN_KINDS: Final = frozenset({"explain", "ask", "summary", "diagram", "topic", "glance", "image"})
 #: ``ai_diagram_parts.part_kind`` (0011): how the plate draws a part (DESIGN.md §1 "Diagrams").
 DIAGRAM_PART_KINDS: Final = frozenset({"input", "step", "output", "concept"})
 #: A plate holds at most twelve parts, lettered A-L in arrival order.

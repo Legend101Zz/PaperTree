@@ -11,6 +11,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { Compile } from 'typebox/schema';
 
+import { GLANCE_QUESTION } from './glance.ts';
 import { parseTopicInput } from './topic.ts';
 
 /** The four read-only paper tools, in the order they are registered (contracts.md §3.1, §4). */
@@ -123,7 +124,7 @@ function conditionalFields(schemaPath: string): string[] {
   return Object.keys(then?.properties ?? {});
 }
 
-export type Kind = 'explain' | 'ask' | 'summary' | 'diagram' | 'topic' | 'image';
+export type Kind = 'explain' | 'ask' | 'summary' | 'diagram' | 'topic' | 'glance' | 'image';
 /** The reader's level an explain/ask answer is written for (v0.3, #339). */
 export type Level = 'new' | 'familiar' | 'expert';
 export const LEVELS: readonly Level[] = ['new', 'familiar', 'expert'];
@@ -131,7 +132,7 @@ export const LEVELS: readonly Level[] = ['new', 'familiar', 'expert'];
 export type DiagramUse = 'may' | 'never' | 'always';
 
 export type PromptVersion =
-  'explain-v1' | 'ask-v1' | 'summary-v1' | 'diagram-v1' | 'topic-v1' | 'image-v1';
+  'explain-v1' | 'ask-v1' | 'summary-v1' | 'diagram-v1' | 'topic-v1' | 'glance-v1' | 'image-v1';
 
 export interface SeedPassage {
   readonly handle: string;
@@ -199,6 +200,7 @@ export const PROMPT_FOR_KIND: Readonly<Record<Kind, PromptVersion>> = {
   diagram: 'diagram-v1',
   topic: 'topic-v1',
   image: 'image-v1',
+  glance: 'glance-v1',
 };
 
 /**
@@ -257,6 +259,9 @@ export function validateRunRequest(body: unknown): Validation {
   }
   const picture = imageProblem(request.images ?? []);
   if (picture !== null) return { ok: false, detail: `images: ${picture}` };
+  if (request.kind === 'glance' && !request.question.startsWith(GLANCE_QUESTION)) {
+    return { ok: false, detail: 'question: a glance run takes the glance question' };
+  }
   const history = historyProblem(request.history?.entries ?? []);
   if (history !== null) return { ok: false, detail: `history.entries: ${history}` };
   return { ok: true, request };

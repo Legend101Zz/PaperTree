@@ -8,11 +8,13 @@ is made to fire. The thread table is NOT rebuilt: an image thread is an ``ask`` 
 
 from __future__ import annotations
 
+import re
 import sqlite3
 from pathlib import Path
 
 import pytest
 from papertree_db import open_database
+from papertree_db.ai import RUN_KINDS
 from papertree_db.migrate import BACKUP_BEFORE_VERSIONS
 
 from .saved_shapes import MIGRATIONS_DIR, migrations_through
@@ -146,3 +148,89 @@ def test_the_thread_read_probes_ai_runs_by_an_index_not_a_scan(tmp_path: Path) -
             assert all("USING" in part and "INDEX" in part for part in probes), plan
         finally:
             conn.close()
+
+
+def _check_kinds(conn: sqlite3.Connection) -> set[str]:
+    """The kinds ``ai_runs.kind``'s CHECK names, read from the stored DDL (not from the code)."""
+    ddl = conn.execute("SELECT sql FROM sqlite_master WHERE name = 'ai_runs'").fetchone()[0]
+    match = re.search(r"kind\s+TEXT\s+NOT NULL CHECK \(kind IN \(([^)]*)\)\)", ddl)
+    assert match is not None, ddl
+    return set(re.findall(r"'([a-z]+)'", match.group(1)))
+
+
+def _every_kind_is_accepted(conn: sqlite3.Connection) -> None:
+    conn.execute("PRAGMA foreign_keys = ON")
+    for kind in sorted(RUN_KINDS):
+        conn.execute("UPDATE ai_runs SET kind = ? WHERE run_id = 'run_2'", (kind,))
+    with pytest.raises(sqlite3.IntegrityError):
+        conn.execute("UPDATE ai_runs SET kind = 'chat' WHERE run_id = 'run_2'")
+
+
+def test_the_final_check_names_all_seven_kinds_on_a_fresh_database(tmp_path: Path) -> None:
+    with open_database(tmp_path / "fresh.sqlite") as db:
+        assert 17 in db.migrate().applied
+    conn = sqlite3.connect(tmp_path / "fresh.sqlite")
+    try:
+        assert _check_kinds(conn) == {
+            "explain",
+            "ask",
+            "summary",
+            "diagram",
+            "topic",
+            "glance",
+            "image",
+        }
+        assert _check_kinds(conn) == set(RUN_KINDS)  # the code's list and the schema agree
+    finally:
+        conn.close()
+
+
+def test_a_database_at_0011_migrates_through_0017_and_keeps_glance_and_image(
+    tmp_path: Path,
+) -> None:
+    """0013 adds ``glance``, 0017 rebuilds ``ai_runs`` again: the end state must accept both (and
+    every older kind), keep every run row filled at 0011 and keep both indexes."""
+    file, _owner, _paper = _populated(tmp_path, 10)  # the shared filler writes the pre-0011 shape
+    with open_database(file, migrations_through(11, tmp_path / "m11")) as db:
+        assert db.migrate().applied == (11,)
+    conn = sqlite3.connect(file)
+    before = _rows(conn, REBUILT["ai_runs"])
+    conn.close()
+    assert before, "the runs table held rows before"
+
+    with open_database(file) as db:
+        result = db.migrate()
+        assert result.applied == (12, 13, 14, 15, 16, 17)
+        assert [p.name for p in result.backups] == [
+            "old.sqlite.pre-0013.bak",
+            "old.sqlite.pre-0015.bak",
+            "old.sqlite.pre-0017.bak",
+        ]
+        assert db.migrate().applied == ()
+
+    conn = sqlite3.connect(file)
+    try:
+        assert _check_kinds(conn) == set(RUN_KINDS) and len(RUN_KINDS) == 7
+        assert _rows(conn, REBUILT["ai_runs"]) == before
+        indexes = {r[0] for r in _rows(conn, "SELECT name FROM sqlite_master WHERE type='index'")}
+        assert {"ai_runs_by_owner", "ai_runs_by_thread"} <= indexes
+        assert _rows(conn, "PRAGMA foreign_key_check") == []
+        _every_kind_is_accepted(conn)
+    finally:
+        conn.close()
+
+
+def test_0017_keeps_a_glance_run_written_at_0013(tmp_path: Path) -> None:
+    """A run row of kind ``glance`` (0013's) survives 0017's rebuild untouched."""
+    file = _at_0016(tmp_path)
+    conn = sqlite3.connect(file)
+    conn.execute("UPDATE ai_runs SET kind = 'glance' WHERE run_id = 'run_2'")
+    conn.commit()
+    conn.close()
+    with open_database(file) as db:
+        assert db.migrate().applied == (17,)
+    conn = sqlite3.connect(file)
+    try:
+        assert _rows(conn, "SELECT kind FROM ai_runs WHERE run_id = 'run_2'") == [("glance",)]
+    finally:
+        conn.close()

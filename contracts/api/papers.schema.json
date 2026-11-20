@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "PaperTree API contract: papers",
-  "description": "GENERATED from services/api/python/papertree_api/schemas.py by `uv run python -m papertree_api.contracts export` (contracts.md §0). Do not edit: change the model and re-export. Models: LibraryPaper, JobSummary, UploadAccepted, JobAccepted, JobStatus, ReparseRequest, ReadingStateUpdate, LibraryLinks, LibraryLink, LibraryReference, LibraryPlate, PaperFigure, PaperAbstract, PlatePut.",
+  "description": "GENERATED from services/api/python/papertree_api/schemas.py by `uv run python -m papertree_api.contracts export` (contracts.md §0). Do not edit: change the model and re-export. Models: LibraryPaper, JobSummary, UploadAccepted, JobAccepted, JobStatus, ReparseRequest, ReadingStateUpdate, LibraryLinks, LibraryLink, LibraryReference, LibraryPlate, PaperFigure, PaperAbstract, PlatePut, PaperRename.",
   "$defs": {
     "AnchorCreated": {
       "additionalProperties": false,
@@ -960,6 +960,20 @@
         "anchor"
       ],
       "title": "PaperFigure",
+      "type": "object"
+    },
+    "PaperRename": {
+      "additionalProperties": false,
+      "description": "`PATCH /papers/{id}` (v0.3 #337): the name the library shows for this paper from now on.\nThe parsed title is kept; this one wins over it and over the filename.",
+      "properties": {
+        "title": {
+          "maxLength": 300,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": ["title"],
+      "title": "PaperRename",
       "type": "object"
     },
     "PlatePut": {

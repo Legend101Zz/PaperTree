@@ -1,7 +1,7 @@
 /**
  * ShelfRows: a library at scale (#196, frame 01f, DESIGN.md §9: past about 40 spines). Each group
  * (topic, or the arrangement's row) stands on its own plank and scrolls sideways (`ShelfRow`). One
- * toolbar and one tab stop for the whole shelf, as with the spines and the covers: ←/→ walk every
+ * toolbar and one tab stop for the whole shelf, as with the spines: ←/→ walk every
  * book in order, into the overflow too; a row's "+n more" bookend is an ordinary tab stop.
  */
 'use client';
@@ -19,22 +19,18 @@ import type { ReactNode } from 'react';
  * The shelf at scale; it takes the `Shelf`'s props.
  *
  * @example
- * <ShelfRows papers={books} arrangement="topic" matches={null} openId={null} cardId="card"
- *   onActivate={takeDown} />
+ * <ShelfRows papers={books} arrangement="topic" matches={null} onActivate={open} />
  */
 export function ShelfRows({
   papers,
   arrangement,
   matches,
-  openId,
-  cardId,
   onActivate,
-  onPutBack,
   focus,
 }: ShelfProps): ReactNode {
   const groups = useMemo(() => arrangeShelf(papers, arrangement), [papers, arrangement]);
   const order = useMemo(() => groups.flatMap((g) => g.papers.map((p) => p.id)), [groups]);
-  const { toolbar, stop, onFocusBook, onKeyDown } = useRovingShelf(order, openId, onPutBack, focus);
+  const { toolbar, stop, onFocusBook, onKeyDown } = useRovingShelf(order, focus);
   return (
     <div
       ref={toolbar}
@@ -51,8 +47,6 @@ export function ShelfRows({
           group={group}
           matches={matches}
           stop={stop}
-          openId={openId}
-          cardId={cardId}
           onActivate={onActivate}
           onFocusBook={onFocusBook}
         />

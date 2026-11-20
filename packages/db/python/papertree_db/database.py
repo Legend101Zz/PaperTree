@@ -66,6 +66,7 @@ from ._support import Row, now_iso, opt_json, row_to_dict, to_json
 from .ai import AiMixin
 from .canvas import CanvasMixin
 from .errors import OwnershipError
+from .glance import GlanceMixin
 from .highlights import HighlightsMixin
 from .ids import (
     BlockId,
@@ -84,6 +85,7 @@ from .migrate import MigrationResult, migrate
 from .notebook import NotebookMixin
 from .plate import PlateMixin
 from .reading import ReadingMixin
+from .title import TitleMixin
 from .topics import TopicsMixin
 
 __all__ = [
@@ -643,6 +645,8 @@ class DatabaseCore:
 class PaperTreeDb(
     TopicsMixin,
     PlateMixin,
+    TitleMixin,
+    GlanceMixin,
     LibraryMixin,
     ReadingMixin,
     HighlightsMixin,
