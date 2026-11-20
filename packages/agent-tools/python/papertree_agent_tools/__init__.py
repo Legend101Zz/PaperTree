@@ -1,7 +1,7 @@
-"""papertree_agent_tools — the answer contract, the grounding verifier, the read-only paper view.
+"""papertree_agent_tools — the answer contract, the claim matcher, the read-only paper view.
 
     answer     the grounded-answer contract: ``GroundedAnswer``, ``VerifiedClaim``, ``SourceRegion``
-    grounding  ``verify_grounding``: deterministic, offline; FLAGS unsupported claims, drops none
+    grounding  ``assess_claim``: deterministic, offline lexical match of a claim against blocks
     paperview  ``load_paper_view``: one paper generation through the read-only ``AgentDataHandle``
     schema     a 14-keyword JSON Schema subset, used by ``packages/evaluation``'s scorer
 
@@ -17,13 +17,10 @@ here. The model-facing corpus counts ``tools.py`` carried ("974 blocks", #120) w
 
 WHAT STAYED, AND WHO CALLS IT
 
-  * ``verify_grounding`` runs on EVERY answer the API brokers: ``services/api``'s ``evidence.py``
-    splits the agent's final text into claims, maps each claim's ``[bN]`` markers to the blocks the
-    run was shown, and asks this verifier whether the claim's vocabulary is in those blocks. The
-    verdict becomes ``Citation.supported``; the verifier's REASONS (which name the missing words)
-    are not shown to the reader.
-  * ``answer`` is the verifier's input and output type, and ``packages/evaluation``'s grounding
-    scorer reads it.
+  * ``assess_claim`` finds the nearest passage of a diagram part's quote: ``services/api``'s
+    ``quotes.py`` asks it through ``evidence.claim_assessment``. No verdict is stored on an answer's
+    citation any more (v0.3, #351: an AI answer is a tutor, not an auditor).
+  * ``answer`` is the contract ``packages/evaluation``'s grounding scorer reads.
   * ``schema`` is that scorer's argument checker.
   * ``paperview`` is the read-only way to hold one paper generation through ``AgentDataHandle``.
 
@@ -64,7 +61,6 @@ from papertree_agent_tools.grounding import (
     named_entities,
     paper_vocabulary,
     structure_refs,
-    verify_grounding,
 )
 from papertree_agent_tools.paperview import PaperView, load_paper_view
 from papertree_agent_tools.schema import (
@@ -110,5 +106,4 @@ __all__ = [
     "structure_refs",
     "target_type_for_block_type",
     "validate_arguments",
-    "verify_grounding",
 ]
