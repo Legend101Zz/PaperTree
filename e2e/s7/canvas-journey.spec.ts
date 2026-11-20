@@ -196,19 +196,18 @@ test.describe('Journey D: the canvas', () => {
 
     // ── 5. connect with "supports": the label is visible ──
     calls.length = 0;
-    // #212: the link handles are the brass pins; a thread runs from a claim-out to an evidence-in.
-    const src = await page
-      .locator(`.react-flow__node[data-id="${excerpt.node_id}"] [data-handleid="claim_out"]`)
-      .boundingBox();
-    const dst = await page
-      .locator(`.react-flow__node[data-id="${explanationId}"] [data-handleid="evidence_in"]`)
-      .boundingBox();
-    expect(src && dst).toBeTruthy();
-    await mouseDrag(
-      page,
-      { x: src!.x + src!.width / 2, y: src!.y + src!.height / 2 },
-      { x: dst!.x + dst!.width / 2, y: dst!.y + dst!.height / 2 },
-    );
+    // v0.3: a branching card (passage, answer) has no brass pins, so the thread between these two
+    // cards is made with the toolbar's Thread: select the two (the first is the source), press Thread.
+    await page
+      .locator(`.react-flow__node[data-id="${excerpt.node_id}"] .pt-tc__strip`)
+      .click({ position: { x: 24, y: 6 } });
+    await page
+      .locator(`.react-flow__node[data-id="${explanationId}"] .pt-tc__strip`)
+      .click({ position: { x: 24, y: 6 }, modifiers: ['Shift'] });
+    await page
+      .getByRole('toolbar', { name: 'Board tools' })
+      .getByRole('button', { name: /^Thread/ })
+      .click();
     // #213: the "Link as" picker replaces v0.1's dialog; the same click chooses the kind.
     const dialog = page.getByRole('group', { name: /link as/i });
     await expect(dialog).toBeVisible();
@@ -252,7 +251,11 @@ test.describe('Journey D: the canvas', () => {
       kind: 'derives_from',
       label: 'needs the passage',
     });
-    await page.mouse.click(1000, 870); // empty pane: deselect the link
+    // Empty pane: deselect the link. Not a fixed point: with a thread on the board the key sits
+    // under the stage (y ~825-885 at 1440x900, in the flow, a key and not the pane), so (1000, 870)
+    // is the key. `emptyPanePoint` is verified to be the pane itself.
+    const off = await emptyPanePoint(page);
+    await page.mouse.click(off.x, off.y);
     await expect(edgeBar).toBeHidden();
 
     // ── 6. a note: add, type, Enter = one PATCH of the body ──

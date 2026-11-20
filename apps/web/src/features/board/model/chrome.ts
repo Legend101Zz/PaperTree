@@ -8,6 +8,27 @@ import type { CanvasNode } from '@/lib/api/types';
 /** How far the board zooms: out to 20 % (a whole wide board), in to 200 %. */
 export const ZOOM_RANGE = { min: 0.2, max: 2 } as const;
 
+/** The name every new board is created with (the API's default); it is not a name the reader chose. */
+export const DEFAULT_BOARD_TITLE = 'Canvas';
+
+/**
+ * The name a board goes by: the one the reader gave it, else the paper's title, else null. The
+ * default "Canvas" is nobody's name for a board, so it never heads an export or a pane.
+ *
+ * @param own The board row's title.
+ * @param paperTitle The paper's title, once read.
+ * @returns The name, or null when neither is known.
+ */
+export function boardName(
+  own: string | null | undefined,
+  paperTitle: string | null,
+): string | null {
+  const given = own?.trim() ?? '';
+  if (given !== '' && given !== DEFAULT_BOARD_TITLE) return given;
+  const paper = paperTitle?.trim() ?? '';
+  return paper === '' ? null : paper;
+}
+
 /** What the header counts. */
 export interface BoardCounts {
   readonly cards: number;

@@ -14,6 +14,7 @@ import {
   counterPage,
   pageCounterLabel,
   ReaderHeader,
+  type ImageTool,
   type ReaderHeaderProps,
 } from '@/features/reader';
 
@@ -66,6 +67,49 @@ describe('the page counter', () => {
     expect(counterPage('guided', 3, 1)).toBe(1);
     expect(counterPage('source', -1, 1)).toBe(1);
     expect(counterPage('source', -1, null)).toBeNull();
+  });
+});
+
+describe('Select area (#348)', () => {
+  const tool = (over: Partial<ImageTool> = {}): ImageTool => ({
+    armed: false,
+    starter: 0,
+    toggle: vi.fn(),
+    disarm: vi.fn(),
+    ...over,
+  });
+
+  it('is a toggle button that says whether it is armed', () => {
+    const { rerender } = render(<ReaderHeader {...BASE} imageTool={tool()} />);
+    const button = within(screen.getByRole('banner')).getByRole('button', { name: /Select area/ });
+    expect(button.getAttribute('aria-pressed')).toBe('false');
+    rerender(<ReaderHeader {...BASE} imageTool={tool({ armed: true })} />);
+    expect(
+      within(screen.getByRole('banner'))
+        .getByRole('button', { name: /Select area/ })
+        .getAttribute('aria-pressed'),
+    ).toBe('true');
+  });
+
+  it('a pointer press arms it; a keyboard press (no pointer) arms it and asks for a rectangle', () => {
+    const toggle = vi.fn();
+    render(<ReaderHeader {...BASE} imageTool={tool({ toggle })} />);
+    const button = within(screen.getByRole('banner')).getByRole('button', { name: /Select area/ });
+    fireEvent.click(button, { detail: 1 });
+    expect(toggle).toHaveBeenLastCalledWith(false);
+    fireEvent.click(button, { detail: 0 });
+    expect(toggle).toHaveBeenLastCalledWith(true);
+  });
+
+  it('is not drawn in Guided (nothing to draw on) or without a tool', () => {
+    const { rerender } = render(<ReaderHeader {...BASE} mode="guided" imageTool={tool()} />);
+    expect(
+      within(screen.getByRole('banner')).queryByRole('button', { name: /Select area/ }),
+    ).toBeNull();
+    rerender(<ReaderHeader {...BASE} imageTool={null} />);
+    expect(
+      within(screen.getByRole('banner')).queryByRole('button', { name: /Select area/ }),
+    ).toBeNull();
   });
 });
 

@@ -4,6 +4,7 @@
  * (its kind and its first words, large). Pure: `BoardView` asks it on zoom, the cards on render.
  */
 import { anchorPageIndex } from './cards';
+import { imageCardOf } from './imageCard';
 
 import type { PtNode } from './flow';
 import type { NodeProps } from '@xyflow/react';
@@ -91,6 +92,10 @@ export function glanceOf(node: PtNode['data']['node']): Glance {
   const text = node.body.trim() === '' ? (node.title ?? '') : node.body;
   switch (node.kind) {
     case 'excerpt': {
+      const picture = imageCardOf(node.source_anchor, node.body);
+      if (picture !== null) {
+        return { kind: picture.source, words: firstWords(picture.caption ?? ''), voice: 'paper' };
+      }
       const page = anchorPageIndex(node.source_anchor);
       const kind = page === null ? 'Passage' : `Passage · p. ${String(page + 1)}`;
       return { kind, words: firstWords(node.body), voice: 'paper' };

@@ -26,6 +26,7 @@ import {
   type LinkStart,
 } from './BoardContext';
 import { BranchProvider } from './BranchContext';
+import { NoteCard } from './cards/NoteCard';
 import { PassageCard } from './cards/PassageCard';
 import { branchActions } from '../../../../test/branch-harness';
 import { ThreadEdge } from './ThreadEdge';
@@ -138,20 +139,44 @@ describe('the brass port pins', () => {
     commitTitle: vi.fn(),
     commitSize: vi.fn(),
   };
+  // The brass pins belong to the loose v0.2 cards (a note on the open board): a branching card
+  // (passage, answer, child note) is joined by the tree's own lines and has none.
   const mountPassage = (linking: LinkStart | null = null) => {
-    const node = toFlowNode(cardRow('excerpt', { body: 'A passage.' }), 'ppr_1');
+    const node = toFlowNode(cardRow('note', { body: 'A loose note.' }), 'ppr_1');
     return render(
       <ReactFlowProvider>
         <CanvasActionsProvider value={ctx}>
           <BranchProvider value={branchActions()}>
             <LinkingProvider value={linking}>
-              <PassageCard {...(node as unknown as NodeProps<PtNode>)} />
+              <NoteCard {...(node as unknown as NodeProps<PtNode>)} />
             </LinkingProvider>
           </BranchProvider>
         </CanvasActionsProvider>
       </ReactFlowProvider>,
     );
   };
+
+  it('are not on a branching card: the passage of a tree has no brass pins, only the hidden handles', () => {
+    const node = toFlowNode(cardRow('excerpt', { body: 'A passage.' }), 'ppr_1');
+    const { container } = render(
+      <ReactFlowProvider>
+        <CanvasActionsProvider value={ctx}>
+          <BranchProvider value={branchActions()}>
+            <PassageCard {...(node as unknown as NodeProps<PtNode>)} />
+          </BranchProvider>
+        </CanvasActionsProvider>
+      </ReactFlowProvider>,
+    );
+    expect(screen.queryByRole('button', { name: 'claim out' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'evidence in' })).toBeNull();
+    expect(container.querySelectorAll('.pt-pin:not(.pt-pin-fallback)')).toHaveLength(0);
+    // Hidden, never a control: the two handles its stored pins name (claim_out, evidence_in) so a
+    // thread made with the toolbar's Thread is drawn, and the any_out / any_in fallback pair.
+    const ids = [...container.querySelectorAll('.pt-pin-fallback')].map((h) =>
+      h.getAttribute('data-handleid'),
+    );
+    expect(ids.sort()).toEqual(['any_in', 'any_out', 'claim_out', 'evidence_in']);
+  });
 
   it('are named buttons with the pin ids the server knows', () => {
     const { container } = mountPassage();
@@ -178,7 +203,7 @@ describe('the brass port pins', () => {
   });
 
   it('do not light on the card the thread leaves from', () => {
-    mountPassage({ nodeId: 'cn_excerpt', kind: 'excerpt', port: 'claim_out' });
+    mountPassage({ nodeId: 'cn_note', kind: 'note', port: 'claim_out' });
     expect(screen.getByRole('button', { name: 'evidence in' }).getAttribute('data-lit')).toBe(
       'false',
     );

@@ -30,8 +30,11 @@ export interface SourceTarget {
 
 /** A passage dragged from the paper over the board. */
 export interface DragIn {
-  /** The passage in the air (its words size the footprint), or null when nothing is dragged. */
-  readonly current: () => { readonly text: string } | null;
+  /**
+   * The passage in the air (its words size the footprint), or null when nothing is dragged. A
+   * picture (`image`) is as tall as an image card, whatever its caption.
+   */
+  readonly current: () => { readonly text: string; readonly image?: boolean } | null;
   /** Dropped at this point of the board (board units). */
   readonly drop: (at: { readonly x: number; readonly y: number }) => void;
 }

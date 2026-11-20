@@ -26,29 +26,24 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import {
-  frameForPdfPage,
-  pageTextStreamId,
-  sourcePaint,
-  type Anchor,
-  type IndexedDocument,
-  type Resolution,
-} from '@papertree/anchoring';
+import { pageTextStreamId, type Anchor, type IndexedDocument } from '@papertree/anchoring';
 
-import { useHighlightClick, useSelectionToolbar } from '@/features/reader';
-import { setDraggedPassage } from '@/features/split/model/passageDrag';
+import { useHighlightClick, useImageSelection, useSelectionToolbar } from '@/features/reader';
 import { MAX_ANCHORS_PER_HIGHLIGHT } from '@/lib/api/highlights';
 
 import { type DocumentHandle, type DocumentRef } from './documentHandle';
 import { figureMats, type MatRegion } from './figureRegions';
 import { FLASH_SCROLL_MS, prefersReducedMotion } from './flash';
-import { HighlightOverlay, type FlashPaint, type PaintItem } from './HighlightOverlay';
+import { HighlightOverlay, type FlashPaint } from './HighlightOverlay';
+import { PdfErrorState } from './PdfErrorState';
 import { usePdfDocument } from './PdfDocumentProvider';
-import { displayQuote } from './quote';
+import { pageTextSourceOf } from './pageTextSource';
 import type { TextLayerInfo } from './PdfPage';
+import { paintItemsOf } from './paintItems';
 import { stampTextLayer } from './stampTextLayer';
 import { tooLongSentence, type ReaderHighlight } from './useHighlights';
 import { useSelectionActions, type NoteAt } from './useSelectionActions';
+import { useTextDragToBoard } from './useTextDragToBoard';
 import {
   useSelectionCapture,
   type PageTextSource,
@@ -80,6 +75,13 @@ export interface SourcePaneProps {
    * The menu's Note: a highlight with its card open on the note field. Drawn only when given.
    */
   readonly onCreateNote?: (capture: SelectionCapture, at: NoteAt | null) => void;
+  /**
+   * A picked picture's highlight (v0.3 #348): the same highlight over anchors that need no words.
+   * Without it a picture cannot be picked (the image menu would have nothing to keep it with).
+   */
+  readonly onCreateAnchors?: (anchors: readonly Anchor[], color?: HighlightColor) => void;
+  /** A picked picture's Note: the highlight over its region, with its card open on the note. */
+  readonly onNoteAnchors?: (anchors: readonly Anchor[], at: NoteAt | null) => void;
   /** The menu's Board beside: open the board next to the paper, on the card just sent (#344). */
   readonly onOpenBoard?: (cardId: string | null) => void;
   /**
@@ -132,43 +134,10 @@ export interface SourcePaneProps {
   readonly onNotice?: (message: string) => void;
 }
 
-function quoteOf(anchor: Anchor): string {
-  return displayQuote([anchor]) || 'highlight';
-}
+/** The pane without a way to keep a picture's highlight never picks one, so this is never called. */
+const NOTHING = (): void => undefined;
 
-/** Every anchor's Source paint, or its absence. The tray lists exactly the absences. */
-export function paintItemsOf(
-  doc: IndexedDocument | null,
-  highlights: readonly ReaderHighlight[],
-): {
-  readonly items: PaintItem[];
-  readonly unplaced: { anchor: Anchor; resolution: Resolution; highlightId: string }[];
-} {
-  const items: PaintItem[] = [];
-  const unplaced: { anchor: Anchor; resolution: Resolution; highlightId: string }[] = [];
-  if (doc === null) return { items, unplaced };
-  for (const highlight of highlights) {
-    for (const { anchor, resolution } of highlight.anchors) {
-      const paint = sourcePaint(anchor, doc, resolution);
-      if (paint === null) {
-        unplaced.push({ anchor, resolution, highlightId: highlight.highlightId });
-        continue;
-      }
-      items.push({
-        key: anchor.id,
-        highlightId: highlight.highlightId,
-        color: highlight.color,
-        pageIndex: paint.pageIndex,
-        polygons: paint.polygons,
-        quads: paint.quads,
-        approximate: paint.approximate,
-        label: quoteOf(anchor),
-        saving: highlight.status === 'saving' || highlight.status === 'unsaved',
-      });
-    }
-  }
-  return { items, unplaced };
-}
+export { paintItemsOf };
 
 export function SourcePane(props: SourcePaneProps) {
   const { doc, onCreateHighlight, onSelectionChange, onActivateHighlight } = props;
@@ -203,25 +172,7 @@ export function SourcePane(props: SourcePaneProps) {
   const onTextLayer = useCallback(
     (info: TextLayerInfo) => {
       const userUnit = doc?.pages.find((p) => p.index === info.pageIndex)?.user_unit ?? 1;
-      pages.current.set(info.pageIndex, {
-        frame: frameForPdfPage({ view: info.page.view, rotate: info.page.rotate, userUnit }),
-        items: info.items.map((item) => {
-          const style = item.fontName === undefined ? undefined : info.styles[item.fontName];
-          return {
-            str: item.str,
-            transform: item.transform,
-            width: item.width,
-            height: item.height,
-            ...(item.hasEOL === undefined ? {} : { hasEOL: item.hasEOL }),
-            ...(style?.ascent === undefined ? {} : { ascent: style.ascent }),
-            ...(style?.descent === undefined ? {} : { descent: style.descent }),
-            // The family the text layer sets this span in: the capture measures glyph advances in it.
-            ...(typeof style?.fontFamily === 'string' && style.fontFamily !== ''
-              ? { fontFamily: style.fontFamily }
-              : {}),
-          };
-        }),
-      });
+      pages.current.set(info.pageIndex, pageTextSourceOf(info, userUnit));
       const blocks = doc?.byPage.get(info.pageIndex) ?? [];
       if (blocks.length === 0) return;
       stampTextLayer({
@@ -250,8 +201,34 @@ export function SourcePane(props: SourcePaneProps) {
     props.highlightUnavailableReason ??
     (targetCount > MAX_ANCHORS_PER_HIGHLIGHT ? tooLongSentence(targetCount) : undefined);
 
+  // A picked picture (a float, or an area): while it is picked it is the selection the menu acts on,
+  // and the words' own Enter and Escape keys stand down, though the words stay for "figure + text".
+  const pageMeta = pdf.pageMeta;
+  const image = useImageSelection({
+    doc: props.onCreateAnchors === undefined ? null : doc,
+    root,
+    zoom: props.zoom,
+    pageOf: (pageIndex) => {
+      const meta = pageMeta?.get(pageIndex);
+      return meta === undefined
+        ? null
+        : { width: meta.width, height: meta.height, userUnit: meta.userUnit };
+    },
+    textSelection: selection,
+    captureText: () => capture('text'),
+    clearText: clear,
+    items,
+    boardBeside: props.boardBeside === true,
+    currentPage: () => listRef.current?.getVisiblePages().current ?? -1,
+    onCreateAnchors: props.onCreateAnchors ?? NOTHING,
+    ...(props.onNoteAnchors === undefined ? {} : { onNoteAnchors: props.onNoteAnchors }),
+    ...(props.onOpenBoard === undefined ? {} : { onOpenBoard: props.onOpenBoard }),
+    ...(props.onNotice === undefined ? {} : { onNotice: props.onNotice }),
+    highlightDisabledReason: unavailable,
+  });
+
   const selectionActions = useSelectionActions({
-    selection,
+    selection: image.active ? null : selection,
     capture,
     clear,
     root,
@@ -275,32 +252,7 @@ export function SourcePane(props: SourcePaneProps) {
 
   // A selection dragged out of the page is a passage in the air: the board beside (the split view,
   // #344) shows where it would land and takes it at the drop. Only when there is a board to take it.
-  const canDragToBoard = props.onOpenBoard !== undefined;
-  // `capture` changes whenever the selection state does, and a native drag changes it (pointercancel
-  // reconciles the selection): the listeners must not be torn down, and the passage in the air not
-  // forgotten, in the middle of the very drag that set it. So they read the latest `capture`.
-  const captureRef = useRef(capture);
-  captureRef.current = capture;
-  useEffect(() => {
-    if (root === null || !canDragToBoard) return undefined;
-    const start = (event: DragEvent): void => {
-      const captured = captureRef.current('text');
-      if (captured === null) return;
-      setDraggedPassage({ anchor: captured.anchor, text: captured.selection.text });
-      if (event.dataTransfer !== null) {
-        event.dataTransfer.effectAllowed = 'copy';
-        event.dataTransfer.setData('text/plain', captured.selection.text);
-      }
-    };
-    const end = (): void => setDraggedPassage(null);
-    root.addEventListener('dragstart', start);
-    root.addEventListener('dragend', end);
-    return () => {
-      root.removeEventListener('dragstart', start);
-      root.removeEventListener('dragend', end);
-    };
-  }, [root, canDragToBoard]);
-  useEffect(() => () => setDraggedPassage(null), []);
+  useTextDragToBoard(root, capture, props.onOpenBoard !== undefined);
 
   // A settled selection is painted by the overlay as one band per line (#346), on at most two pages
   // (what the capture measures); the native highlight goes transparent meanwhile. Anything else keeps
@@ -346,7 +298,6 @@ export function SourcePane(props: SourcePaneProps) {
   );
 
   // A click (not a drag) on highlighted text opens that highlight (#176, `useHighlightClick`).
-  const pageMeta = pdf.pageMeta;
   useHighlightClick({
     root,
     items,
@@ -356,45 +307,16 @@ export function SourcePane(props: SourcePaneProps) {
   });
 
   const toolbar = useSelectionToolbar({
-    selection,
+    selection: image.geometry ?? selection,
     doc,
     narrow: props.narrow,
     sheetOpen: props.sheetOpen === true,
     dockOnly: props.boardBeside === true,
-    actions: selectionActions,
+    actions: image.actions ?? selectionActions,
   });
 
   if (pdf.error !== null && pdf.error !== undefined) {
-    return (
-      <div className="pt-state" role="alert">
-        {pdf.errorKind === 'engine' ? (
-          <>
-            <h2 className="pt-state__title">The reader could not start its PDF engine</h2>
-            <p className="pt-state__body">
-              Reload the page; if it keeps happening, the server is missing a file.
-            </p>
-          </>
-        ) : (
-          <>
-            <h2 className="pt-state__title">This PDF could not be opened</h2>
-            <p className="pt-state__body">
-              The file reached the reader, but it could not be read as a PDF. Trying again usually
-              fixes a download that dropped part-way; if it keeps happening, the file itself may be
-              damaged.
-            </p>
-          </>
-        )}
-        <button
-          type="button"
-          className="pt-btn pt-btn--outline"
-          // pdf.js remembers a worker that failed to start for the life of the page, so re-running
-          // the load in place would fail the same way; an engine failure needs a fresh page.
-          onClick={pdf.errorKind === 'engine' ? () => window.location.reload() : pdf.reload}
-        >
-          Try again
-        </button>
-      </div>
-    );
+    return <PdfErrorState errorKind={pdf.errorKind} reload={pdf.reload} />;
   }
 
   const ready = pdf.pdf !== null && pdf.pdf !== undefined && (pdf.numPages ?? 0) > 0;
@@ -429,18 +351,21 @@ export function SourcePane(props: SourcePaneProps) {
         initialPosition={props.initialPosition}
         onPositionChange={props.onPositionChange}
         renderOverlay={(pageIndex, meta) => (
-          <HighlightOverlay
-            pageIndex={pageIndex}
-            pageWidth={meta.width}
-            pageHeight={meta.height}
-            userUnit={meta.userUnit}
-            zoom={props.zoom}
-            items={items}
-            activeHighlightId={props.activeHighlightId}
-            flash={props.flash}
-            selection={selectionOn(pageIndex)}
-            onActivate={(highlightId) => onActivateHighlight(highlightId, null)}
-          />
+          <>
+            <HighlightOverlay
+              pageIndex={pageIndex}
+              pageWidth={meta.width}
+              pageHeight={meta.height}
+              userUnit={meta.userUnit}
+              zoom={props.zoom}
+              items={items}
+              activeHighlightId={props.activeHighlightId}
+              flash={props.flash}
+              selection={selectionOn(pageIndex)}
+              onActivate={(highlightId) => onActivateHighlight(highlightId, null)}
+            />
+            {image.layer(pageIndex, meta.userUnit)}
+          </>
         )}
         renderFloating={(geometry) => <>{toolbar.floating(geometry)}</>}
       />

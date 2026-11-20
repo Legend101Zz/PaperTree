@@ -9,9 +9,16 @@
 import type { Anchor } from '@papertree/anchoring';
 
 import { displayQuote } from '@/components/reader/quote';
+import { imageBoxOf, isImageAnchor } from '@/lib/imageAnchor';
 import type { CanvasNode } from '@/lib/api/types';
 
 export function anchorKey(anchor: Anchor): string | null {
+  // A picture has no words: it is the same picture when it is the same rectangle of the same page,
+  // to the nearest point (the same figure picked twice never gives identical numbers to the digit).
+  const picture = imageBoxOf(anchor);
+  if (picture !== null && isImageAnchor(anchor)) {
+    return `${String(picture.page)}|image|${picture.box.map((n) => String(Math.round(n))).join(',')}`;
+  }
   const quote = displayQuote([anchor]).toLowerCase();
   if (quote === '') return null;
   let page: number | null = null;

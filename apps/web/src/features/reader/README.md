@@ -6,7 +6,9 @@ The reader's v0.2 chrome (#203, DESIGN.md §1 "Reader", frames 04 and 09b). The 
 
 ## Data flow
 
-UI (`components/ReaderHeader`) ← props from `app/paper/[id]/read/ReaderWorkspace.tsx`, which owns every piece
+UI (`components/ReaderHeader`) ← props from `app/paper/[id]/read/ReaderWorkspace.tsx` (composition only; its state lives in
+`hooks/usePaperSource`, `useReadingPosition`, `useFocusAnchor`, `useHighlightActions`, and `features/split`'s
+`useBoardBesideWiring`; the regions are `components/ReaderWorkspaceView`, `DocumentSlot`, `NavigatorSlot`), which owns every piece
 of state the header shows: the reading mode and zoom (saved per paper in `localStorage`, contracts.md §5), the
 page at the top of the view (reported by Source's scroller and Guided's top block), the Contents panel, and
 the Explain toggle (`useExplainActions`, `components/explain`). Presses go back up as callbacks; the header
@@ -138,3 +140,26 @@ selects.
 - `packages/ui/src/styles.css`, "the reader (S4)": the header, the desk (`--pt-desk` with a laid pattern),
   the PDF page as a `--pt-pdf-page` sheet with e1 (Light, Sepia or Dark: the canvas is recoloured by CSS, `pdfPage.css`),
   and the Guided page on `--pt-page`.
+
+## Selecting a picture (v0.3 #348)
+
+A figure, table, algorithm, display equation or any rectangle of a Source page is selected like words and
+asked about through the same menu (`SelectionToolbar`, docked or in the margin; `useSelectionToolbar` is placed
+by a `SelectionGeometry`, the selected lines of words or the picture's rectangle).
+
+- **Floats** (`model/floats`): from the IR's blocks, outermost figure boxes only, each with its caption folded
+  into the selectable box (the parser's `caption_block`, a `caption_of` relation, else the nearest caption within
+  48 pt). `components/ImageLayer` draws a `button` per float in reading order (Tab walks them, Enter selects) and
+  the faint hover outline; a mouse click is decided by `hooks/useImagePick` the way `useHighlightClick` decides
+  (page element + `zoom x userUnit` into IR points), and a click on a painted highlight opens it instead.
+- **Area tool**: the reader bar's "Select area" (`hooks/useImageTool`, a context the workspace mounts) or Alt+drag.
+  The rectangle (`model/imageRegion`) has eight handles, moves by its body, and answers the arrow keys (Alt resizes,
+  Shift takes bigger steps); armed from the keyboard it starts as a rectangle in the middle of the page.
+- **Esc**, one level: a rectangle being drawn, then the armed tool, then the selection.
+- **Shift** pairs a picture with words: the words stay, and the ask sends them as `with_text_anchor`.
+- **Menu** (`hooks/useImageActions`): Explain and Ask open an `image` thread; Send to board makes an excerpt whose
+  anchor is the picture and whose body is the caption; Note and a colour make a highlight over the region alone.
+  The anchor (`lib/imageAnchor`) is exactly the API's: `figure` or `figure_region`, one PageSelector, one
+  ShapeSelector quad, no quote.
+- **Beside the board** the frame's chip is draggable: the board lands an image card where it is dropped.
+- Colours are `--pt-pdf-img-*`, per page colour (Light, Sepia, Dark), contrast pinned in `packages/ui/test/tokens.spec.ts`.

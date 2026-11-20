@@ -129,7 +129,8 @@ export function buildExchanges<M extends ExchangeMessage>(
   }
   if (open !== null) out.push(exchangeOf(open.ask, null));
   const first = out[0];
-  if (first !== undefined && origin !== null) {
+  // A picture with no words beside it has no quote to slip: its crop is shown above the exchange.
+  if (first !== undefined && origin !== null && cleanQuote(origin.quote) !== '') {
     out[0] = { ...first, quote: slipQuote(origin, answers) };
   }
   return out;

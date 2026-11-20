@@ -35,7 +35,14 @@ import { usePaperTitle } from '../hooks/usePaperTitle';
 import { useThreadDrawing } from '../hooks/useThreadDrawing';
 import { useUndoKeys } from '../hooks/useUndoKeys';
 import { anchorPageIndex } from '../model/cards';
-import { ZOOM_RANGE, besideHref, boardCounts, countsLine, paperBesideHref } from '../model/chrome';
+import {
+  ZOOM_RANGE,
+  besideHref,
+  boardCounts,
+  boardName,
+  countsLine,
+  paperBesideHref,
+} from '../model/chrome';
 import { withPageTitles, type PtEdge, type PtNode } from '../model/flow';
 import { bigBoard, glanceAt, publishedZoom } from '../model/glance';
 import { BoardHeader } from './BoardHeader';
@@ -66,6 +73,16 @@ import './cards.css';
 import './threads.css';
 import './legend.css';
 import './chrome.css';
+
+/**
+ * Whether the board shows the thread key: only when it holds v0.2 threads (between loose cards).
+ * A tree of passages, answers and notes has no pins and no threads, so it has nothing to key.
+ *
+ * @param threads How many threads the board has.
+ */
+export function showLegend(threads: number): boolean {
+  return threads > 0;
+}
 
 /** The legend never changes with the board, so a drag does not redraw it. */
 const ThreadLegend = memo(Legend);
@@ -264,7 +281,9 @@ function Board({ paperId }: { readonly paperId: string }) {
   );
   const notice = drawing.refusal ?? ctl.notice;
 
-  const title = ctl.board?.title ?? paperTitle ?? 'Board';
+  // The reader's own name for the board, else the paper's title; the default "Canvas" is neither.
+  const givenName = boardName(ctl.board?.title, null);
+  const title = boardName(ctl.board?.title, paperTitle) ?? 'Board';
 
   // B opens the paper beside a full-width board. (Beside the paper the reader owns the key.)
   useEffect(() => {
@@ -290,7 +309,7 @@ function Board({ paperId }: { readonly paperId: string }) {
             paperTitle={paperTitle}
             counts={ready ? counts : null}
             beside={beside}
-            {...(ctl.board?.title == null ? {} : { name: ctl.board.title })}
+            {...(givenName === null ? {} : { name: givenName })}
           >
             <BoardToolbar {...tools} />
           </BoardHeader>
@@ -451,7 +470,7 @@ function Board({ paperId }: { readonly paperId: string }) {
                       </ReactFlow>
                     </GlanceProvider>
                   </LinkingProvider>
-                  {empty ? <EmptyBoard paperId={paperId} /> : <ThreadLegend glance={glance} />}
+                  {empty ? <EmptyBoard paperId={paperId} /> : null}
                   {link.request === null ? null : (
                     <LinkAsLayer
                       request={link.request}
@@ -464,6 +483,12 @@ function Board({ paperId }: { readonly paperId: string }) {
                 </>
               )}
             </div>
+            {/* v0.2 threads join loose cards only; the key to them is drawn under the stage, in the
+                flow, and only when the board has one. It never lies over the cards, the minimap or an
+                ask box. */}
+            {ready && !empty && showLegend(ctl.edges.length) ? (
+              <ThreadLegend glance={glance} />
+            ) : null}
             {branch.control.ui.outline ? (
               <OutlineView
                 tree={branch.view.tree}

@@ -281,3 +281,12 @@ so v0.1 bookmarks keep working (#214). The reader-side helpers keep their v0.1 n
 the API, the tables and the wire types (`CanvasNode`); everything they show a person says "board"
 ("Send to board", "Passage added to your board.", "Open board"), and `test/board-wording.spec.tsx`
 and `chrome.spec.tsx` fail on a "canvas" in any text, name or tooltip they render.
+
+## Image cards (v0.3 #348)
+
+An excerpt whose `source_anchor` is an image anchor is drawn by `ImageCard` (`PassageCard` decides): the crop
+(`crop-url` per card, shared per rectangle), its caption in the paper's serif, and the quiet source "Fig. 4 · p. 6"
+that opens the paper on it. The card's body is the caption written when it was sent; its alt text is the caption
+plus the first answer's TL;DR (`model/imageCard`). It is a `BranchCard` like the passage, so every ask, follow-up
+and span branch goes through the same ask path, and the server sends the root's crop on each. A figure dragged
+across the divider (`DraggedPassage.image`) lands as an image card, with an image-sized footprint.

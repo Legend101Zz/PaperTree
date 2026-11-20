@@ -15,6 +15,7 @@ import {
   writeBoardLevel,
   type LevelStorage,
 } from './askPayload';
+import { askAnchorFixture } from './imageFixtures';
 import { buildTree } from './tree';
 import { node, resetClock, spanOf } from './treeFixtures';
 
@@ -222,6 +223,17 @@ describe('what the AI will read', () => {
   it('labels the path by size', () => {
     expect(whatTheAiWillRead(tree, 'p', defaultUses()).pathLabel).toBe('this passage');
     expect(whatTheAiWillRead(tree, 'a2', defaultUses()).pathLabel).toBe('this path (3 cards)');
+  });
+
+  it('calls a picked figure "this figure" and a drawn area "this area", not "this passage"', () => {
+    const root = (kind: 'figure' | 'figure_region') =>
+      buildTree([
+        { ...node({ id: 'img' }), source_anchor: { ...askAnchorFixture(1), targetKind: kind } },
+      ]);
+    expect(whatTheAiWillRead(root('figure'), 'img', defaultUses()).pathLabel).toBe('this figure');
+    expect(whatTheAiWillRead(root('figure_region'), 'img', defaultUses()).pathLabel).toBe(
+      'this area',
+    );
   });
 });
 

@@ -21,6 +21,8 @@ import { createContext, createElement, useContext, type ReactNode } from 'react'
 
 import type { Anchor } from '@papertree/anchoring';
 
+import type { ImageAsk } from '@/lib/imageAnchor';
+
 export type SendToCanvasInput =
   /**
    * `toast`: what to say when it lands. Default: "Passage added to your board" with Open board.
@@ -32,6 +34,8 @@ export type SendToCanvasInput =
   | {
       kind: 'excerpt';
       anchor: Anchor;
+      /** The card's words when the anchor quotes none: an image card's caption (#348). */
+      body?: string;
       toast?: 'added' | 'none';
       at?: { readonly x: number; readonly y: number };
       /**
@@ -45,13 +49,20 @@ export type SendToCanvasInput =
   /** A diagram answer's plate (#217): the card keeps the message id and draws the stored parts. */
   | { kind: 'diagram'; messageId: string; title: string };
 
+/** What the panel opens on: a passage's anchor and words, or a picture (`image`, v0.3 #348). */
+export interface ExplainInput {
+  readonly anchor: Anchor;
+  readonly quote: string;
+  readonly image?: ImageAsk;
+}
+
 export type ReaderActions = {
-  openExplain(input: { anchor: Anchor; quote: string }): void;
+  openExplain(input: ExplainInput): void;
   /**
    * The selection toolbar's Ask (#203): the panel opens on the passage, waiting for the reader's
    * own question. Optional: a reader without it draws no Ask button (never an inert one).
    */
-  askAbout?(input: { anchor: Anchor; quote: string }): void;
+  askAbout?(input: ExplainInput): void;
   /** Resolves to the id of the card this send made (or found: the same passage twice is one card). */
   sendToCanvas(input: SendToCanvasInput): Promise<string | null | undefined>;
   /**

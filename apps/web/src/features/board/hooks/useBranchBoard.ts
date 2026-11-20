@@ -16,7 +16,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } fro
 
 import { DRAFT_ID } from '../model/display';
 import { heightCap } from '../model/layout';
-import { viewToCentre } from '../model/panes';
+import { viewToCentre, viewToReveal } from '../model/panes';
 import { onPathIds } from '../model/ui';
 import { useBoardAsk, type BoardAsk } from './useBoardAsk';
 import { useBoardTree, type TreeView } from './useBoardTree';
@@ -147,6 +147,8 @@ export function useBranchBoard(
 
   // ── arrival (#342) ───────────────────────────────────────────────────────────────────────────
   const arrived = useRef<string | null>(null);
+  // The arrival has placed the view for the box it opened; the reveal below leaves that one alone.
+  const arrivalPlaced = useRef(false);
   const { tree, layout, heights } = view;
   const { openAsk } = control;
   // A card made outside the board (a send beside the paper, a drop) is read in before it can arrive.
@@ -171,6 +173,7 @@ export function useBranchBoard(
     }
     if (wantsBox && (box === undefined || !heights.has(DRAFT_ID))) return;
     arrived.current = arrivalKey;
+    arrivalPlaced.current = true;
     setArrivedId(cardParam);
     if (hostArrival === null) {
       // Arrived by address: a reload must not pan again, so the address no longer names the card.
@@ -212,6 +215,34 @@ export function useBranchBoard(
     tree,
   ]);
 
+  // An ask box that opens below or beside its card must be wholly in view: the board pans by the
+  // least it must (the arrival above centres its own pair, so it is left to do that first).
+  const draft = view.draft;
+  const boxSpot = layout.cards.get(DRAFT_ID);
+  const boxMeasured = heights.has(DRAFT_ID);
+  const revealed = useRef<string | null>(null);
+  useEffect(() => {
+    if (draft === null || draft.expanded !== true) {
+      revealed.current = null;
+      return;
+    }
+    if (boxSpot === undefined || !boxMeasured) return;
+    if (cardParam !== null && arrived.current !== arrivalKey) return; // the arrival will centre it
+    const key = `${draft.parentId}|${String(draft.span?.start ?? '')}|${String(draft.askDifferently)}|${String(boxSpot.x)},${String(boxSpot.y)},${String(boxSpot.h)}`;
+    if (revealed.current === key) return;
+    revealed.current = key;
+    if (arrivalPlaced.current) {
+      arrivalPlaced.current = false;
+      return;
+    }
+    const pane = {
+      w: stage.current?.clientWidth ?? window.innerWidth,
+      h: stage.current?.clientHeight ?? window.innerHeight,
+    };
+    const target = viewToReveal(boxSpot, flow.getViewport(), pane);
+    if (target !== null) void flow.setViewport(target, { duration: reducedMotion() ? 0 : 250 });
+  }, [draft, boxSpot, boxMeasured, cardParam, arrivalKey, flow, stage]);
+
   // One glow, then it goes: reduced motion gets a still ring for a second instead.
   useEffect(() => {
     if (arrivedId === null) return undefined;
@@ -238,6 +269,7 @@ export function useBranchBoard(
 
   const actions = useMemo<BranchActions>(
     () => ({
+      paperId,
       tree: view.tree,
       layout: view.layout,
       control,
@@ -257,6 +289,7 @@ export function useBranchBoard(
       stage,
     }),
     [
+      paperId,
       view.tree,
       view.layout,
       view.draft,

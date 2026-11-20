@@ -13,7 +13,7 @@ import { useReactFlow } from '@xyflow/react';
 import { useCallback, useState, type DragEvent, type RefObject } from 'react';
 
 import { heightCap } from '../model/layout';
-import { FOOTPRINT_WIDTH, footprintHeight } from '../model/panes';
+import { FOOTPRINT_WIDTH, IMAGE_FOOTPRINT_HEIGHT, footprintHeight } from '../model/panes';
 
 import type { BoardHost } from '../components/BoardHost';
 import type { PtEdge, PtNode } from '../model/flow';
@@ -66,7 +66,10 @@ export function useDropIn(host: BoardHost, stage: RefObject<HTMLElement | null>)
       }
       const x = Math.round(event.clientX - box.left);
       const y = Math.round(event.clientY - box.top);
-      const height = footprintHeight(dragged.text.length, heightCap(box.height));
+      const height =
+        dragged.image === true
+          ? IMAGE_FOOTPRINT_HEIGHT
+          : footprintHeight(dragged.text.length, heightCap(box.height));
       setMark((was) =>
         was !== null && Math.abs(was.x - x) + Math.abs(was.y - y) <= 3
           ? was

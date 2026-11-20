@@ -342,8 +342,9 @@ export function spanKnots<N extends TreeNodeInput>(
 }
 
 /**
- * The answers and notes in a branch, the card itself included (a folded card is one of the answers
- * its pill counts, as in the prototype: "2 answers" for a card and one reply).
+ * The answers and notes a fold hides: everything UNDER the card, never the card itself (the pill
+ * stands for the card, so a folded answer with two answers under it says "2 answers", as in the
+ * prototype, not "3").
  *
  * @param tree The tree.
  * @param id The top of the branch.
@@ -356,7 +357,7 @@ export function branchCounts<N extends TreeNodeInput>(
   let answers = 0;
   let notes = 0;
   const top = tree.byId.get(id);
-  const members = top === undefined ? [] : [top, ...descendantsOf(tree, id)];
+  const members = top === undefined ? [] : descendantsOf(tree, id);
   for (const node of members) {
     if (node.kind === 'explanation') answers += 1;
     else if (node.kind === 'note') notes += 1;
@@ -378,5 +379,5 @@ export function countsPhrase(counts: BranchCounts): string {
   if (counts.notes > 0) {
     parts.push(`${String(counts.notes)} ${counts.notes === 1 ? 'note' : 'notes'}`);
   }
-  return parts.length === 0 ? '0 answers' : parts.join(' · ');
+  return parts.length === 0 ? 'nothing under it' : parts.join(' · ');
 }

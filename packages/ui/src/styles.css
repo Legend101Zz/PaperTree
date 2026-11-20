@@ -383,6 +383,13 @@
   --pt-pdf-ring: #1f4e79; /* 8.7 */
   --pt-pdf-lit-wash: rgb(240 190 70 / 22%);
   --pt-flash-rest: 0.6;
+  /* a picked picture (#348): the faint outline under the pointer, the selection's edge and wash, its
+   * handles and the chip that names it; the edge keeps 3:1 on the page and on the figure's mat */
+  --pt-pdf-img-hover: rgb(31 78 121 / 55%);
+  --pt-pdf-img-edge: #1f4e79; /* 8.7 */
+  --pt-pdf-img-wash: rgb(31 78 121 / 9%);
+  --pt-pdf-img-handle: #ffffff;
+  --pt-pdf-img-chip-ink: #ffffff;
   /* Guided: the sheet is ivory by day, and its type re-declares the room's ink tokens (below, in
    * `.pt-guided__sheet`) from these, so everything inside it follows the page and not the room */
   --pt-guided-page: #faf8f3;
@@ -415,6 +422,11 @@
   --pt-pdf-ring: #1f4e79; /* 7.2 */
   --pt-pdf-lit-wash: rgb(232 160 30 / 24%);
   --pt-flash-rest: 0.7;
+  --pt-pdf-img-hover: rgb(31 78 121 / 55%);
+  --pt-pdf-img-edge: #1f4e79; /* 7.2 */
+  --pt-pdf-img-wash: rgb(31 78 121 / 9%);
+  --pt-pdf-img-handle: #fbf5e6;
+  --pt-pdf-img-chip-ink: #fbf5e6;
   --pt-guided-page: #f4e9d2;
   --pt-guided-ink: #3a2e22;
   --pt-guided-ink-2: #52453a; /* 7.7 */
@@ -446,6 +458,11 @@
   --pt-pdf-ring: #8fb8e8; /* 8.4 */
   --pt-pdf-lit-wash: rgb(240 190 70 / 13%);
   --pt-flash-rest: 0.7;
+  --pt-pdf-img-hover: rgb(143 184 232 / 60%);
+  --pt-pdf-img-edge: #8fb8e8; /* 8.4 */
+  --pt-pdf-img-wash: rgb(143 184 232 / 12%);
+  --pt-pdf-img-handle: #0f0d0b;
+  --pt-pdf-img-chip-ink: #0f0d0b;
   --pt-guided-page: #1d1a17;
   --pt-guided-ink: #e6ded0;
   --pt-guided-ink-2: #cfc6b6; /* 10.2 */

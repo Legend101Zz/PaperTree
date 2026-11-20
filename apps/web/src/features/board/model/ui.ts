@@ -5,9 +5,12 @@
  * the selection under it), then the ask box, then path focus, then the Outline. The state is plain
  * data and `escapeStep` is pure, so the order is one table the tests can read.
  */
+import { pictureNameOf } from '@/lib/imageAnchor';
+
 import { pathTo, type BoardTree, type TreeNodeInput } from './tree';
 
 import type { AskUses, ParentSpan } from '@/lib/api/types';
+import type { Anchor } from '@papertree/anchoring';
 
 /** The four dotted items of the Uses line, each opens one picker. */
 export type PickerName = 'path' | 'paper' | 'level' | 'diagram';
@@ -90,6 +93,8 @@ export interface CrumbNodeInput extends TreeNodeInput {
   readonly body: string;
   readonly title?: string | null;
   readonly question?: string | null;
+  /** A root's anchor: a picture's root is named for the picture, not "Passage". */
+  readonly source_anchor?: Anchor | null;
 }
 
 const CRUMB_MAX = 36;
@@ -111,7 +116,7 @@ export function breadcrumbOf<N extends CrumbNodeInput>(tree: BoardTree<N>, id: s
     const asked = node.question?.trim() || node.title?.trim() || '';
     const label =
       node.kind === 'excerpt'
-        ? 'Passage'
+        ? (pictureNameOf(node.source_anchor, node.body)?.label ?? 'Passage')
         : node.kind === 'note'
           ? 'Note'
           : asked !== ''

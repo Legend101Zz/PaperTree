@@ -318,6 +318,32 @@ describe('the paper in Light, Sepia and Dark (#345; #205, frame 09b)', () => {
     }
   });
 
+  for (const name of ['light', 'sepia', 'dark'] as const) {
+    const scheme = PAGES[name];
+    const page = colour(scheme, '--pt-pdf-page');
+    const mat =
+      scheme.get('--pt-pdf-mat') === 'transparent' ? page : colour(scheme, '--pt-pdf-mat');
+
+    it(`${name}: a picked picture's edge keeps 3:1 on the page and on the figure's mat (#348)`, () => {
+      const edge = colour(scheme, '--pt-pdf-img-edge');
+      expect(contrast(edge, page)).toBeGreaterThanOrEqual(3);
+      expect(contrast(edge, mat)).toBeGreaterThanOrEqual(3);
+    });
+
+    it(`${name}: its handles are drawn in the edge's colour on a fill that keeps 3:1 against it, and its chip reads`, () => {
+      const edge = colour(scheme, '--pt-pdf-img-edge');
+      expect(ratioOn(scheme, '--pt-pdf-img-handle', edge)).toBeGreaterThanOrEqual(3);
+      expect(ratioOn(scheme, '--pt-pdf-img-chip-ink', edge)).toBeGreaterThanOrEqual(4.5);
+    });
+
+    it(`${name}: the faint outline of a float under the pointer shows on the page, and its wash does not hide the type`, () => {
+      const hover = over(paint(scheme, '--pt-pdf-img-hover'), page);
+      expect(contrast(hover, page)).toBeGreaterThanOrEqual(2);
+      const washed = over(paint(scheme, '--pt-pdf-img-wash'), page);
+      expect(contrast(typeOn(name), washed)).toBeGreaterThanOrEqual(4.5);
+    });
+  }
+
   it('dark: each wash stands off the page at least as far as off white by day', () => {
     const [day, night] = [
       colour(PAGES.light, '--pt-pdf-page'),

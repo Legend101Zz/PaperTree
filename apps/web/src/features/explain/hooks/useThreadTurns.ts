@@ -4,10 +4,11 @@
  */
 import { useCallback } from 'react';
 
-import { threadsApi, type CreateThreadBody, type FollowUpBody } from '@/lib/api/threads';
+import { threadsApi, type FollowUpBody } from '@/lib/api/threads';
 
+import { createBodyFor } from '../model/createBody';
 import { levelOf } from '../model/levels';
-import { DEFAULT_EXPLAIN_QUESTION, isStreaming } from '../model/turns';
+import { DEFAULT_EXPLAIN_QUESTION, DEFAULT_IMAGE_QUESTION, isStreaming } from '../model/turns';
 
 import type { AskOptions, AskOutcome } from '../model/controller';
 import type { ExplainRequest } from '../model/state';
@@ -56,16 +57,10 @@ export function useThreadTurns(
     ): Promise<AskOutcome> => {
       if (paperId === null) return Promise.resolve('sent');
       const level = stateRef.current.level;
-      const body: CreateThreadBody =
-        request === null
-          ? { kind: 'ask', question: question ?? '', level }
-          : {
-              kind: 'explain',
-              anchor: request.anchor,
-              ...(question === undefined ? {} : { question }),
-              level,
-            };
-      const shown = question ?? DEFAULT_EXPLAIN_QUESTION;
+      const body = createBodyFor(request, question, level);
+      const shown =
+        question ??
+        (request?.image === undefined ? DEFAULT_EXPLAIN_QUESTION : DEFAULT_IMAGE_QUESTION);
       return startTurn(
         epoch,
         shown,
@@ -187,15 +182,15 @@ export function useThreadTurns(
         const first = current.messages[0];
         const asExplain = current.request !== null && first === message;
         const request = current.request;
-        const body: CreateThreadBody =
-          asExplain && request !== null
-            ? {
-                kind: 'explain',
-                anchor: request.anchor,
-                ...(question === DEFAULT_EXPLAIN_QUESTION ? {} : { question }),
-                level: levelOf(message),
-              }
-            : { kind: 'ask', question, level: levelOf(message) };
+        const body = createBodyFor(
+          asExplain ? request : null,
+          // The default question is left to the server, which asks it of the kind's own wording.
+          asExplain &&
+            (question === DEFAULT_EXPLAIN_QUESTION || question === DEFAULT_IMAGE_QUESTION)
+            ? undefined
+            : question,
+          levelOf(message),
+        );
         void startTurn(
           epoch,
           question,

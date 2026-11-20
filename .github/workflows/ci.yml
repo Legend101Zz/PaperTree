@@ -550,7 +550,18 @@ jobs:
           PAPERTREE_E2E_YOLO_PDF: ${{ github.workspace }}/research/benchmarks/fresh/pdfs/yolo-1506.02640.pdf
         run: |
           set -o pipefail
+          # Memory every 20 s (free + the five largest processes): a run killed with exit 143
+          # mid-suite and no failing test is most likely out of memory; this log says so or not.
+          ( while true; do
+              echo "== $(date -u +%H:%M:%S)"; free -m | sed -n 2,3p
+              ps -eo rss=,comm= --sort=-rss | head -n 5 | awk '{printf "  %6d MB %s\n", $1/1024, $2}'
+              sleep 20
+            done ) > "$RUNNER_TEMP/e2e-mem.log" 2>&1 &
           pnpm e2e 2>&1 | tee "$RUNNER_TEMP/e2e.log"
+
+      - name: e2e memory log (last 10 min)
+        if: always()
+        run: tail -n 210 "$RUNNER_TEMP/e2e-mem.log" || true
 
       - name: Assert no e2e spec skipped (Journey B needs the YOLO PDF)
         run: |
@@ -585,6 +596,7 @@ jobs:
             ${{ runner.temp }}/e2e-results
             ${{ runner.temp }}/e2e-scratch
             ${{ runner.temp }}/e2e.log
+            ${{ runner.temp }}/e2e-mem.log
           if-no-files-found: warn
           retention-days: 7
 

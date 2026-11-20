@@ -976,3 +976,16 @@
   font: 13px / 18px var(--pt-font-you);
   color: var(--pt-ink-2);
 }
+
+/* An image card (#348): the crop at the card's width, its caption in the paper's serif beneath. */
+.pt-tc__crop {
+  inline-size: 100%;
+}
+
+.pt-tc__caption {
+  margin: 8px 0 0;
+  font-family: var(--pt-font-paper);
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--pt-ink-2);
+}

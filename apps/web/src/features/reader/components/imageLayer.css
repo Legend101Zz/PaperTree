@@ -1,0 +1,163 @@
+/*
+ * The picture-picking layer (v0.3 #348). Every colour is a `--pt-pdf-img-*` token, re-tuned per
+ * page colour in `@papertree/ui` (Light, Sepia, Dark; contrast pinned in its tokens spec). The
+ * layer sits in the page's overlay slot, which is `pointer-events: none`: only the frame, its
+ * handles and its chip take the pointer.
+ */
+.pt-imglayer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+/* A float: invisible until the pointer is over it or the keyboard has it. */
+.pt-imgfloat {
+  position: absolute;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  border: 1.5px dashed transparent;
+  border-radius: 3px;
+  background: transparent;
+  pointer-events: none;
+  cursor: default;
+}
+
+.pt-imgfloat[data-hover] {
+  border-color: var(--pt-pdf-img-hover);
+}
+
+.pt-imgfloat:focus-visible {
+  outline: 2px solid var(--pt-pdf-img-edge);
+  outline-offset: 2px;
+  border-color: var(--pt-pdf-img-hover);
+}
+
+/* The selected float is drawn by the frame; its button only keeps the keyboard's place. */
+.pt-imgfloat[data-selected]:not(:focus-visible) {
+  visibility: hidden;
+}
+
+.pt-imgdraft {
+  position: absolute;
+  box-sizing: border-box;
+  border: 1.5px dashed var(--pt-pdf-img-edge);
+  background: var(--pt-pdf-img-wash);
+  border-radius: 2px;
+}
+
+.pt-imgframe {
+  position: absolute;
+  box-sizing: border-box;
+  border: 2px solid var(--pt-pdf-img-edge);
+  background: var(--pt-pdf-img-wash);
+  border-radius: 3px;
+  pointer-events: none;
+  /* a selected picture keeps its own colours: the frame tints, it never filters */
+}
+
+.pt-imgframe[data-origin='area'] {
+  pointer-events: auto;
+  cursor: move;
+}
+
+.pt-imgframe:focus-visible {
+  outline: 2px solid var(--pt-pdf-img-edge);
+  outline-offset: 3px;
+}
+
+.pt-imghandle {
+  position: absolute;
+  inline-size: 11px;
+  block-size: 11px;
+  box-sizing: border-box;
+  border: 2px solid var(--pt-pdf-img-edge);
+  background: var(--pt-pdf-img-handle);
+  border-radius: 2px;
+  pointer-events: auto;
+  /* a 24 px target round the 11 px mark (WCAG 2.5.8) */
+  touch-action: none;
+}
+
+.pt-imghandle::after {
+  content: '';
+  position: absolute;
+  inset: -7px;
+}
+
+.pt-imghandle[data-handle='n'] {
+  left: calc(50% - 5.5px);
+  top: -6.5px;
+  cursor: ns-resize;
+}
+.pt-imghandle[data-handle='s'] {
+  left: calc(50% - 5.5px);
+  bottom: -6.5px;
+  cursor: ns-resize;
+}
+.pt-imghandle[data-handle='e'] {
+  right: -6.5px;
+  top: calc(50% - 5.5px);
+  cursor: ew-resize;
+}
+.pt-imghandle[data-handle='w'] {
+  left: -6.5px;
+  top: calc(50% - 5.5px);
+  cursor: ew-resize;
+}
+.pt-imghandle[data-handle='ne'] {
+  right: -6.5px;
+  top: -6.5px;
+  cursor: nesw-resize;
+}
+.pt-imghandle[data-handle='sw'] {
+  left: -6.5px;
+  bottom: -6.5px;
+  cursor: nesw-resize;
+}
+.pt-imghandle[data-handle='nw'] {
+  left: -6.5px;
+  top: -6.5px;
+  cursor: nwse-resize;
+}
+.pt-imghandle[data-handle='se'] {
+  right: -6.5px;
+  bottom: -6.5px;
+  cursor: nwse-resize;
+}
+
+/* The chip names the selection, above its top-left corner; beside the board it is the thing to drag. */
+.pt-imgchip {
+  position: absolute;
+  left: -2px;
+  bottom: 100%;
+  margin-bottom: 4px;
+  padding: 2px 8px;
+  max-inline-size: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font: 500 12px/18px var(--pt-font-ui, system-ui, sans-serif);
+  color: var(--pt-pdf-img-chip-ink);
+  background: var(--pt-pdf-img-edge);
+  border-radius: 3px;
+  pointer-events: none;
+}
+
+.pt-imgchip[draggable='true'] {
+  pointer-events: auto;
+  cursor: grab;
+}
+
+/* The tool is armed: a cross-hair, and a drag draws instead of selecting text. */
+[data-pt-areatool] .papertree-page,
+[data-pt-areatool] .papertree-text-layer {
+  cursor: crosshair;
+  user-select: none;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .pt-imgfloat {
+    transition: border-color 120ms linear;
+  }
+}

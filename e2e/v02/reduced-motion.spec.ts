@@ -216,14 +216,14 @@ test.describe('S8: reduced motion, every moment (faux agent)', () => {
       title: plate.title,
       source_diagram_id: plate.messageId,
     });
+    // A loose note takes the thread: a passage (a branching card) has no brass pins since v0.3.
     const passage = await placeCard(stack.apiUrl, token, paperId, {
-      kind: 'excerpt',
+      kind: 'note',
       x: 700,
       y: 0,
       w: 340,
       h: 200,
       body: 'We propose a new simple network architecture, the Transformer.',
-      source_anchor: selection,
     });
     await page.goto(`/paper/${paperId}/board`);
     await expect(page.locator('.react-flow__node')).toHaveCount(2, { timeout: 60_000 });

@@ -134,3 +134,12 @@ closes; nothing when invalid). ``check: `model/check.ts` + `CheckYourself` (mark
 - `model/phone.ts`: the phone sheet's first-paragraph clip and which answer the footer pins. Pure, tested
   (`phone.spec.ts`, on the golden thread).
 - `api/threads.ts`: query keys and fetchers. `hooks/useThreads.ts`: the reads, the open-on-newest, the merge.
+
+## An image thread (v0.3 #348)
+
+`openExplain` and `askAbout` take an optional `image` on the request (`ImageAsk`: its label, its caption, the
+words selected with it). `model/createBody` turns that into `POST /papers/{id}/threads` with `kind: "image"`, the
+picture's anchor, no question unless the reader typed one (the server asks "Explain this figure."), and
+`with_text_anchor` for the paragraph selected beside it. `components/ImageHead` shows the crop (`crop-url`, via
+`components/image/CropImage`) above the first exchange for as long as the thread is open; a stored image thread
+reopens on its crop (`originOf`).

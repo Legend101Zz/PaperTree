@@ -171,15 +171,22 @@ test('branch a conversation: ask, branch from words, focus a path, tidy, fold, o
   await expect(page.locator('.pt-tn--dim').first()).toBeAttached();
   const stub = page.getByTestId('followup-stub');
   await expect(stub).toBeVisible();
-  const secondBox = (await second.boundingBox())!;
   // A follow-up goes BELOW the card it continues.
   await stub.getByRole('textbox', { name: 'Follow up' }).click();
   await page.getByLabel('Your question').fill('so can it do nothing?');
   await page.getByLabel('Your question').press('Enter');
   await expect(answerCards(page)).toHaveCount(3, { timeout: 120_000 });
   const third = answerCards(page).nth(2);
-  const thirdBox = (await third.boundingBox())!;
-  expect(thirdBox.y).toBeGreaterThan(secondBox.y + secondBox.height - 2);
+  // v0.3 (853370d): an ask box that opens out of view pans the board into view, and the new answer
+  // arrives centred, so screen coordinates read before the question are stale. Compare the two
+  // cards in the SAME frame, once the pan has settled.
+  await expect
+    .poll(async () => {
+      const a = (await second.boundingBox())!;
+      const b = (await third.boundingBox())!;
+      return b.y - (a.y + a.height - 2);
+    })
+    .toBeGreaterThan(0);
   // One real down line (second -> third). The new answer is focused, so it offers its own Follow up
   // stub, and that one draws a DASHED pending line (`data-pending="true"`): not an edge yet.
   await expect(page.locator('.pt-tree-edge[data-branch="down"][data-pending="false"]')).toHaveCount(

@@ -152,7 +152,7 @@ export async function sendToCanvas(
         kind: 'excerpt',
         ...spot,
         ...size,
-        body: displayQuote([input.anchor]).slice(0, CANVAS_BODY_MAX),
+        body: (input.body ?? displayQuote([input.anchor])).slice(0, CANVAS_BODY_MAX),
         source_anchor: input.anchor,
       });
     } else {

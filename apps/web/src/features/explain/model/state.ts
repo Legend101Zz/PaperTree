@@ -9,14 +9,20 @@ import { DEFAULT_LEVEL } from '@/features/explain/model/levels';
 import { mergeStored, type ThreadMessage } from '@/features/explain/model/messages';
 
 import type { Anchor } from '@papertree/anchoring';
+import type { ImageAsk } from '@/lib/imageAnchor';
 import type { AnswerLevel, Message, RunSummary, Summary } from '@/lib/api/types';
 import type { Failure } from '@/components/explain/errors';
 
-/** What the panel is opened on: a selection's Anchor and its words. */
+/** What the panel is opened on: a selection's Anchor and its words, or a picture. */
 export interface ExplainRequest {
   readonly anchor: Anchor;
-  /** The exact selected text, verbatim — the paper's words, rendered in the paper's register. */
+  /**
+   * The exact selected text, verbatim — the paper's words, rendered in the paper's register. For a
+   * picture: the words selected with it, or "".
+   */
   readonly quote: string;
+  /** Set when the anchor is a figure or a region: the thread is an `image` thread (#348). */
+  readonly image?: ImageAsk;
 }
 
 /** One line of the conversation as the panel shows it (defined beside the merge that builds it). */

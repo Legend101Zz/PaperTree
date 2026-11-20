@@ -95,8 +95,41 @@ export function viewToCentre(
   };
 }
 
+/** The air kept between a revealed box and the pane's edge. */
+export const REVEAL_MARGIN = 16;
+
+/**
+ * The view that brings a box (an ask box that opened below or beside its card) wholly into the
+ * pane: the board pans by the least it must, and the zoom stays. Null when it is in view already.
+ *
+ * @param box The box in board coordinates.
+ * @param view The view now.
+ * @param pane The pane's size in px.
+ * @param pane.w Its width.
+ * @param pane.h Its height.
+ * @returns The view to pan to, or null when no pan is needed.
+ */
+export function viewToReveal(
+  box: Box,
+  view: View,
+  pane: { readonly w: number; readonly h: number },
+): View | null {
+  const onScreen: Box = {
+    x: box.x * view.zoom + view.x,
+    y: box.y * view.zoom + view.y,
+    w: box.w * view.zoom,
+    h: box.h * view.zoom,
+  };
+  const { dx, dy } = shiftInto(onScreen, pane, REVEAL_MARGIN);
+  return dx === 0 && dy === 0
+    ? null
+    : { x: Math.round(view.x + dx), y: Math.round(view.y + dy), zoom: view.zoom };
+}
+
 /** A dropped passage's footprint is drawn this wide: a passage card's width. */
 export const FOOTPRINT_WIDTH = 304;
+/** A dropped picture's footprint: an image card is a picture and a caption, about this tall. */
+export const IMAGE_FOOTPRINT_HEIGHT = 200;
 /** About how many characters fit on a line of a passage card, and how tall a line and the strip are. */
 const CHARS_PER_LINE = 45;
 const LINE_HEIGHT = 18;
