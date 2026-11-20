@@ -113,19 +113,3 @@ export function sourcePaint(
     approximate: resolution.approximate || resolution.state === 'approximate',
   };
 }
-
-/**
- * Does this anchor belong in the unanchored tray while reading Source?
- *
- * Only when it can be painted nowhere: no usable stored quads and an orphaned ladder. An anchor
- * whose stored quads paint but whose text the current parse cannot find is NOT an orphan — the user
- * sees their highlight exactly where they made it; only its links (Guided, Navigator grouping) are
- * missing, and those surfaces say so themselves.
- */
-export function isSourceOrphan(
-  anchor: Anchor,
-  doc: IndexedDocument,
-  resolution: Resolution,
-): boolean {
-  return sourcePaint(anchor, doc, resolution) === null && resolution.state === 'orphan';
-}
