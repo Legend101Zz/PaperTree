@@ -262,13 +262,29 @@ export function SourcePane(props: SourcePaneProps) {
     highlightDisabledReason: unavailable,
   });
 
+  // The pages on screen are the board beside's business only (the faint amber edge): with no board
+  // beside, the page list is not asked, and the callback is one stable function, not a new closure
+  // per render (the list republishes its visible pages whenever the callback changes).
+  const reportPages = props.onVisiblePages;
+  const besideOpen = props.boardBeside === true;
+  const onVisibleChange = useCallback(
+    (visible: { readonly pages: readonly number[] }): void => reportPages?.(visible.pages),
+    [reportPages],
+  );
+  const visibleChange = besideOpen && reportPages !== undefined ? onVisibleChange : undefined;
+
   // A selection dragged out of the page is a passage in the air: the board beside (the split view,
   // #344) shows where it would land and takes it at the drop. Only when there is a board to take it.
   const canDragToBoard = props.onOpenBoard !== undefined;
+  // `capture` changes whenever the selection state does, and a native drag changes it (pointercancel
+  // reconciles the selection): the listeners must not be torn down, and the passage in the air not
+  // forgotten, in the middle of the very drag that set it. So they read the latest `capture`.
+  const captureRef = useRef(capture);
+  captureRef.current = capture;
   useEffect(() => {
     if (root === null || !canDragToBoard) return undefined;
     const start = (event: DragEvent): void => {
-      const captured = capture('text');
+      const captured = captureRef.current('text');
       if (captured === null) return;
       setDraggedPassage({ anchor: captured.anchor, text: captured.selection.text });
       if (event.dataTransfer !== null) {
@@ -282,9 +298,9 @@ export function SourcePane(props: SourcePaneProps) {
     return () => {
       root.removeEventListener('dragstart', start);
       root.removeEventListener('dragend', end);
-      setDraggedPassage(null);
     };
-  }, [root, capture, canDragToBoard]);
+  }, [root, canDragToBoard]);
+  useEffect(() => () => setDraggedPassage(null), []);
 
   // A settled selection is painted by the overlay as one band per line (#346), on at most two pages
   // (what the capture measures); the native highlight goes transparent meanwhile. Anything else keeps
@@ -409,9 +425,7 @@ export function SourcePane(props: SourcePaneProps) {
         onTextLayer={onTextLayer}
         figureRegionsOf={(pageIndex) => figuresByPage.get(pageIndex)}
         onViewportResize={props.onViewportResize}
-        {...(props.onVisiblePages === undefined
-          ? {}
-          : { onVisibleChange: (visible) => props.onVisiblePages?.(visible.pages) })}
+        {...(visibleChange === undefined ? {} : { onVisibleChange: visibleChange })}
         initialPosition={props.initialPosition}
         onPositionChange={props.onPositionChange}
         renderOverlay={(pageIndex, meta) => (
