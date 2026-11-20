@@ -18,7 +18,12 @@ const PARTIAL =
 function shown(text: string, state: 'live' | 'done' | 'cut'): string {
   const view = answerView('n1', text, state, []);
   const { container } = render(
-    <AnswerBody blocks={view.model.blocks} streaming={state === 'live'} general={false} />,
+    <AnswerBody
+      blocks={view.model.blocks}
+      streaming={state === 'live'}
+      general={false}
+      onShow={() => undefined}
+    />,
   );
   return (container.textContent ?? '').replace(/\s+/g, ' ').trim();
 }
