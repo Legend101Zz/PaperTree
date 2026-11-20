@@ -79,8 +79,7 @@ letters or leader lines; labels with maths (`$…$`, or bare TeX like `√d_k` m
 by `lib/MathText` in a `foreignObject`; the `<svg role="img">` carries a `<title>` and a `<desc>` listing the
 parts and arrows in order. The standalone plate (`PlateDrawing`, `layout.ts`) is unchanged. Tests:
 `test/diagram-layered.spec.ts` (the ten reviewed fences: no overlap, every arrow parent -> child, none through a
-box, fits 520 and 300), `test/diagram-inline.spec.tsx`; `test/diagram-render-fixtures.spec.tsx` writes them as SVG
-when `PT_DIAGRAM_SVG_DIR` is set.
+box, fits 520 and 300), `test/diagram-inline.spec.tsx`.
 
 ## On screen
 
