@@ -47,17 +47,17 @@ export function ExportSheet({ tree, title, sourceOf, onClose }: ExportSheetProps
   };
 
   return (
-    <div className="pt-sheet" role="dialog" aria-label="Export Markdown" aria-modal="false">
-      <div className="pt-sheet__head">
-        <h2 className="pt-sheet__title">Export Markdown</h2>
+    <div className="pt-xsheet" role="dialog" aria-label="Export Markdown" aria-modal="false">
+      <div className="pt-xsheet__head">
+        <h2 className="pt-xsheet__title">Export Markdown</h2>
         <button type="button" className="pt-btn pt-btn--outline" onClick={onClose}>
           Close
         </button>
       </div>
-      <fieldset className="pt-sheet__toggles">
-        <legend className="pt-sheet__legend">Include</legend>
+      <fieldset className="pt-xsheet__toggles">
+        <legend className="pt-xsheet__legend">Include</legend>
         {TOGGLES.map((toggle, i) => (
-          <label key={toggle.key} className="pt-sheet__toggle">
+          <label key={toggle.key} className="pt-xsheet__toggle">
             <input
               ref={i === 0 ? first : undefined}
               type="checkbox"
@@ -69,14 +69,14 @@ export function ExportSheet({ tree, title, sourceOf, onClose }: ExportSheetProps
         ))}
       </fieldset>
       {/* eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- a scrolling region must be reachable by keyboard */}
-      <pre className="pt-sheet__md" tabIndex={0} aria-label="The Markdown">
+      <pre className="pt-xsheet__md" tabIndex={0} aria-label="The Markdown">
         {markdown}
       </pre>
-      <div className="pt-sheet__foot">
+      <div className="pt-xsheet__foot">
         <button type="button" className="pt-btn pt-btn--primary" onClick={copy}>
           Copy
         </button>
-        <span role="status" className="pt-sheet__said">
+        <span role="status" className="pt-xsheet__said">
           {copied === 'yes'
             ? 'Copied.'
             : copied === 'no'
