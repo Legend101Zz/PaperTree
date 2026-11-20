@@ -163,6 +163,41 @@ describe('Explain on a figure', () => {
     expect(screen.getByText('The 56-layer net is worse.')).toBeTruthy();
   });
 
+  it('the crop is a thumbnail (240 px tall at most, aspect kept); a click shows it large, Esc puts it back and keeps the panel', async () => {
+    installFetch(routes());
+    render(
+      <TestQueryProvider>
+        <Body />
+      </TestQueryProvider>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'explain figure' }));
+    await waitFor(() => expect(screen.getByText(/The curves show/)).toBeTruthy());
+
+    const css = readFileSync(
+      `${process.cwd()}/src/features/explain/components/imageHead.css`,
+      'utf8',
+    );
+    expect(css).toMatch(/--pt-explain-crop-max: 240px/);
+    expect(css).toMatch(
+      /\[data-large='false'\] \.pt-crop \{[^}]*max-block-size: var\(--pt-explain-crop-max\);[^}]*object-fit: contain;/,
+    );
+
+    const head = document.querySelector<HTMLElement>('[data-explain-crop]')!;
+    expect(head.getAttribute('data-large')).toBe('false');
+    const toggle = within(head).getByRole('button', { name: 'Show the picture larger' });
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+    fireEvent.click(toggle);
+    expect(head.getAttribute('data-large')).toBe('true');
+    const shrink = within(head).getByRole('button', { name: 'Show the picture smaller' });
+    expect(shrink.getAttribute('aria-expanded')).toBe('true');
+
+    // Esc from the picture closes the picture, and the panel stays open.
+    fireEvent.keyDown(shrink, { key: 'Escape' });
+    expect(head.getAttribute('data-large')).toBe('false');
+    expect(screen.getByText(/The curves show/)).toBeTruthy();
+    expect(document.querySelector('[data-explain-crop]')).not.toBeNull();
+  });
+
   it('a follow-up is an ordinary follow-up in the same thread, and the crop stays', async () => {
     const { calls } = installFetch(routes());
     render(
