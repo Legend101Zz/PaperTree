@@ -229,7 +229,9 @@ test('branch a conversation: ask, branch from words, focus a path, tidy, fold, o
   // Fold: the answer and what hangs from it become a pill that says what it holds; click unfolds.
   await second.click({ position: { x: 24, y: 8 } });
   // The card's own Fold (the board bar has one too, for the focused answer).
-  await second.getByRole('button', { name: 'Fold', exact: true }).click();
+  const fold = second.getByRole('button', { name: 'Fold', exact: true });
+  await fold.scrollIntoViewIfNeeded();
+  await fold.click();
   const pill = page.locator('.pt-pill').first();
   await expect(pill).toContainText(/\d+ answers?/);
   await pill.getByRole('button').click();
