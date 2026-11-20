@@ -42,7 +42,7 @@ ATTACHED_PASSAGE_CHARS: Final = 600
 DEFAULT_FIRST_QUESTION: Final = "Explain this passage."
 _MARKER: Final = re.compile(r"\s*\[b\d+(?:\s*,\s*b\d+)*\]")
 _FENCE: Final = re.compile(
-    r"^```(?:diagram|check)[^\n]*\n.*?^```[ \t]*\n?", re.MULTILINE | re.DOTALL
+    r"^```(?:diagram|mermaid|check)[^\n]*\n.*?^```[ \t]*\n?", re.MULTILINE | re.DOTALL
 )
 _TLDR: Final = re.compile(r"^##\s*TL;DR[ \t]*\n+(.*?)(?=^##\s|\Z)", re.MULTILINE | re.DOTALL | re.I)
 _SENTENCE_END: Final = re.compile(r"(?<=[.!?])\s+")
@@ -71,7 +71,7 @@ class PathPlan:
 
 
 def unmarked(text: str) -> str:
-    """An answer without its handles and its diagram and check fences.
+    """An answer without its handles and its figure (mermaid, or diagram) and check fences.
 
     The ``[bN]`` handles named passages of another run; the rest of the Markdown is kept.
     """

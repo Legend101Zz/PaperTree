@@ -387,7 +387,7 @@ describe('asking from the Uses line', () => {
     const { result } = await mount(tree());
     await act(() => result.current.branch.ask.quick('a', SPAN, 'diagram'));
     expect(api.ask.mock.calls[0]![2]).toMatchObject({
-      question: 'Draw this as a small diagram.',
+      question: 'Draw a diagram of this.',
       quick: 'diagram',
       span: SPAN,
       uses: { diagram: 'always' },

@@ -754,7 +754,7 @@ class Run {
   }
 
   /**
-   * `final_text`: an explain, ask or image answer has its ```diagram and ```check fences tidied
+   * `final_text`: an explain, ask or image answer has its ```mermaid (or older ```diagram) and ```check fences tidied
    * (answer.ts); every other kind is exactly what streamed.
    */
   private tidied(): string {

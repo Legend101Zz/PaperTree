@@ -5,14 +5,16 @@
  * that shows an answer: the Explain panel, the board's explanation card and the notebook page. It
  * draws the answer's blocks in reading order: the small lower-case section labels, each paragraph
  * through `AnswerText` (the TL;DR as the lead), the answer's ONE quiet source line at the end of "In
- * the paper" (#340; an older unsectioned answer keeps a line under each paragraph with handles), the figure of a ```diagram fence, and, only where a `check` is handed in, the Check yourself block.
+ * the paper" (#340; an older unsectioned answer keeps a line under each paragraph with handles),
+ * the figure of a ```mermaid fence (an older stored answer's ```diagram fence keeps its plate
+ * drawing), and, only where a `check` is handed in, the Check yourself block.
  *
  * Small surfaces pass no `check`: the block is heavy in a 328 px card (#349) and a notebook page
  * has no one to ask, so it is simply not drawn there, and never as raw text.
  */
 import { SourceLine } from '@papertree/ui';
 
-import { InlineDiagram } from '@/features/diagram';
+import { InlineDiagram, MermaidDiagram } from '@/features/diagram';
 
 import { SECTION_LABEL } from '../model/sections';
 import { AnswerText, type AnswerTextProps } from './AnswerText';
@@ -91,6 +93,8 @@ export function AnswerBody({
         );
       case 'diagram':
         return <InlineDiagram key={i} body={block.body} closed={block.closed} />;
+      case 'mermaid':
+        return <MermaidDiagram key={i} body={block.body} closed={block.closed} />;
       case 'check':
         return check === undefined ? null : (
           <CheckYourself key={i} spec={block.spec} state={check.state} onChange={check.onChange} />

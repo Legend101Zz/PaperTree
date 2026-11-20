@@ -128,7 +128,7 @@ export type Kind = 'explain' | 'ask' | 'summary' | 'diagram' | 'topic' | 'glance
 /** The reader's level an explain/ask answer is written for (v0.3, #339). */
 export type Level = 'new' | 'familiar' | 'expert';
 export const LEVELS: readonly Level[] = ['new', 'familiar', 'expert'];
-/** Whether an answer may, must or must not carry its ```diagram fence (v0.3, #343). */
+/** Whether an answer may, must or must not carry its one figure fence (```mermaid; v0.3, #343). */
 export type DiagramUse = 'may' | 'never' | 'always';
 
 export type PromptVersion =
@@ -186,7 +186,7 @@ export interface RunRequest {
   readonly level?: Level;
   /** v0.3: end the answer with one ```check fence. The API decides; absent reads false. */
   readonly check?: boolean;
-  /** v0.3 (#343): the ```diagram fence is optional (`may`), required or refused; absent reads `may`. */
+  /** v0.3 (#343): the figure fence (```mermaid) is optional (`may`), required or refused; absent reads `may`. */
   readonly diagram?: DiagramUse;
   /** v0.3 (#348): the picture(s) of an `image` run; present exactly on that kind. */
   readonly images?: readonly RunImage[];

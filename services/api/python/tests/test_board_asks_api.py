@@ -497,7 +497,7 @@ def test_quick_asks_set_the_question_level_and_diagram(tmp_path: Path) -> None:
         _, diagram = b.ask(b.root, quick="diagram")
         assert simpler["question"] == "Explain this more simply."
         assert example["question"] == "Give me a concrete example of this."
-        assert diagram["question"] == "Draw this as a small diagram."
+        assert diagram["question"] == "Draw a diagram of this."
         first, second, third = h.fake.requests
         assert (first["level"], first["diagram"]) == ("new", "may")
         assert (second["level"], second["diagram"]) == ("familiar", "may")
@@ -750,3 +750,7 @@ def test_unmarked_drops_handles_diagram_and_check_fences_but_keeps_the_markdown(
     out = board_path.unmarked(text)
     assert "[b1]" not in out and "diagram" not in out and "check" not in out
     assert out.startswith("## TL;DR\nA idea.") and "$$y=x$$" in out
+    mermaid = "## How\nIt adds.\n\n```mermaid\nflowchart LR\n  a --> b\n```\n\nDone."
+    kept = board_path.unmarked(mermaid)
+    assert "mermaid" not in kept and "flowchart" not in kept and "-->" not in kept
+    assert kept.startswith("## How\nIt adds.") and kept.endswith("Done.")

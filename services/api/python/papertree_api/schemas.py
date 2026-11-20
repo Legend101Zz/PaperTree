@@ -1812,8 +1812,8 @@ class AgentRunRequest(Wire):
     #: ```check fence (the API decides: contracts.md §2.5). Both are optional on the agent's side.
     level: AnswerLevel = "familiar"
     check: bool = False
-    #: v0.3 (#343): whether the answer may / must / must not carry a ```diagram fence. `may` is the
-    #: tutor shape's own rule; a board ask's `uses.diagram` sets the others.
+    #: v0.3 (#343): whether the answer may / must / must not carry its figure fence (```mermaid).
+    #: `may` is the tutor shape's own rule; a board ask's `uses.diagram` sets the others.
     diagram: Literal["may", "never", "always"] = "may"
     #: v0.3 (#348): the crop(s) of an `image` run: required there, refused on every other kind.
     images: list[AgentImage] | None = omittable(min_length=1, max_length=2)

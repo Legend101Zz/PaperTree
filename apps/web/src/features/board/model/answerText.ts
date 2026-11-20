@@ -3,8 +3,9 @@
  * text, for the outline, the Markdown export and the "what the AI will read" list.
  *
  * The answer is the Markdown the model wrote: `## TL;DR` and friends, `$…$` maths, an optional
- * ```diagram fence, an optional ```check fence, and `[b3]` handles on sentences that rest on the
- * paper. An older or odd answer without those sections degrades to plain paragraphs.
+ * ```mermaid fence (an older answer's: ```diagram), an optional ```check fence, and `[b3]`
+ * handles on sentences that rest on the paper. An older or odd answer without those sections
+ * degrades to plain paragraphs.
  */
 
 /** One block of an answer. */
@@ -58,7 +59,7 @@ export function answerBlocks(text: string): AnswerBlock[] {
   for (const line of text.split('\n')) {
     if (fence !== null) {
       if (line.trimStart().startsWith('```')) {
-        if (fence.lang === 'diagram') out.push({ kind: 'diagram' });
+        if (fence.lang === 'diagram' || fence.lang === 'mermaid') out.push({ kind: 'diagram' });
         else if (fence.lang === 'check') out.push({ kind: 'check' });
         else out.push({ kind: 'paragraph', text: fence.lines.join('\n') });
         fence = null;

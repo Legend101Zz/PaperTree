@@ -88,7 +88,7 @@ router = APIRouter()
 QUICK_QUESTIONS: Final = {
     "simpler": "Explain this more simply.",
     "example": "Give me a concrete example of this.",
-    "diagram": "Draw this as a small diagram.",
+    "diagram": "Draw a diagram of this.",
 }
 #: Where a new card is first put (the web's Tidy layout moves it; these only keep it off its
 #: parent): to the right of the parent, or below it.
