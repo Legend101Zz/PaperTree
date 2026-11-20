@@ -163,10 +163,11 @@ describe('the explain and ask prompts (v0.3, #339)', () => {
     ]) {
       assert.ok(prompt.includes(type), type);
     }
-    assert.match(prompt, /6-15 nodes/);
+    assert.match(prompt, /flowchart TD/);
+    assert.match(prompt, /Hard limits, checked/);
     assert.match(prompt, /never one letter/);
     assert.match(prompt, /numbers only from the passages/);
-    assert.match(prompt, /no \$, HTML, click, links, style or colours/);
+    assert.match(prompt, /no \$, <br>, HTML, quotes in titles, click, links, style or colours/);
     assert.doesNotMatch(prompt, /"t":"plate"|```diagram|4-8 parts/, 'the plate wording is gone');
   });
 
@@ -199,8 +200,8 @@ describe('the explain and ask prompts (v0.3, #339)', () => {
     const seed = { ...request('explain').seed!, passages: [] };
     const worst = base('explain', { check: true, level: 'new', seed });
     assert.ok(
-      worst.length < 3050,
-      `the old 2,700 plus the one mermaid type menu and example: ${String(worst.length)}`,
+      worst.length < 3260,
+      `the old 2,700 plus the mermaid type menu, hard limits and example: ${String(worst.length)}`,
     );
     assert.doesNotMatch(base('explain'), /Cite every claim/);
     assert.match(base('explain'), /^Example: "## TL;DR/m, 'one compact example of the shape');
@@ -231,8 +232,10 @@ describe('the explain and ask prompts are a short contract (#339, P2)', () => {
   // Length of the same prompt, passages removed. Before #339 (git 91a3109): 2772 / 2670. With the
   // plate-fence example (v0.3 W6): 2698 / 2655. The mermaid fence swaps that 946-char plate
   // instruction for a 989-char one (a type menu and a 5-box flowchart): +43 characters, 2741 / 2698.
-  // The budget is that, rounded up by 20; a longer prompt needs a reason written here.
-  const BUDGET = { 'explain-v1': 2760, 'ask-v1': 2720 } as const;
+  // W6 readability: the per-type hard limits (the agent counts and enforces them, figure.ts) make
+  // it 1188 chars, +199: 2940 / 2897. The budget is that, rounded up by 20; a longer prompt needs a
+  // reason written here.
+  const BUDGET = { 'explain-v1': 2960, 'ask-v1': 2920 } as const;
 
   for (const version of ['explain-v1', 'ask-v1'] as const) {
     test(`${version}: within its budget, the mermaid instruction and example included`, () => {
@@ -265,7 +268,7 @@ describe('a board ask: the diagram fence and the tools (#343)', () => {
     assert.doesNotMatch(ask({}), /exactly one ```mermaid fence/);
     assert.match(ask({ diagram: 'always' }), /exactly one ```mermaid fence/);
     assert.match(ask({ diagram: 'always' }), /of the type that fits the idea best/);
-    assert.match(ask({ diagram: 'always' }), /^flowchart LR$/m, 'the example still comes with it');
+    assert.match(ask({ diagram: 'always' }), /^flowchart TD$/m, 'the example still comes with it');
     const never = ask({ diagram: 'never' });
     assert.match(never, /No ```mermaid fence/);
     assert.doesNotMatch(never, /sequenceDiagram|flowchart/);

@@ -50,7 +50,7 @@ describe('the default brain answers in the v0.3 shape', () => {
     }
     assert.equal((text.match(/\$[^$\n]+\$/g) ?? []).length, 1);
     assert.deepEqual(text.match(/\[b\d+\]/g), ['[b3]']);
-    assert.match(text, /^```mermaid\nflowchart LR\n {2}subgraph /m, 'an explain draws a flowchart');
+    assert.match(text, /^```mermaid\nflowchart TD\n {2}subgraph /m, 'an explain draws a flowchart');
     assert.match(text, /The selected passage says: /);
     assert.doesNotMatch(text, /```check/);
   });

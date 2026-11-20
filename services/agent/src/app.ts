@@ -42,6 +42,7 @@ import {
 } from './models.ts';
 import { createFauxModel, defaultBrain, type FauxBrain, type FauxModel } from './faux.ts';
 import type { Logger } from './log.ts';
+import type { ParseVerdict } from './mermaid-parse.ts';
 import { type ActiveRun, startRun } from './run.ts';
 import { createPaperSession } from './session.ts';
 import { SseWriter } from './sse.ts';
@@ -66,6 +67,8 @@ export interface AppOptions {
   readonly modelOverride?: (model: Model<any>) => Model<any>;
   /** TESTS ONLY, never from the environment: the provider's time-to-headers bound (§3.1: 30 s). */
   readonly providerTimeoutMs?: number;
+  /** TESTS ONLY: replaces the worker-thread `mermaid.parse` (mermaid-parse.ts) of the figure step. */
+  readonly parseMermaid?: (body: string) => Promise<ParseVerdict>;
 }
 
 export interface Health {
@@ -481,6 +484,7 @@ export async function createAgentApp(options: AppOptions): Promise<AgentApp> {
         ...(options.providerTimeoutMs === undefined
           ? {}
           : { providerTimeoutMs: options.providerTimeoutMs }),
+        ...(options.parseMermaid === undefined ? {} : { parseMermaid: options.parseMermaid }),
       },
       gone.signal,
     );

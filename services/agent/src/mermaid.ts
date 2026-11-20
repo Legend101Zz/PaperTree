@@ -11,10 +11,9 @@
  *   dropped  `style`, `classDef`, `linkStyle` lines and `:::class` suffixes: the app themes the
  *            figure, a colour the model picked would fight it (a cosmetic line is cut, not the fence)
  *
- * A real parse is NOT done here: Mermaid's parser needs a DOM and a ~1 MB dependency, and this
- * service has neither (offline, Node only). The web parses with `mermaid.parse` before it draws
- * and shows nothing when that fails, so a fence that passes these checks and still does not parse
- * costs one quiet placeholder, never raw code.
+ * A real parse is NOT done here: it needs a DOM, so it runs in a worker thread (mermaid-parse.ts)
+ * and is orchestrated, with the repairs and the size caps, by figure.ts. This file is the cheap,
+ * synchronous, safety-first check that runs before it.
  */
 
 /** The diagram types the prompt offers (plus `graph`, the older name of a flowchart). */

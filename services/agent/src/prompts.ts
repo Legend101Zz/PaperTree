@@ -247,15 +247,17 @@ const CHECK_EXAMPLE = [
  */
 export const INLINE_DIAGRAM = [
   'When a picture explains it better than words, add one ```mermaid fence in "## How it works" ' +
-    'of the type that fits: flowchart (pipelines, architectures: a subgraph per component, ' +
-    'labelled edges), sequenceDiagram (steps over time: client/server, encoder/decoder, training ' +
-    "loop), stateDiagram-v2 (phases), mindmap (how concepts relate), timeline (an idea's " +
-    'history), quadrantChart (trade-offs), xychart-beta (a trend: numbers only from the ' +
-    'passages), classDiagram or erDiagram (structures). 6-15 nodes if the mechanism warrants it, ' +
-    'fewer if simple. Labels are words, never one letter; maths plain ("y = F(x) + x"); no $, ' +
-    'HTML, click, links, style or colours. Skip it for a plain definition. Example:',
+    'of the type that fits: flowchart TD (pipelines, architectures; labelled edges; a subgraph per ' +
+    'component; LR only for 4 nodes or fewer), sequenceDiagram (steps over time), stateDiagram-v2 ' +
+    '(phases), mindmap (how concepts relate), timeline (history), quadrantChart (trade-offs), ' +
+    'xychart-beta (a trend), classDiagram or erDiagram. Hard limits, checked: flowchart 12 nodes; ' +
+    'mindmap one root, 12 nodes, 3 levels, no parentheses in text; sequenceDiagram 4 participants, ' +
+    '10 messages; timeline 6 periods with 2 short events each (more: a flowchart TD); quadrantChart ' +
+    '6 points; xychart-beta 8 points, numbers only from the passages. Labels 5 words at most, never ' +
+    'one letter; maths plain ("y = F(x) + x"); no $, <br>, HTML, quotes in titles, click, links, ' +
+    'style or colours. Skip it for a plain definition. Example:',
   '```mermaid',
-  'flowchart LR',
+  'flowchart TD',
   '  subgraph search["Two indexes"]',
   '    keyword["Keyword index"]',
   '    vector["Vector index"]',

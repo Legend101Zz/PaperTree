@@ -410,7 +410,7 @@ function seedPassages(systemPrompt: string): Array<{ handle: string; text: strin
 
 /** The faux explain figure: a flowchart with a subgraph and labelled edges (Mermaid). */
 export const FAUX_FLOWCHART = [
-  'flowchart LR',
+  'flowchart TD',
   '  subgraph block["Residual block"]',
   '    layers["Layers learn F(x)"]',
   '    add(("Add"))',

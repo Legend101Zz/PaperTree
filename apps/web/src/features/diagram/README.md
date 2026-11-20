@@ -73,7 +73,10 @@ plate once it settles (`features/explain/model/messages.mergeStored`), keyed by 
 New answers draw their figure as a ```mermaid fence in "How it works"; the model picks the type that fits the
 idea (flowchart, sequenceDiagram, stateDiagram-v2, mindmap, timeline, quadrantChart, xychart-beta, classDiagram,
 erDiagram). The agent checks the fence (`services/agent/src/mermaid.ts`: allowed types, no `%%{` directive,
-`click`, `href`, HTML, size caps; structural only, no parser there) and drops an unsafe one.
+`click`, `href`, HTML, size caps) and drops an unsafe one; then the agent's figure step (`figure.ts`) runs the REAL
+`mermaid.parse` in a worker thread (`mermaid-parse.ts`, happy-dom shim isolated there), repairs what it can
+(`mermaid-repair.ts`: split statements, quote shape characters, one root, drop `<br>`), asks the model once, else
+drops the fence, and enforces the size caps the prompt states.
 `components/MermaidDiagram.tsx` draws what is left:
 
 - `mermaid` is imported only in `mermaid/render.ts`, with `import('mermaid')`, only once a fence has CLOSED
@@ -90,13 +93,15 @@ erDiagram). The agent checks the fence (`services/agent/src/mermaid.ts`: allowed
   other values of those tokens; a `MutationObserver` on `<html>` (class, `data-pt-theme`, `data-pt-page`) and the
   OS scheme re-read them and the figure is drawn again only when the tokens really changed.
 - Mermaid's svg carries a `<style>` scoped to its own id (`#pt-mmd-N .node ...`, `createUserStyles`), so it cannot
-  restyle the page; strict mode sanitises labels. The figure scales to its room (`useMaxWidth`; ~520 panel, ~300
-  card, at most 420 px tall); one click on it ("larger") shows it at its natural width, scrolling sideways inside
-  its box; click, Enter/Space or Esc puts it back (the Explain image head's pattern). Its accessible name is
+  restyle the page; strict mode sanitises labels. The figure scales to its room but never below 0.7
+  (`mermaid/scale.ts`): a wider drawing keeps that scale and scrolls sideways inside its box, with a fade at the
+  edge it scrolls toward; its height is capped like a board card (`--pt-card-cap`, 60vh) and scrolls inside. One
+  click on it ("larger") shows it at its natural width; click, Enter/Space or Esc puts it back (the Explain image head's pattern). Its accessible name is
   "Diagram, <type in words>: first labels" (`mermaid/fence.ts`); the drawing itself is `aria-hidden`. No motion.
 - Tests: `test/mermaid-diagram.spec.tsx` (mermaid mocked: lazy load, parse first, failure, re-theme, larger),
   `test/mermaid-answer.spec.tsx` (streaming placeholder through `AnswerBody`), `test/mermaid-theme.spec.ts`,
-  `mermaid/fence.spec.ts`.
+  `mermaid/fence.spec.ts`, `mermaid/scale.spec.ts` (min scale, scroll, CSS contract), `mermaid/theme.spec.ts`
+  (no default rainbow per page/room), `components/MermaidDiagram.spec.tsx`.
 
 ### The older plate fence
 

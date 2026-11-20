@@ -139,10 +139,24 @@ export function tokensKey(tokens: FigureTokens): string {
  * @param t The tokens.
  * @returns Twelve `#rrggbb` fills.
  */
-function scale(t: FigureTokens): string[] {
+export function colourScale(t: FigureTokens): string[] {
   const tints = [t.accent, t.inkMuted, t.border, t.accent, t.inkMuted, t.border];
   return Array.from({ length: 12 }, (_, i) =>
-    mix(t.page, tints[i % 6] as string, 0.1 + 0.05 * (i % 3)),
+    mix(t.page, tints[i % 6] as string, 0.14 + 0.06 * (i % 3)),
+  );
+}
+
+/**
+ * Twelve stronger fills for the figures that need slices told apart by colour alone (a pie, the
+ * git-style branches a mind map's root uses): the same three tints, mixed further in.
+ *
+ * @param t The tokens.
+ * @returns Twelve `#rrggbb` fills.
+ */
+export function sliceScale(t: FigureTokens): string[] {
+  const tints = [t.accent, t.inkMuted, t.border, t.ink];
+  return Array.from({ length: 12 }, (_, i) =>
+    mix(t.page, tints[i % 4] as string, 0.3 + 0.1 * (Math.floor(i / 4) % 3)),
   );
 }
 
@@ -158,7 +172,8 @@ export function themeVariables(t: FigureTokens): Record<string, unknown> {
   const node = mix(t.page, t.rule, 0.55);
   const soft = mix(t.page, t.accent, 0.1);
   const cluster = mix(t.page, t.rule, 0.25);
-  const fills = scale(t);
+  const fills = colourScale(t);
+  const slices = sliceScale(t);
   const vars: Record<string, unknown> = {
     darkMode: dark,
     background: t.page,
@@ -244,10 +259,32 @@ export function themeVariables(t: FigureTokens): Record<string, unknown> {
       plotColorPalette: [t.accent, t.inkMuted, t.border, t.ink].join(','),
     },
   };
+  // Without these Mermaid derives the colour scales, the pie slices and the git branches (a mind
+  // map's root) by rotating the primary colour's hue: the rainbow the round-1 figures showed.
   fills.forEach((fill, i) => {
     vars[`cScale${String(i)}`] = fill;
+    vars[`cScalePeer${String(i)}`] = mix(fill, t.ink, 0.18);
     vars[`cScaleLabel${String(i)}`] = t.ink;
     vars[`cScaleInv${String(i)}`] = t.ink;
+  });
+  slices.forEach((fill, i) => {
+    vars[`pie${String(i + 1)}`] = fill;
+    if (i < 8) {
+      vars[`git${String(i)}`] = fill;
+      vars[`gitInv${String(i)}`] = t.ink;
+      vars[`gitBranchLabel${String(i)}`] = t.ink;
+      vars[`fillType${String(i)}`] = fills[i] as string;
+    }
+  });
+  Object.assign(vars, {
+    pieTitleTextColor: t.ink,
+    pieSectionTextColor: t.ink,
+    pieLegendTextColor: t.ink,
+    pieStrokeColor: t.border,
+    pieOuterStrokeColor: t.border,
+    pieStrokeWidth: '1px',
+    pieOuterStrokeWidth: '1px',
+    pieOpacity: '0.9',
   });
   return vars;
 }

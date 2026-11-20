@@ -13,10 +13,12 @@
  *  - A fence Mermaid cannot parse draws NOTHING (a hidden, empty figure): a quiet "diagram
  *    unavailable" note would put the app's failure into an answer that reads fine without the
  *    picture, and raw code is never shown. The old plate figure behaves the same way.
- *  - It scales to the room it has (the panel, or a board card about half as wide) and one click
- *    shows it at its natural size, scrolling sideways inside the figure; click, Enter/Space or Esc
- *    puts it back (the Explain image head's pattern, `ImageHead`). The figure's accessible name is
- *    its type and first labels; the drawing itself is hidden from assistive tech.
+ *  - It scales to the room it has (the panel, or a board card about half as wide) but never below
+ *    `MIN_SCALE` (`../mermaid/scale`): a wider drawing keeps that scale and scrolls sideways inside
+ *    the figure, with a fade at the edge it scrolls toward; its height is capped like a board card
+ *    (`--pt-card-cap`, 60vh) and scrolls inside. One click shows it at its natural size; click,
+ *    Enter/Space or Esc puts it back (the Explain image head's pattern, `ImageHead`). The figure's
+ *    accessible name is its type and first labels; the drawing itself is hidden from assistive tech.
  */
 import {
   useEffect,
@@ -31,6 +33,7 @@ import {
 
 import { mermaidName } from '../mermaid/fence';
 import { renderMermaid, type MermaidResult } from '../mermaid/render';
+import { fitFigure } from '../mermaid/scale';
 import { readTokens, tokensKey, type FigureTokens } from '../mermaid/theme';
 
 import './inline.css';
@@ -80,12 +83,38 @@ function useTokens(ref: RefObject<HTMLElement | null>, active: boolean): FigureT
   return tokens;
 }
 
+/**
+ * The width the figure has, measured on its scroll box (so padding and the frame are out of it),
+ * and kept current when the panel or the card is resized. 0 until measured, and with no
+ * ResizeObserver (a test DOM), which `fitFigure` reads as "natural size".
+ *
+ * @param ref The scroll box's element.
+ * @param active Whether the box exists yet (the drawing has landed).
+ * @returns The box's inner width in px.
+ */
+function useRoom(ref: RefObject<HTMLElement | null>, active: boolean): number {
+  const [room, setRoom] = useState(0);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!active || el === null) return undefined;
+    const read = (): void => setRoom(Math.floor(el.clientWidth));
+    read();
+    if (typeof ResizeObserver !== 'function') return undefined;
+    const observer = new ResizeObserver(read);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [ref, active]);
+  return room;
+}
+
 /** The figure of one ```mermaid fence. */
 export function MermaidDiagram({ body, closed }: MermaidDiagramProps): ReactNode {
   const ref = useRef<HTMLElement | null>(null);
   const tokens = useTokens(ref, closed);
   const [result, setResult] = useState<MermaidResult | null>(null);
   const [large, setLarge] = useState(false);
+  const box = useRef<HTMLSpanElement | null>(null);
+  const [atEnd, setAtEnd] = useState(false);
 
   useEffect(() => {
     if (!closed || tokens === null) return undefined;
@@ -99,6 +128,10 @@ export function MermaidDiagram({ body, closed }: MermaidDiagramProps): ReactNode
   }, [body, closed, tokens]);
 
   const drawn = result?.ok === true ? result : null;
+  const room = useRoom(box, drawn !== null);
+  const fit = fitFigure(drawn?.width ?? 0, room, large);
+  // A new size starts at the left edge again: the fade is back until the reader reaches the end.
+  useLayoutEffect(() => setAtEnd(false), [fit.width, room]);
   if (result?.ok === false) {
     // Nothing is shown; the element stays so the theme reader and tests can find it.
     return <figure ref={ref} hidden data-mermaid-failed="" />;
@@ -121,33 +154,44 @@ export function MermaidDiagram({ body, closed }: MermaidDiagramProps): ReactNode
       className="pt-diagram-inline pt-mmd"
       data-mermaid=""
       data-large={large}
+      data-scrolls={fit.scrolls && !atEnd}
       aria-label={mermaidName(body)}
-      style={{ '--pt-mmd-w': `${String(drawn.width)}px` } as CSSProperties}
+      style={{ '--pt-mmd-w': `${String(fit.width)}px` } as CSSProperties}
     >
-      <button
-        type="button"
-        className="pt-mmd__btn"
-        aria-expanded={large}
-        aria-label={label}
-        title={large ? 'Show smaller (Esc)' : 'Show larger'}
-        onClick={() => setLarge((on) => !on)}
-        onKeyDown={(event: KeyboardEvent<HTMLButtonElement>) => {
-          if (event.key !== 'Escape' || !large) return;
-          // The figure goes back first; the panel stays open.
-          event.stopPropagation();
-          setLarge(false);
+      <span
+        ref={box}
+        className="pt-mmd__scroll"
+        onScroll={(event) => {
+          const el = event.currentTarget;
+          setAtEnd(el.scrollLeft + el.clientWidth >= el.scrollWidth - 2);
         }}
       >
-        <span
-          className="pt-mmd__svg"
-          aria-hidden="true"
-          // Mermaid's own output, sanitised by `securityLevel: 'strict'` (DOMPurify) before it is returned.
-          dangerouslySetInnerHTML={{ __html: drawn.svg }}
-        />
-        <span className="pt-mmd__hint" aria-hidden="true">
-          {large ? 'smaller' : 'larger'}
-        </span>
-      </button>
+        <button
+          type="button"
+          className="pt-mmd__btn"
+          aria-expanded={large}
+          aria-label={label}
+          title={large ? 'Show smaller (Esc)' : 'Show larger'}
+          onClick={() => setLarge((on) => !on)}
+          onKeyDown={(event: KeyboardEvent<HTMLButtonElement>) => {
+            if (event.key !== 'Escape' || !large) return;
+            // The figure goes back first; the panel stays open.
+            event.stopPropagation();
+            setLarge(false);
+          }}
+        >
+          <span
+            className="pt-mmd__svg"
+            aria-hidden="true"
+            // Mermaid's own output, sanitised by `securityLevel: 'strict'` (DOMPurify) before it is returned.
+            dangerouslySetInnerHTML={{ __html: drawn.svg }}
+          />
+        </button>
+      </span>
+      <span className="pt-mmd__hint" aria-hidden="true">
+        {large ? 'smaller' : 'larger'}
+      </span>
+      <span className="pt-mmd__fade" aria-hidden="true" />
     </figure>
   );
 }

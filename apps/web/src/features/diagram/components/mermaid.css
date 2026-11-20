@@ -32,27 +32,30 @@
   line-height: 0;
 }
 
-/* Fit to the room: Mermaid's svg is width 100% with a natural max-width; keep it from filling the panel. */
-.pt-mmd[data-large='false'] .pt-mmd__svg svg {
+/*
+ * The scroll box holds the drawing: it is drawn at `--pt-mmd-w` (the room, but never below the
+ * minimum readable scale; scale.ts), wider than the box it scrolls sideways, and its height is
+ * capped like a board card (--pt-card-cap, 60vh) and scrolls inside.
+ */
+.pt-mmd {
+  position: relative;
+}
+
+.pt-mmd__scroll {
   display: block;
-  margin-inline: auto;
-  inline-size: 100%;
-  block-size: auto;
-  max-block-size: 420px;
+  flex: 1 1 auto;
+  min-inline-size: 0;
+  overflow: auto;
+  max-block-size: var(--pt-card-cap, 60vh);
+  overscroll-behavior: contain;
 }
 
-/* Larger: its natural width, the figure scrolls sideways inside its own box. */
-.pt-mmd[data-large='true'] {
-  overflow-x: auto;
-}
-
-.pt-mmd[data-large='true'] .pt-mmd__btn {
+.pt-mmd__scroll .pt-mmd__btn {
   inline-size: max-content;
   min-inline-size: 100%;
-  cursor: zoom-out;
 }
 
-.pt-mmd[data-large='true'] .pt-mmd__svg svg {
+.pt-mmd__svg svg {
   display: block;
   margin-inline: auto;
   inline-size: var(--pt-mmd-w, 100%);
@@ -60,10 +63,32 @@
   block-size: auto;
 }
 
+.pt-mmd[data-large='true'] .pt-mmd__btn {
+  cursor: zoom-out;
+}
+
+/* A fade at the edge the drawing scrolls toward, gone once the end is reached or it all fits. */
+.pt-mmd__fade {
+  position: absolute;
+  inset-block: 6px;
+  inset-inline-end: 6px;
+  inline-size: 28px;
+  pointer-events: none;
+  background: linear-gradient(to right, transparent, var(--pt-page));
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.pt-mmd[data-scrolls='true'] .pt-mmd__fade {
+  opacity: 1;
+}
+
 .pt-mmd__hint {
   position: absolute;
   inset-block-end: 0;
   inset-inline-end: 0;
+  z-index: 1;
+  pointer-events: none;
   padding: 0 4px;
   font: 13px var(--pt-font-ui);
   line-height: 1.4;

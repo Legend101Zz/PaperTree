@@ -4,8 +4,10 @@
  * is still read) and, when the request says `check: true`, one ```check fence. The model is trusted
  * with neither, so `tidyAnswer` runs on `done.final_text`, the text the API stores:
  *
- *   mermaid  the figure the prompt asks for; checked by mermaid.ts (allowed diagram types, no
- *            directive / click / HTML, size caps); an unsafe or unknown fence is removed whole
+ *   mermaid  the figure the prompt asks for; cosmetics first (mermaid-repair.ts: `<br>`, quotes in a
+ *            title, a wide LR flowchart), then checked by mermaid.ts (allowed diagram types, no
+ *            directive / click / HTML, size caps); an unsafe or unknown fence is removed whole.
+ *            The REAL parse, the repairs and the caps are figure.ts's, which runs after this
  *   diagram  the older plate fence; its lines are validated with the diagram run's own reader
  *            (diagram.ts), invalid lines dropped; a fence with no part left is removed
  *            (at most ONE figure in all, mermaid or diagram: a second is removed)
@@ -18,6 +20,7 @@
  */
 import { cleanDiagramFence } from './diagram.ts';
 import { cleanMermaidFence } from './mermaid.ts';
+import { tidyMermaidText } from './mermaid-repair.ts';
 
 /** The four keys of a ```check fence, in the order they are written back. */
 export const CHECK_KEYS = ['prompt', 'accept', 'right', 'hint'] as const;
@@ -85,7 +88,8 @@ export function tidyAnswer(text: string, check: boolean, diagram = true): string
     let kept: string | null = null;
     if (closed) {
       if (lang === 'diagram' && figures === 0 && diagram) kept = cleanDiagramFence(body);
-      if (lang === 'mermaid' && figures === 0 && diagram) kept = cleanMermaidFence(body);
+      if (lang === 'mermaid' && figures === 0 && diagram)
+        kept = cleanMermaidFence(tidyMermaidText(body).body);
       if (lang === 'check' && checks === 0 && check) kept = cleanCheckFence(body);
     }
     if (kept === null) removed = true;
