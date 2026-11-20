@@ -14,6 +14,7 @@ import {
   tidyResets,
   type LayoutInput,
 } from './layout';
+import { DRAFT_ID } from './display';
 import { buildTree } from './tree';
 import { node, resetClock, spanOf } from './treeFixtures';
 
@@ -312,6 +313,22 @@ describe('layoutBoard: edges', () => {
       'viaSpan',
     ]);
     expect(layout.edges.every((e) => e.parentId.length > 0)).toBe(true);
+  });
+
+  it('draws the follow-up stub of the newest answer as ONE more down line, the pending one', () => {
+    // second -> third is a real down line; the focused third offers its own stub (the draft), whose
+    // line is the only other down line. The board marks the draft's line `data-pending`.
+    const tree = buildTree([
+      node({ id: 'p', x: 0, y: 0 }),
+      node({ id: 'second', parent: 'p' }),
+      node({ id: 'third', parent: 'second', branch: 'down' }),
+      node({ id: DRAFT_ID, parent: 'third', branch: 'down' }),
+    ]);
+    const edges = layoutBoard(tree, input({ p: 100, second: 150, third: 150 })).edges;
+    const down = edges.filter((e) => e.branch === 'down');
+    expect(down.map((e) => e.id).sort()).toEqual([DRAFT_ID, 'third'].sort());
+    expect(down.filter((e) => e.id !== DRAFT_ID)).toHaveLength(1);
+    expect(new Set(edges.map((e) => e.id)).size).toBe(edges.length);
   });
 
   it('carries the line with a dragged parent, because both ends move', () => {

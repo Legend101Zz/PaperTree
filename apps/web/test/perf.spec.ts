@@ -255,6 +255,30 @@ describe('imperative scrolling targets are arithmetic', () => {
     const biased = offsetForBlock(layout, 9, bbox, 2, { margin: 24, viewportHeight: 900 });
     expect(biased.top).toBeLessThan(pinned.top);
   });
+
+  it('places the block above what covers the foot of the view (the phone peek sheet, #205)', () => {
+    const bbox: [number, number, number, number] = [72, 300, 540, 340];
+    const viewport = 700;
+    const inset = 120;
+    const scale = 2;
+    const pageTop = layout.offsets[9] as number;
+    const blockBottom = pageTop + 340 * scale;
+    for (const covered of [0, inset]) {
+      const { top } = offsetForBlock(layout, 9, bbox, scale, {
+        margin: 24,
+        viewportHeight: viewport - covered,
+      });
+      // Where the block's foot lands in the window once the scroll is `top`.
+      expect(blockBottom - top).toBeLessThanOrEqual(viewport - covered);
+    }
+    // The covered view scrolls the block up, not down: more of the page is above it.
+    const free = offsetForBlock(layout, 9, bbox, scale, { margin: 24, viewportHeight: viewport });
+    const covered = offsetForBlock(layout, 9, bbox, scale, {
+      margin: 24,
+      viewportHeight: viewport - inset,
+    });
+    expect(covered.top).toBeGreaterThan(free.top);
+  });
 });
 
 /** The flow height the mounted pages themselves occupy, gutters included. */

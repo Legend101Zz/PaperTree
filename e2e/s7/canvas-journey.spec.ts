@@ -338,7 +338,10 @@ test.describe('Journey D: the canvas', () => {
       }));
       return { api: board, dom };
     };
-    await page.mouse.click(1000, 870); // deselect everything: a selected link adds its editor row
+    // Deselect everything: a selected link adds its editor row. A click on the bare pane clears it;
+    // a fixed point does not, because a tree card (or the stage's lower edge) may sit there.
+    const clear = await emptyPanePoint(page);
+    await page.mouse.click(clear.x, clear.y);
     await expect(page.getByRole('group', { name: 'Selected link' })).toBeHidden();
     await page.waitForTimeout(500);
     const beforeReload = await snapshot();

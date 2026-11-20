@@ -12,7 +12,7 @@
  * when the answer stopped short, "Try again", and, when it already has a next turn, "Ask differently".
  */
 import { type NodeProps } from '@xyflow/react';
-import { useRef, type ReactNode } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
 
 import { AnswerBody } from '@/features/explain/components/AnswerBody';
 
@@ -69,6 +69,15 @@ export function AnswerCard({ id, data, selected }: NodeProps<PtNode>): ReactNode
   const folded = node.folded === true;
   const knots = spanKnots(branch.tree, id);
   const placed = useSpanMarks(id, root, body, text, knots, branch.reports);
+  // Words selected while the stored text is still being read back are not lost: when it lands, the
+  // selection that is still standing opens the menu (the reader did the right thing, early).
+  const wasSettling = useRef(settling);
+  const reselect = useRef<() => void>(() => undefined);
+  useEffect(() => {
+    const was = wasSettling.current;
+    wasSettling.current = settling;
+    if (was && !settling) reselect.current();
+  }, [settling]);
   const hasNext = downChild(branch.tree, id) !== undefined;
   const kids = childrenOf(branch.tree, id);
   const placedCard = branch.layout.cards.get(id);
@@ -104,6 +113,10 @@ export function AnswerCard({ id, data, selected }: NodeProps<PtNode>): ReactNode
         h: picked.last.height,
       },
     });
+  };
+
+  reselect.current = () => {
+    if (body.current !== null) onSelectWords(body.current);
   };
 
   const counts = kids.length > 0 ? countsPhrase(branchCounts(branch.tree, id)) : null;
