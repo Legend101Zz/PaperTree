@@ -1,0 +1,978 @@
+/* tree.css — the branching board (v0.3, P4 steps 7–10, V3-21…V3-29). Colours are --pt-* tokens
+   only, so the lamp-lit scheme is the same board at night. Sizes come from the PANE (--pt-card-cap
+   is set on the stage from its own height), never from the window: the split view embeds this
+   board. Motion is one glow and short fades; reduced motion turns them into still states. */
+
+/* ── the cards ──────────────────────────────────────────────────────────────────────────────── */
+
+.pt-tc {
+  --pt-tc-cap: var(--pt-card-cap, 60vh);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  inline-size: 100%;
+  /* The card is as tall as its text, up to 60% of the pane; past that the body scrolls inside. */
+  max-block-size: var(--pt-tc-cap);
+  color: var(--pt-ink);
+  font: 13.5px / 19px var(--pt-font-ai);
+  background: var(--pt-call-slip);
+  border-radius: var(--pt-radius-paper);
+  box-shadow:
+    inset 0 0 0 1px var(--pt-card-edge),
+    var(--pt-e1);
+  transition: opacity 0.18s ease;
+}
+
+.pt-tc[data-stock='answer'] {
+  background: var(--pt-ai-slip);
+}
+
+.pt-tc:focus-visible {
+  outline: var(--pt-focus-width, 2px) solid var(--pt-focus);
+  outline-offset: 2px;
+}
+
+.pt-tc[data-focused='true'] {
+  box-shadow:
+    0 0 0 2px var(--pt-focus),
+    var(--pt-e2);
+}
+
+/* Off the focused path: dimmed, still readable and still clickable. */
+.pt-tn--dim .pt-tc,
+.pt-tn--dim .pt-pill {
+  opacity: 0.42;
+}
+
+.pt-tc__strip {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-block-size: 32px;
+  padding: 4px 10px 4px 12px;
+  cursor: grab;
+  border-block-end: 1px solid var(--pt-rule);
+}
+
+.pt-tc__strip:active {
+  cursor: grabbing;
+}
+
+.pt-tc__stamp {
+  flex: none;
+}
+
+.pt-tc__q {
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 14px / 20px var(--pt-font-you);
+  color: var(--pt-pen);
+}
+
+.pt-tc__tag {
+  font: 700 12.5px / 16px var(--pt-font-label);
+  letter-spacing: 0.08em;
+  text-transform: lowercase;
+  color: var(--pt-ink-2);
+}
+
+.pt-tc__swatch {
+  flex: none;
+  inline-size: 10px;
+  block-size: 22px;
+  border-radius: 1px;
+  background: var(--pt-focus);
+}
+
+.pt-tc__grow {
+  flex: 1;
+}
+
+.pt-tc__body {
+  position: relative;
+  flex: 1 1 auto;
+  min-block-size: 0;
+  overflow-y: auto;
+  padding: 8px 16px 8px 14px; /* the right padding is where a span's line leaves (#349) */
+  user-select: text;
+  cursor: text;
+}
+
+.pt-tc[data-stock='passage'] .pt-tc__body {
+  padding-block: 10px 12px;
+}
+
+.pt-tc__text > * + * {
+  margin-block-start: 6px;
+}
+
+.pt-tc__quote {
+  margin: 0;
+  font-family: var(--pt-font-paper);
+  font-size: 15px;
+  line-height: 22px;
+}
+
+.pt-tc__empty {
+  margin: 0;
+  color: var(--pt-ink-muted);
+}
+
+.pt-tc__typed {
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.pt-tc__textarea {
+  inline-size: 100%;
+  box-sizing: border-box;
+  font: 14px / 20px var(--pt-font-you);
+  color: var(--pt-pen);
+  background: transparent;
+  border: 1px solid var(--pt-control-border);
+  border-radius: var(--pt-radius-control);
+  resize: vertical;
+}
+
+/* The answer's own furniture, in the slip's ink (labels and the lead come from answer.css). */
+.pt-tc__answer p,
+.pt-tc__answer ul,
+.pt-tc__answer ol {
+  margin: 0 0 8px;
+}
+
+.pt-tc__answer ul,
+.pt-tc__answer ol {
+  padding-inline-start: 18px;
+}
+
+.pt-tc__answer > * + .pt-ai-label {
+  margin-block-start: var(--pt-space-3, 12px);
+}
+
+.pt-tc__answer .pt-ai-label {
+  margin-block-end: 2px;
+}
+
+.pt-tc__answer .pt-ai-lead {
+  font-size: 15px;
+  line-height: 21px;
+}
+
+.pt-tc__fail {
+  margin: 4px 0 0;
+  color: var(--pt-danger);
+}
+
+/* The words a branch grew from stay underlined (the Custom Highlight API; no wrapping, so the
+   answer stays one selectable text). */
+::highlight(pt-branch-span) {
+  text-decoration: underline;
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 3px;
+  text-decoration-color: var(--pt-focus);
+}
+
+/* The scroll cue: a fade over the last lines and how much there is. */
+.pt-tc__cue {
+  position: relative;
+  flex: none;
+  margin: 0;
+  padding: 2px 14px 4px;
+  font: 11.5px / 16px var(--pt-font-you);
+  color: var(--pt-ink-2);
+}
+
+.pt-tc__fade {
+  position: absolute;
+  inset-inline: 0;
+  inset-block-end: 100%;
+  block-size: 22px;
+  pointer-events: none;
+  background: linear-gradient(transparent, var(--pt-call-slip));
+}
+
+.pt-tc[data-stock='answer'] .pt-tc__fade {
+  background: linear-gradient(transparent, var(--pt-ai-slip));
+}
+
+.pt-tc__foot {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  padding: 4px 12px 8px;
+  font: 12.5px / 18px var(--pt-font-you);
+  color: var(--pt-ink-2);
+}
+
+.pt-tc__ai {
+  font: 700 12px / 16px var(--pt-font-label);
+  letter-spacing: 0.08em;
+  color: var(--pt-ai-tab-ink);
+}
+
+.pt-tc__act,
+.pt-tc__src {
+  padding: 0 2px;
+  min-block-size: 24px;
+  font: inherit;
+  color: var(--pt-primary);
+  background: none;
+  border: 0;
+  border-radius: 2px;
+  cursor: pointer;
+}
+
+.pt-tc__src {
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+}
+
+.pt-tc__act:hover,
+.pt-tc__src:hover {
+  text-decoration: underline;
+}
+
+.pt-tc__act:focus-visible,
+.pt-tc__src:focus-visible,
+.pt-tc__ask:focus-visible,
+.pt-tc__knot:focus-visible {
+  outline: var(--pt-focus-width, 2px) solid var(--pt-focus);
+  outline-offset: 2px;
+}
+
+.pt-tc__think {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.pt-tc__think span {
+  inline-size: 6px;
+  block-size: 6px;
+  border-radius: 50%;
+  background: var(--pt-ink-2);
+  animation: pt-tc-think 1s ease-in-out infinite;
+}
+
+.pt-tc__think span:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.pt-tc__think span:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+@keyframes pt-tc-think {
+  50% {
+    opacity: 0.25;
+  }
+}
+
+/* The Ask edge: a round button on the card's right side. */
+.pt-tc__ask {
+  position: absolute;
+  inset-inline-end: -15px;
+  inset-block-start: 50%;
+  display: grid;
+  place-items: center;
+  inline-size: 30px;
+  block-size: 30px;
+  margin-block-start: -15px;
+  color: var(--pt-primary);
+  background: var(--pt-page);
+  border: 1px solid var(--pt-control-border);
+  border-radius: var(--pt-radius-round, 50%);
+  box-shadow: var(--pt-e1);
+  cursor: pointer;
+}
+
+/* The count knot: a dark count in the right padding, level with the words it sits on. */
+.pt-tc__knot {
+  position: absolute;
+  inset-inline-end: 1px;
+  display: grid;
+  place-items: center;
+  inline-size: 18px;
+  block-size: 18px;
+  margin-block-start: -9px;
+  padding: 0;
+  font: 700 11px / 1 var(--pt-font-you);
+  color: var(--pt-page);
+  background: var(--pt-ink);
+  border: 0;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+/* The arrival: one glow, then it goes. Reduced motion gets a still ring instead. */
+.pt-tn--arrived .pt-tc {
+  animation: pt-tc-glow 1.5s ease-out 1;
+}
+
+@keyframes pt-tc-glow {
+  0% {
+    box-shadow:
+      0 0 0 0 var(--pt-focus),
+      var(--pt-e2);
+  }
+  30% {
+    box-shadow:
+      0 0 0 6px var(--pt-focus),
+      var(--pt-e2);
+  }
+  100% {
+    box-shadow:
+      0 0 0 0 var(--pt-focus),
+      var(--pt-e1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pt-tn--arrived .pt-tc {
+    animation: none;
+    box-shadow:
+      0 0 0 3px var(--pt-focus),
+      var(--pt-e2);
+  }
+
+  .pt-tc,
+  .pt-tc__think span {
+    transition: none;
+    animation: none;
+  }
+}
+
+/* ── the pill of a folded branch ────────────────────────────────────────────────────────────── */
+
+.pt-pill {
+  display: flex;
+  align-items: stretch;
+  block-size: 40px;
+  inline-size: 100%;
+  background: var(--pt-page);
+  border: 1px solid var(--pt-control-border);
+  border-radius: 20px;
+  box-shadow: var(--pt-e1);
+}
+
+.pt-pill__grip {
+  flex: none;
+  inline-size: 14px;
+  cursor: grab;
+  border-start-start-radius: 20px;
+  border-end-start-radius: 20px;
+  background: repeating-linear-gradient(90deg, transparent 0 3px, var(--pt-rule) 3px 4px);
+}
+
+.pt-pill__btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-inline-size: 0;
+  padding: 0 12px 0 4px;
+  font: 13.5px / 18px var(--pt-font-you);
+  color: var(--pt-ink);
+  text-align: start;
+  background: none;
+  border: 0;
+  border-start-end-radius: 20px;
+  border-end-end-radius: 20px;
+  cursor: pointer;
+}
+
+.pt-pill__btn:focus-visible {
+  outline: var(--pt-focus-width, 2px) solid var(--pt-focus);
+  outline-offset: -2px;
+}
+
+.pt-pill__q {
+  flex: 1;
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pt-pill__n {
+  flex: none;
+  padding: 2px 8px;
+  font-size: 12px;
+  color: var(--pt-ink);
+  background: var(--pt-ai-slip);
+  border-radius: 10px;
+}
+
+/* ── the lines ──────────────────────────────────────────────────────────────────────────────── */
+
+.pt-tree-edges {
+  position: absolute;
+  inset: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.pt-tree-edge {
+  fill: none;
+  stroke: var(--pt-ink);
+  stroke-width: 1.4;
+  transition: opacity 0.18s ease;
+}
+
+.pt-tree-edge[data-pending='true'] {
+  stroke: var(--pt-focus);
+  stroke-dasharray: 5 4; /* dashed navy = not there yet */
+}
+
+.pt-tree-edge[data-dim='true'] {
+  opacity: 0.3;
+}
+
+/* The ask box is not a card: it floats in board coordinates where the layout put it. React Flow's
+   viewport takes no pointer (`pointer-events: none`, each node turns it back on), so the layer
+   must, or every click on the box falls through to the pane under it. */
+.pt-ask-layer {
+  position: absolute;
+  z-index: 40;
+  pointer-events: auto;
+}
+
+/* ── the ask box ────────────────────────────────────────────────────────────────────────────── */
+
+.pt-ask {
+  position: relative;
+  inline-size: 100%;
+  box-sizing: border-box;
+  background: var(--pt-call-slip);
+  border: 1.5px dashed var(--pt-focus); /* dashed navy: it is not a card yet */
+  border-radius: var(--pt-radius-paper);
+  box-shadow: var(--pt-e1);
+}
+
+.pt-ask--stub {
+  padding: 4px;
+  border-style: solid;
+  border-width: 1px;
+  border-color: var(--pt-control-border);
+}
+
+.pt-ask__uses {
+  margin: 0;
+  padding: 8px 12px 0;
+  font: 12.5px / 18px var(--pt-font-you);
+  color: var(--pt-ink-2);
+}
+
+.pt-ask__lead {
+  font-weight: 700;
+}
+
+.pt-ask__dotted {
+  padding: 0;
+  font: inherit;
+  color: var(--pt-ink);
+  background: none;
+  border: 0;
+  border-block-end: 1.5px dotted var(--pt-ink-muted);
+  cursor: pointer;
+}
+
+.pt-ask__dotted:hover,
+.pt-ask__dotted[aria-expanded='true'] {
+  color: var(--pt-primary);
+  border-block-end-color: var(--pt-primary);
+}
+
+.pt-ask__dotted:focus-visible {
+  outline: var(--pt-focus-width, 2px) solid var(--pt-focus);
+  outline-offset: 2px;
+}
+
+.pt-ask__on {
+  margin: 0;
+  padding: 6px 12px 0;
+  font: 13px / 18px var(--pt-font-ai);
+  color: var(--pt-ink-2);
+}
+
+.pt-ask__quote {
+  font-family: var(--pt-font-paper);
+  font-style: italic;
+  color: var(--pt-ink);
+}
+
+.pt-ask__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+}
+
+.pt-ask__input {
+  flex: 1;
+  min-inline-size: 0;
+  block-size: 32px;
+  box-sizing: border-box;
+  padding: 0 8px;
+  font: 14px / 20px var(--pt-font-you);
+  color: var(--pt-pen);
+  background: var(--pt-page);
+  border: 1px solid var(--pt-control-border);
+  border-radius: var(--pt-radius-control);
+}
+
+.pt-ask--stub .pt-ask__input {
+  inline-size: 100%;
+  border-color: transparent;
+  background: transparent;
+}
+
+.pt-ask__input:focus-visible {
+  outline: var(--pt-focus-width, 2px) solid var(--pt-focus);
+  outline-offset: 1px;
+}
+
+.pt-ask__actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 12px 10px;
+}
+
+.pt-ask__esc {
+  margin-inline-start: auto;
+  font: 12px / 16px var(--pt-font-you);
+  color: var(--pt-ink-2);
+}
+
+/* ── the Uses pickers ───────────────────────────────────────────────────────────────────────── */
+
+.pt-pick {
+  position: absolute;
+  inset-inline-start: 12px;
+  inset-block-start: 36px;
+  z-index: 5;
+  inline-size: min(300px, calc(100% - 24px));
+  box-sizing: border-box;
+  padding: 10px 12px;
+  color: var(--pt-ink);
+  background: var(--pt-page);
+  border: 1px solid var(--pt-control-border);
+  border-radius: var(--pt-radius-menu, 4px);
+  box-shadow: var(--pt-e2);
+}
+
+.pt-pick__title {
+  margin: 0 0 4px;
+  font: 700 12.5px / 16px var(--pt-font-label);
+  letter-spacing: 0.08em;
+  text-transform: lowercase;
+  color: var(--pt-primary);
+}
+
+.pt-pick__opt {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  inline-size: 100%;
+  padding: 5px 4px;
+  font: 13.5px / 17px var(--pt-font-ai);
+  color: inherit;
+  text-align: start;
+  background: none;
+  border: 0;
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.pt-pick__opt:hover {
+  background: var(--pt-ai-slip);
+}
+
+.pt-pick__opt:focus-visible {
+  outline: var(--pt-focus-width, 2px) solid var(--pt-focus);
+  outline-offset: -2px;
+}
+
+.pt-pick__radio {
+  flex: none;
+  inline-size: 12px;
+  block-size: 12px;
+  margin-block-start: 3px;
+  border: 1.5px solid var(--pt-ink-2);
+  border-radius: 50%;
+}
+
+.pt-pick__radio[data-on='true'] {
+  background: radial-gradient(var(--pt-ink) 0 40%, transparent 45%);
+}
+
+.pt-pick__note {
+  display: block;
+  font: 11.5px / 15px var(--pt-font-you);
+  color: var(--pt-ink-2);
+}
+
+.pt-pick__reads {
+  margin: 8px 0 0;
+  padding: 8px 0 0;
+  list-style: none;
+  border-block-start: 1px solid var(--pt-rule);
+}
+
+.pt-pick__read {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 3px 0;
+  font: 13px / 17px var(--pt-font-ai);
+}
+
+.pt-pick__reads--off .pt-pick__read {
+  color: var(--pt-ink-muted);
+}
+
+.pt-pick__tick {
+  flex: none;
+  inline-size: 10px;
+  block-size: 10px;
+  margin-block-start: 4px;
+  background: var(--pt-ink);
+}
+
+.pt-pick__tick--off {
+  background: none;
+  border: 1.5px solid var(--pt-ink-muted);
+}
+
+/* ── the span menu and the breadcrumb: they live in the pane, at full size ─────────────────── */
+
+.pt-span-menu {
+  position: absolute;
+  z-index: 8;
+  display: flex;
+  flex-direction: column;
+  inline-size: 216px;
+  padding: 4px;
+  background: var(--pt-page);
+  border: 1px solid var(--pt-control-border);
+  border-radius: var(--pt-radius-menu, 4px);
+  box-shadow: var(--pt-e2);
+}
+
+.pt-span-menu__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-block-size: 32px;
+  padding: 0 8px;
+  font: 14px / 20px var(--pt-font-ai);
+  color: var(--pt-ink);
+  text-align: start;
+  background: none;
+  border: 0;
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.pt-span-menu__item kbd,
+.pt-ask kbd,
+.pt-crumbs kbd {
+  margin-inline-start: auto;
+  padding: 0 5px;
+  font: 11.5px / 18px var(--pt-font-you);
+  color: var(--pt-ink-2);
+  border: 1px solid var(--pt-control-border);
+  border-radius: 3px;
+}
+
+.pt-span-menu__item:hover {
+  background: var(--pt-ai-slip);
+}
+
+.pt-span-menu__item:focus-visible {
+  outline: var(--pt-focus-width, 2px) solid var(--pt-focus);
+  outline-offset: -2px;
+}
+
+.pt-span-menu__rule {
+  block-size: 1px;
+  margin: 4px 2px;
+  background: var(--pt-rule);
+}
+
+.pt-crumbs {
+  position: absolute;
+  inset-inline: 12px;
+  inset-block-start: 8px;
+  z-index: 7;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  overflow-x: auto;
+  background: var(--pt-page);
+  border: 1px solid var(--pt-control-border);
+  border-radius: var(--pt-radius-control);
+  box-shadow: var(--pt-e1);
+}
+
+.pt-crumbs__lead {
+  flex: none;
+  margin-inline-end: 4px;
+  font: 700 12.5px / 16px var(--pt-font-label);
+  letter-spacing: 0.08em;
+  color: var(--pt-ink-2);
+}
+
+.pt-crumbs__sep {
+  flex: none;
+  color: var(--pt-ink-muted);
+}
+
+.pt-crumbs__crumb {
+  flex: none;
+  max-inline-size: 240px;
+  overflow: hidden;
+  padding: 2px 6px;
+  font: 13.5px / 20px var(--pt-font-you);
+  color: var(--pt-primary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background: none;
+  border: 0;
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.pt-crumbs__crumb[aria-current='location'] {
+  font-weight: 700;
+  color: var(--pt-ink);
+}
+
+.pt-crumbs__esc {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-inline-start: auto;
+  padding-inline-start: 10px;
+  font: 13px / 18px var(--pt-font-you);
+  color: var(--pt-ink-2);
+}
+
+/* ── the outline and the export sheet ───────────────────────────────────────────────────────── */
+
+.pt-ol {
+  position: absolute;
+  inset: 0;
+  z-index: 9;
+  display: grid;
+  grid-template-columns: minmax(160px, 240px) minmax(0, 1fr);
+  overflow: auto;
+  background: var(--pt-linen);
+}
+
+.pt-ol__nav {
+  padding: 16px 8px;
+  border-inline-end: 1px solid var(--pt-control-border);
+  background: var(--pt-page);
+}
+
+.pt-ol__navlead {
+  margin: 0 0 8px;
+  padding-inline: 8px;
+  font: 700 14px / 18px var(--pt-font-label);
+  letter-spacing: 0.08em;
+  color: var(--pt-ink-2);
+}
+
+.pt-ol__navlink {
+  display: block;
+  padding-block: 4px;
+  overflow: hidden;
+  font: 13.5px / 18px var(--pt-font-you);
+  color: var(--pt-ink);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-decoration: none;
+}
+
+.pt-ol__navlink:hover {
+  text-decoration: underline;
+}
+
+.pt-ol__navnote {
+  margin: 12px 0 0;
+  padding-inline: 8px;
+  font: 13px / 18px var(--pt-font-ai);
+  color: var(--pt-ink-2);
+}
+
+.pt-ol__main {
+  box-sizing: border-box;
+  inline-size: min(720px, 100%);
+  margin: 16px auto;
+  padding: 20px 28px 32px;
+  background: var(--pt-page);
+  border-radius: var(--pt-radius-paper);
+  box-shadow: var(--pt-e1);
+}
+
+.pt-ol__bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pt-ol__crumb,
+.pt-ol__counts {
+  margin: 0;
+  font: 12.5px / 18px var(--pt-font-you);
+  color: var(--pt-ink-2);
+}
+
+.pt-ol__title {
+  margin: 4px 0 0;
+  font: 700 28px / 34px var(--pt-font-paper);
+}
+
+.pt-ol__passage {
+  margin: 20px 0 0;
+  padding-inline-start: 14px;
+  font: 15px / 22px var(--pt-font-paper);
+  border-inline-start: 3px solid var(--pt-rule);
+}
+
+.pt-ol__q {
+  margin-block-start: 20px;
+}
+
+.pt-ol__h {
+  margin: 0;
+  font: 700 17px / 24px var(--pt-font-paper);
+}
+
+.pt-ol__from {
+  font-style: italic;
+  font-weight: 400;
+}
+
+.pt-ol__line,
+.pt-ol__fold {
+  margin: 4px 0 0;
+  font: 14px / 20px var(--pt-font-ai);
+  color: var(--pt-ink-2);
+}
+
+.pt-ol__answer {
+  margin-block-start: 6px;
+  padding: 8px 12px;
+  background: var(--pt-ai-slip);
+  border-radius: var(--pt-radius-paper);
+}
+
+.pt-ol__more {
+  margin-block-start: 2px;
+  padding: 0;
+  font: 12.5px / 20px var(--pt-font-you);
+  color: var(--pt-primary);
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+.pt-ol__note {
+  margin: 14px 0 0;
+  font: 14px / 20px var(--pt-font-you);
+  color: var(--pt-pen);
+}
+
+.pt-ol__notetag {
+  font: 700 12px / 16px var(--pt-font-label);
+  letter-spacing: 0.08em;
+  color: var(--pt-ink-2);
+}
+
+.pt-ol__empty {
+  margin-block-start: 20px;
+  color: var(--pt-ink-2);
+}
+
+.pt-sheet {
+  position: absolute;
+  inset-block: 56px 16px;
+  inset-inline-end: 16px;
+  z-index: 11;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  inline-size: min(520px, calc(100% - 32px));
+  box-sizing: border-box;
+  padding: 14px 16px;
+  background: var(--pt-page);
+  border: 1px solid var(--pt-control-border);
+  border-radius: var(--pt-radius-paper);
+  box-shadow: var(--pt-e3);
+}
+
+.pt-sheet__head,
+.pt-sheet__foot {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.pt-sheet__title {
+  flex: 1;
+  margin: 0;
+  font: 700 18px / 24px var(--pt-font-paper);
+}
+
+.pt-sheet__toggles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.pt-sheet__legend {
+  padding: 0;
+  font: 700 12.5px / 18px var(--pt-font-label);
+  letter-spacing: 0.08em;
+  text-transform: lowercase;
+  color: var(--pt-ink-2);
+}
+
+.pt-sheet__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font: 14px / 20px var(--pt-font-ai);
+}
+
+.pt-sheet__md {
+  flex: 1;
+  min-block-size: 0;
+  margin: 0;
+  padding: 10px 12px;
+  overflow: auto;
+  white-space: pre-wrap;
+  font: 12.5px / 18px var(--pt-font-you);
+  color: var(--pt-ink);
+  background: var(--pt-call-slip);
+  border: 1px solid var(--pt-rule);
+  border-radius: var(--pt-radius-control);
+}
+
+.pt-sheet__said {
+  font: 13px / 18px var(--pt-font-you);
+  color: var(--pt-ink-2);
+}

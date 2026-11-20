@@ -9,7 +9,10 @@ import { ReactFlowProvider, type NodeProps } from '@xyflow/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { CanvasActionsProvider } from '@/features/board/components/BoardContext';
-import { ExplanationCard } from '@/features/board/components/cards/ExplanationCard';
+import { AnswerCard } from '@/features/board/components/cards/AnswerCard';
+import { BranchProvider } from '@/features/board/components/BranchContext';
+
+import { branchActions } from './branch-harness';
 import { toFlowNode, type PtNode } from '@/features/board/model/flow';
 import { cardRow } from '@/features/board/model/test-data';
 
@@ -476,7 +479,9 @@ describe('the small board card', () => {
             openCitation: vi.fn(),
           }}
         >
-          <ExplanationCard {...props} />
+          <BranchProvider value={branchActions()}>
+            <AnswerCard {...props} />
+          </BranchProvider>
         </CanvasActionsProvider>
       </ReactFlowProvider>,
     );

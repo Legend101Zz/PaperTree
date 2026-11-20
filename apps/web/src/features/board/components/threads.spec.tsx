@@ -25,7 +25,9 @@ import {
   type CanvasActions,
   type LinkStart,
 } from './BoardContext';
+import { BranchProvider } from './BranchContext';
 import { PassageCard } from './cards/PassageCard';
+import { branchActions } from '../../../../test/branch-harness';
 import { ThreadEdge } from './ThreadEdge';
 import { ThreadLegend } from './ThreadLegend';
 
@@ -141,9 +143,11 @@ describe('the brass port pins', () => {
     return render(
       <ReactFlowProvider>
         <CanvasActionsProvider value={ctx}>
-          <LinkingProvider value={linking}>
-            <PassageCard {...(node as unknown as NodeProps<PtNode>)} />
-          </LinkingProvider>
+          <BranchProvider value={branchActions()}>
+            <LinkingProvider value={linking}>
+              <PassageCard {...(node as unknown as NodeProps<PtNode>)} />
+            </LinkingProvider>
+          </BranchProvider>
         </CanvasActionsProvider>
       </ReactFlowProvider>,
     );

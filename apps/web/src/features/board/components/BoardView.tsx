@@ -12,19 +12,29 @@
  * and turns them to glances below the low-zoom switch (one subscription to the zoom, here); the
  * zoom the stylesheet reads is published in 0.05 steps, since each write restyles every card.
  */
-import { Background, ReactFlow, ReactFlowProvider, useReactFlow, useStore } from '@xyflow/react';
+import {
+  Background,
+  ReactFlow,
+  ReactFlowProvider,
+  useReactFlow,
+  useStore,
+  useStoreApi,
+} from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
 import { useBoardController } from '../hooks/useBoardController';
 import { useBoardSelection } from '../hooks/useBoardSelection';
+import { useEscapeDeselect } from '../hooks/useEscapeDeselect';
+import { useBranchBoard } from '../hooks/useBranchBoard';
 import { useBoardTools } from '../hooks/useBoardTools';
 import { useCardSources } from '../hooks/useCardSources';
 import { useLinkAs } from '../hooks/useLinkAs';
 import { usePaperTitle } from '../hooks/usePaperTitle';
 import { useThreadDrawing } from '../hooks/useThreadDrawing';
 import { useUndoKeys } from '../hooks/useUndoKeys';
-import { ZOOM_RANGE, boardCounts, countsLine } from '../model/chrome';
+import { anchorPageIndex } from '../model/cards';
+import { ZOOM_RANGE, boardCounts, citationHref, countsLine } from '../model/chrome';
 import { withPageTitles, type PtEdge, type PtNode } from '../model/flow';
 import { bigBoard, glanceAt, publishedZoom } from '../model/glance';
 import { BoardHeader } from './BoardHeader';
@@ -32,6 +42,7 @@ import { BoardMinimap } from './BoardMinimap';
 import { BoardFailed, BoardLoading, BoardNotice, UndoToast } from './BoardStates';
 import { BoardToolbar } from './BoardToolbar';
 import { CanvasActionsProvider, GlanceProvider, LinkingProvider } from './BoardContext';
+import { BranchProvider } from './BranchContext';
 import { nodeTypes } from './cards';
 import { EmptyBoard } from './EmptyBoard';
 import { LinkAsLayer } from './LinkAsLayer';
@@ -39,30 +50,19 @@ import { ThreadBar } from './ThreadBar';
 import { edgeTypes } from './ThreadEdge';
 import { ThreadLegend as Legend } from './ThreadLegend';
 import { ThreadPreview } from './ThreadPreview';
+import { AskLayer } from './tree/AskBox';
+import { Breadcrumb } from './tree/Breadcrumb';
+import { ExportSheet } from './tree/ExportSheet';
+import { OutlineView } from './tree/OutlineView';
+import { SpanMenu } from './tree/SpanMenu';
+import { TreeEdges } from './tree/TreeEdges';
+
+import type { CanvasNode } from '@/lib/api/types';
+import './tree/tree.css';
 import './cards.css';
 import './threads.css';
 import './legend.css';
 import './chrome.css';
-
-/**
- * The reader URL that opens a card's cited passage and flashes it (`useFocusFromCanvas`).
- *
- * @param paperId The paper.
- * @param nodeId The AI card the marker is on.
- * @param citationId The citation behind the marker.
- * @param threadId The thread the answer is in, so the reader reads that one thread only.
- * @returns `/paper/<id>/read?focus=<card>&cite=<citation>[&thread=<thread>]`.
- */
-export function citationHref(
-  paperId: string,
-  nodeId: string,
-  citationId: string,
-  threadId?: string,
-): string {
-  const q = new URLSearchParams({ focus: nodeId, cite: citationId });
-  if (threadId !== undefined) q.set('thread', threadId);
-  return `/paper/${encodeURIComponent(paperId)}/read?${q.toString()}`;
-}
 
 /** The legend never changes with the board, so a drag does not redraw it. */
 const ThreadLegend = memo(Legend);
@@ -133,11 +133,21 @@ function useGlanceZoom(big: boolean): boolean {
   return glance;
 }
 
+/** "Deep Residual Learning, p. 3": where a passage came from, for the Markdown export. */
+function exportSource(paperTitle: string | null, passage: CanvasNode): string | undefined {
+  const page = anchorPageIndex(passage.source_anchor);
+  const words = [paperTitle, page === null ? null : `p. ${String(page + 1)}`].filter(
+    (w): w is string => w !== null && w !== '',
+  );
+  return words.length === 0 ? undefined : words.join(', ');
+}
+
 function Board({ paperId }: { readonly paperId: string }) {
   const ctl = useBoardController(paperId);
   const big = bigBoard(ctl.nodes.length);
   const glance = useGlanceZoom(big);
   const flow = useReactFlow<PtNode, PtEdge>();
+  const flowStore = useStoreApi();
   const { selection, onSelectionChange } = useBoardSelection();
   const drawing = useThreadDrawing(ctl.nodes);
   const stage = useRef<HTMLDivElement>(null);
@@ -170,12 +180,22 @@ function Board({ paperId }: { readonly paperId: string }) {
     [ctl],
   );
 
+  const branch = useBranchBoard(paperId, ctl, stage);
   const sources = useCardSources(paperId, ctl.nodes);
+  // The cards as drawn: tree cards where Tidy put them, not where the row says.
   const nodes = useMemo(
-    () => withPageTitles(ctl.nodes, (pageId) => sources.pages.get(pageId)?.page.title),
-    [ctl.nodes, sources.pages],
+    () => withPageTitles(branch.view.nodes, (pageId) => sources.pages.get(pageId)?.page.title),
+    [branch.view.nodes, sources.pages],
   );
   const link = useLinkAs(ctl, drawing, nodes, stage);
+  // After the board's own Escape (useBranchBoard, above) and the link gestures', Escape puts the
+  // selection away, as a click on the empty pane does.
+  useEscapeDeselect(
+    (selection.nodes.length > 0 || selection.edges.length > 0) &&
+      link.request === null &&
+      !link.keyboard.walking,
+    () => flowStore.getState().unselectNodesAndEdges(),
+  );
   const tools = useBoardTools({
     ctl,
     selection,
@@ -185,6 +205,7 @@ function Board({ paperId }: { readonly paperId: string }) {
     areaMode,
     setAreaMode,
     fitOptions,
+    branch,
   });
   const selectedEdge =
     selection.edges.length === 1 ? ctl.edges.find((e) => e.id === selection.edges[0]) : undefined;
@@ -221,135 +242,186 @@ function Board({ paperId }: { readonly paperId: string }) {
   );
   const notice = drawing.refusal ?? ctl.notice;
 
+  const title = ctl.board?.title ?? paperTitle ?? 'Board';
+
   return (
     <CanvasActionsProvider value={actions}>
-      <div className="pt-cv">
-        <BoardHeader paperId={paperId} paperTitle={paperTitle} counts={ready ? counts : null}>
-          <BoardToolbar {...tools} />
-        </BoardHeader>
+      <BranchProvider value={branch.actions}>
+        <div className="pt-cv">
+          <BoardHeader paperId={paperId} paperTitle={paperTitle} counts={ready ? counts : null}>
+            <BoardToolbar {...tools} />
+          </BoardHeader>
 
-        <main className="pt-cv__main">
-          {notice === null || ctl.status === 'error' ? null : (
-            <BoardNotice
-              text={notice}
-              onDismiss={() => {
-                drawing.dismissRefusal();
-                ctl.dismissNotice();
-              }}
-            />
-          )}
-
-          <div
-            ref={stage}
-            className="pt-cv__stage"
-            data-testid="canvas-stage"
-            data-status={ctl.status}
-          >
-            {selectedEdge?.data === undefined ? null : (
-              <ThreadBar
-                edge={selectedEdge.data.edge}
-                open={link.request?.mode === 'change'}
-                onKind={(opener) => link.changeKind(selectedEdge.id, opener)}
-                onLabel={(label) => ctl.patchEdge(selectedEdge.id, { label })}
+          <main className="pt-cv__main">
+            {notice === null || ctl.status === 'error' ? null : (
+              <BoardNotice
+                text={notice}
+                onDismiss={() => {
+                  drawing.dismissRefusal();
+                  ctl.dismissNotice();
+                }}
               />
             )}
 
-            {ctl.status === 'loading' ? (
-              <BoardLoading />
-            ) : ctl.status === 'error' ? (
-              <BoardFailed reason={ctl.notice} onRetry={() => void ctl.reload()} />
-            ) : (
-              <>
-                <LinkingProvider value={drawing.linking}>
-                  <GlanceProvider value={glance}>
-                    <ReactFlow<PtNode, PtEdge>
-                      nodes={nodes}
-                      edges={ctl.edges}
-                      nodeTypes={nodeTypes}
-                      edgeTypes={edgeTypes}
-                      onNodesChange={ctl.onNodesChange}
-                      onEdgesChange={ctl.onEdgesChange}
-                      onNodeDragStop={ctl.onNodeDragStop}
-                      {...drawing.flowProps}
-                      onNodesDelete={(ns) =>
-                        queueDelete(
-                          ns.map((n) => n.id),
-                          [],
-                        )
-                      }
-                      onEdgesDelete={(es) =>
-                        queueDelete(
-                          [],
-                          es.map((e) => e.id),
-                        )
-                      }
-                      onSelectionChange={onSelectionChange}
-                      onMoveEnd={(event, viewport) => {
-                        // Programmatic moves (the first fit) have no event; only the reader's pan/zoom END is saved.
-                        if (event !== null) ctl.saveViewport(viewport);
-                      }}
-                      onDoubleClick={(event) => {
-                        const target = event.target as HTMLElement;
-                        if (!target.classList.contains('react-flow__pane')) return;
-                        void ctl.addNote(
-                          flow.screenToFlowPosition({ x: event.clientX, y: event.clientY }),
-                        );
-                      }}
-                      defaultViewport={ctl.initialViewport ?? undefined}
-                      fitView={ctl.initialViewport === null}
-                      fitViewOptions={fitOptions}
-                      minZoom={ZOOM_RANGE.min}
-                      maxZoom={ZOOM_RANGE.max}
-                      zoomOnDoubleClick={false}
-                      // Delete only: Backspace is a typing key and one stray press must not remove a card.
-                      deleteKeyCode={['Delete']}
-                      // S9: Shift, Ctrl and Cmd all ADD to the selection (React Flow's own default is
-                      // Meta/Ctrl only). Shift-drag on the empty board still draws a selection box.
-                      multiSelectionKeyCode={MULTI_SELECT_KEYS}
-                      selectionOnDrag={areaMode}
-                      panOnDrag={!areaMode}
-                      elevateNodesOnSelect={false}
-                      nodesFocusable
-                      edgesFocusable
-                      ariaLabelConfig={link.keyboard.walking ? WALK_KEYS : CARD_KEYS}
-                      onKeyDown={link.keyboard.onKeyDown}
-                      onlyRenderVisibleElements={big}
-                      aria-label="Board of passages, explanations and notes"
-                    >
-                      <ZoomVar />
-                      {link.preview === null ? null : <ThreadPreview {...link.preview} />}
-                      <Background gap={24} size={1} />
-                      <BoardMinimap empty={empty} />
-                    </ReactFlow>
-                  </GlanceProvider>
-                </LinkingProvider>
-                {empty ? <EmptyBoard paperId={paperId} /> : <ThreadLegend glance={glance} />}
-                {link.request === null ? null : (
-                  <LinkAsLayer
-                    request={link.request}
-                    nodes={nodes}
-                    stage={stage}
-                    onChoose={link.choose}
-                    onCancel={link.cancel}
-                  />
-                )}
-              </>
-            )}
-          </div>
-          {/* The board's spoken line (linking by keyboard, S6c); inside `main`, beside the board. */}
-          <p className="pt-sr-only" role="status" aria-live="polite" data-testid="board-said">
-            {link.said}
-          </p>
+            <div
+              ref={stage}
+              className="pt-cv__stage"
+              data-testid="canvas-stage"
+              data-status={ctl.status}
+            >
+              {selectedEdge?.data === undefined ? null : (
+                <ThreadBar
+                  edge={selectedEdge.data.edge}
+                  open={link.request?.mode === 'change'}
+                  onKind={(opener) => link.changeKind(selectedEdge.id, opener)}
+                  onLabel={(label) => ctl.patchEdge(selectedEdge.id, { label })}
+                />
+              )}
 
-          {ctl.undo === null ? null : (
-            <UndoToast
-              message={ctl.undo.message}
-              onUndo={() => void ctl.runUndo()}
-              onDismiss={ctl.dismissUndo}
-            />
-          )}
-        </main>
-      </div>
+              {branch.control.ui.menu === null ? null : <SpanMenu menu={branch.control.ui.menu} />}
+              {/* The selected link's bar owns the stage's top edge: the path waits behind it. */}
+              {selectedEdge?.data === undefined ? <Breadcrumb /> : null}
+              {ctl.status === 'loading' ? (
+                <BoardLoading />
+              ) : ctl.status === 'error' ? (
+                <BoardFailed reason={ctl.notice} onRetry={() => void ctl.reload()} />
+              ) : (
+                <>
+                  <LinkingProvider value={drawing.linking}>
+                    <GlanceProvider value={glance}>
+                      <ReactFlow<PtNode, PtEdge>
+                        nodes={nodes}
+                        edges={ctl.edges}
+                        nodeTypes={nodeTypes}
+                        edgeTypes={edgeTypes}
+                        onNodesChange={(changes) =>
+                          branch.view.onNodesChange(changes, ctl.onNodesChange)
+                        }
+                        onEdgesChange={ctl.onEdgesChange}
+                        onNodeDragStop={() => {
+                          branch.view.onDragStop();
+                          ctl.onNodeDragStop();
+                        }}
+                        {...drawing.flowProps}
+                        onPaneClick={() => {
+                          drawing.flowProps.onPaneClick?.();
+                          branch.control.focus(null);
+                        }}
+                        onNodesDelete={(ns) =>
+                          queueDelete(
+                            ns.map((n) => n.id),
+                            [],
+                          )
+                        }
+                        onEdgesDelete={(es) =>
+                          queueDelete(
+                            [],
+                            es.map((e) => e.id),
+                          )
+                        }
+                        onSelectionChange={onSelectionChange}
+                        onMoveEnd={(event, viewport) => {
+                          // Programmatic moves (the first fit) have no event; only the reader's pan/zoom END is saved.
+                          if (event !== null) ctl.saveViewport(viewport);
+                        }}
+                        onDoubleClick={(event) => {
+                          const target = event.target as HTMLElement;
+                          if (!target.classList.contains('react-flow__pane')) return;
+                          void ctl.addNote(
+                            flow.screenToFlowPosition({ x: event.clientX, y: event.clientY }),
+                          );
+                        }}
+                        defaultViewport={ctl.initialViewport ?? undefined}
+                        fitView={ctl.initialViewport === null && branch.arrivalCard === null}
+                        fitViewOptions={fitOptions}
+                        minZoom={ZOOM_RANGE.min}
+                        maxZoom={ZOOM_RANGE.max}
+                        zoomOnDoubleClick={false}
+                        // Delete only: Backspace is a typing key and one stray press must not remove a card.
+                        deleteKeyCode={['Delete']}
+                        // S9: Shift, Ctrl and Cmd all ADD to the selection (React Flow's own default is
+                        // Meta/Ctrl only). Shift-drag on the empty board still draws a selection box.
+                        multiSelectionKeyCode={MULTI_SELECT_KEYS}
+                        selectionOnDrag={areaMode}
+                        panOnDrag={!areaMode}
+                        elevateNodesOnSelect={false}
+                        nodesFocusable
+                        edgesFocusable
+                        ariaLabelConfig={link.keyboard.walking ? WALK_KEYS : CARD_KEYS}
+                        onKeyDown={(event) => {
+                          link.keyboard.onKeyDown(event);
+                          // Enter or Space on a focused tree card focuses its path, as a click does.
+                          const target = event.target;
+                          if (
+                            event.defaultPrevented ||
+                            (event.key !== 'Enter' && event.key !== ' ') ||
+                            !(target instanceof HTMLElement) ||
+                            !target.classList.contains('react-flow__node')
+                          ) {
+                            return;
+                          }
+                          const id = target.dataset.id;
+                          if (id !== undefined && branch.view.layout.cards.has(id)) {
+                            branch.control.focus(id);
+                          }
+                        }}
+                        onlyRenderVisibleElements={big}
+                        aria-label="Board of passages, explanations and notes"
+                      >
+                        <ZoomVar />
+                        <TreeEdges layout={branch.view.layout} onPath={branch.onPath} />
+                        <AskLayer />
+                        {link.preview === null ? null : <ThreadPreview {...link.preview} />}
+                        <Background gap={24} size={1} />
+                        <BoardMinimap empty={empty} />
+                      </ReactFlow>
+                    </GlanceProvider>
+                  </LinkingProvider>
+                  {empty ? <EmptyBoard paperId={paperId} /> : <ThreadLegend glance={glance} />}
+                  {link.request === null ? null : (
+                    <LinkAsLayer
+                      request={link.request}
+                      nodes={nodes}
+                      stage={stage}
+                      onChoose={link.choose}
+                      onCancel={link.cancel}
+                    />
+                  )}
+                </>
+              )}
+            </div>
+            {branch.control.ui.outline ? (
+              <OutlineView
+                tree={branch.view.tree}
+                title={title}
+                countsLine={counts}
+                onExport={() => branch.control.setSheet(true)}
+                onBack={() => branch.control.setOutline(false)}
+              />
+            ) : null}
+            {branch.control.ui.sheet ? (
+              <ExportSheet
+                tree={branch.view.tree}
+                title={title}
+                sourceOf={(passage) => exportSource(paperTitle, passage)}
+                onClose={() => branch.control.setSheet(false)}
+              />
+            ) : null}
+            {/* The board's spoken line (linking by keyboard, S6c); inside `main`, beside the board. */}
+            <p className="pt-sr-only" role="status" aria-live="polite" data-testid="board-said">
+              {link.said}
+            </p>
+
+            {ctl.undo === null ? null : (
+              <UndoToast
+                message={ctl.undo.message}
+                onUndo={() => void ctl.runUndo()}
+                onDismiss={ctl.dismissUndo}
+              />
+            )}
+          </main>
+        </div>
+      </BranchProvider>
     </CanvasActionsProvider>
   );
 }

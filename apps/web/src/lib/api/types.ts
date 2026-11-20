@@ -360,6 +360,9 @@ export type SseEvent =
       };
     }
   | { event: 'text'; data: { delta: string } }
+  // A board ask only (v0.3 #343): its FIRST frame is the answer card the server made up front,
+  // the node itself (not wrapped), before `run`.
+  | { event: 'node'; data: CanvasNode }
   | { event: 'citations'; data: { items: Citation[] } }
   // A diagram run (v0.2 S7a/S7b): its title, then each part with its quote already resolved, and
   // the feedback edges `after` cannot say. No `text` and no `citations` come on such a run.
@@ -415,30 +418,28 @@ export interface CanvasNode {
   source_diagram_id: string | null;
   /** A notebook card's page counts, computed on read; null on every other kind. */
   counts: NotebookCardCounts | null;
-  /**
-   * The v0.3 branching fields (v03-BOARD-SPEC section 2). Optional while the API side lands: a
-   * node without `parent_id` is a tree root or a loose v0.2 card, and the model treats absent
-   * fields as `null` / `0` / `false`.
-   */
+  /** The v0.3 branching board (migration 0016, #343). A root passage and a loose card have no parent. */
   /** The node this one answers or annotates; null on a root and on a loose card. */
-  parent_id?: string | null;
+  parent_id: string | null;
   /** Where a child sits relative to its parent; null on a root and on a loose card. */
-  branch?: BoardBranch | null;
+  branch: BoardBranch | null;
   /** The words of the parent's answer this branch starts from; null for a follow-up. */
-  parent_span?: ParentSpan | null;
+  parent_span: ParentSpan | null;
   /** For an answer, the ask as typed or the quick-ask label. */
-  question?: string | null;
+  question: string | null;
   /** What the ask sent: the Uses picker's choices. */
-  uses?: AskUses | null;
+  uses: AskUses | null;
   /** The reader's drag offset on top of the Tidy layout. */
-  offset_x?: number;
-  offset_y?: number;
+  offset_x: number;
+  offset_y: number;
   /** A folded subtree shows as one pill. */
-  folded?: boolean;
-  /** Answer nodes only, returned by the GET so the board needs no thread fetches. */
-  final_text?: string | null;
-  level?: AskLevel | null;
-  model?: string | null;
+  folded: boolean;
+  /** Answer nodes only (null on every other kind), read with the board: no thread fetch per card. */
+  final_text: string | null;
+  level: AskLevel | null;
+  model: string | null;
+  /** `streaming` while the run is live. */
+  answer_status: AnswerStatus | null;
   version: number;
   created_at: string;
   updated_at: string;
@@ -456,6 +457,9 @@ export interface ParentSpan {
   end: number;
   quote: string;
 }
+
+/** Where an answer card's run stands, as the board reads it. */
+type AnswerStatus = 'streaming' | 'complete' | 'partial' | 'error' | 'aborted';
 
 /** The depth an answer is written at. */
 export type AskLevel = 'new' | 'familiar' | 'expert';

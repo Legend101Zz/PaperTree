@@ -5,17 +5,30 @@ the paper, joined by typed threads. v0.2 slices: S6a (#211, backend), S6b (#212,
 threads), S6c (#213, Link as and keyboard linking), S6d (#214, frames, minimap, toolbar, empty
 board, the Board wording), S6e (#215, undo and redo; 500 cards).
 
+## v0.3: the branching board (#343, #342, #349)
+
+Trees of cards: a passage root, answers to its right (a branch) or below (a follow-up), notes kept
+from words. Positions are COMPUTED by Tidy (`model/layout.ts`) from the tree and the heights the
+cards report; a drag is an offset that carries the whole branch (`hooks/useBoardTree.ts`); Tidy,
+Fold, asks and Keep as note are in `hooks/useBoardAsk.ts`; what is open and Escape's order are
+`model/ui.ts` and `hooks/useBoardUi.ts`. `hooks/useBranchBoard.ts` composes them for `BoardView`,
+sizes the cards from the PANE (`--pt-card-cap`, so a split view can embed the same board) and
+reads `?card=<id>` to centre a card and its ask box. The cards are `components/cards/{Passage,
+Answer,BranchNote}Card.tsx` on the shared `components/tree/BranchCard.tsx`; the ask box with its
+Uses line and pickers, the span menu, the breadcrumb, the lines, the Outline and the export sheet
+are in `components/tree/`. Loose v0.2 notes, frames and threads between cards are untouched.
+
 ## The cards
 
-| Wire kind     | Card                                                       | Voices                         |
-| ------------- | ---------------------------------------------------------- | ------------------------------ |
-| `excerpt`     | passage: page tab from the anchor, hung quote, Open source | paper                          |
-| `explanation` | call slip with the question, AI slip with numbered markers | you (the ask), ai (the answer) |
-| `note`        | ruled index card in Courier, M stamp, edit in place        | you                            |
-| `question`    | call slip alone, "question" tag                            | you                            |
-| `notebook`    | miniature of the page's items, counts, Open page           | none (a pointer to a page)     |
-| `diagram`     | AI slip with an empty plate and the title until S7 lands   | ai                             |
-| `group`       | a frame: dashed outline, paper tag with its name (S6d)     | you (the name)                 |
+| Wire kind     | Card                                                          | Voices                         |
+| ------------- | ------------------------------------------------------------- | ------------------------------ |
+| `excerpt`     | passage root: strip with "p. n", the words, Ask edge          | paper                          |
+| `explanation` | answer: question strip, tutor-format body, foot (model, Fold) | you (the ask), ai (the answer) |
+| `note`        | ruled index card in Courier, M stamp, edit in place           | you                            |
+| `question`    | call slip alone, "question" tag                               | you                            |
+| `notebook`    | miniature of the page's items, counts, Open page              | none (a pointer to a page)     |
+| `diagram`     | AI slip with an empty plate and the title until S7 lands      | ai                             |
+| `group`       | a frame: dashed outline, paper tag with its name (S6d)        | you (the name)                 |
 
 Every number a card prints is read from the API: the page tab from `source_anchor`, the notebook
 counts from the board read's `counts`, the explanation footer from the message's `coverage` and

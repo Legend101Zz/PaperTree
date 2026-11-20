@@ -467,6 +467,8 @@ class RunBroker:
     documents: evidence.DocumentCache
     registry: dict[str, RunBroker]
     queue: asyncio.Queue[bytes | None] = field(default_factory=asyncio.Queue)
+    #: An event the browser stream opens with, before `run` (a board ask's `node`, v0.3 #343).
+    preface: bytes | None = None
     stream: AgentStream | None = None
     buffer: str = ""
     text_sent: bool = False
@@ -494,6 +496,8 @@ class RunBroker:
 
     def start(self) -> None:
         self.registry[self.spec.run_id] = self
+        if self.preface is not None:
+            self.queue.put_nowait(self.preface)
         self.queue.put_nowait(
             sse(
                 "run",

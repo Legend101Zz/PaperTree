@@ -21,8 +21,10 @@ import {
   pointsFor,
   register,
   reveal,
+  setMessageText,
   shotPath,
   upload,
+  userId,
   waitParsed,
   yoloPdf,
 } from '../s4/support';
@@ -307,7 +309,13 @@ test.describe('W3UI round 2 (YOLO)', () => {
     const board = await getBoard(stack.apiUrl, token, paperId);
     const nodes = (
       board as unknown as {
-        nodes: { node_id: string; kind: string; version: number; body: string }[];
+        nodes: {
+          node_id: string;
+          kind: string;
+          version: number;
+          body: string;
+          source_message_id: string | null;
+        }[];
       }
     ).nodes;
     const cards = nodes.filter((n) => n.kind === 'explanation');
@@ -316,20 +324,17 @@ test.describe('W3UI round 2 (YOLO)', () => {
       cards.some((c) => /\[b\d+\]/.test(c.body)),
       'the stored body keeps its handles',
     ).toBe(true);
-    const boardId = (board as unknown as { board: { board_id: string } }).board.board_id;
-    // Give the first card the markdown the live model writes (the stored words, edited by the test).
-    const first = cards[0] as { node_id: string; version: number };
-    const patched = await api(
-      stack.apiUrl,
-      token,
-      'PATCH',
-      `/boards/${boardId}/nodes/${first.node_id}`,
-      {
-        version: first.version,
-        body: MARKDOWN_ANSWER,
-      },
+    // Give the first card the markdown the live model writes. Since v0.3 a board answer card
+    // shows its message's stored final text (which wins over the card's own `body`), so the
+    // markdown is written onto that message, the stored words edited by the test.
+    const first = cards[0] as { source_message_id: string | null };
+    expect(first.source_message_id).not.toBeNull();
+    setMessageText(
+      stack.dataRoot,
+      await userId(stack.apiUrl, token),
+      first.source_message_id as string,
+      MARKDOWN_ANSWER,
     );
-    expect(patched.status).toBe(200);
 
     for (const screen of SCREENS) {
       for (const theme of THEMES) {
@@ -348,9 +353,10 @@ test.describe('W3UI round 2 (YOLO)', () => {
         const canvas = await ctx.newPage();
         await canvas.goto(`/paper/${paperId}/board`);
         await expect(canvas.locator('.react-flow__node-explanation')).toHaveCount(2);
-        // #340: a board card cites with the quiet source line under a paragraph, no marker or chip.
+        // v0.3: a board card names the page it draws on in its foot ("p. 3", a button), no marker
+        // or chip, and no source line inside the answer.
         await expect(
-          canvas.locator('.react-flow__node-explanation .pt-source').first(),
+          canvas.locator('.react-flow__node-explanation .pt-tc__src').first(),
         ).toBeVisible({ timeout: 30_000 });
         expect(await canvas.locator('.react-flow__node-explanation .pt-marker').count()).toBe(0);
         const body = (await canvas.locator('.react-flow__node-explanation').allInnerTexts()).join(

@@ -186,6 +186,20 @@ describe('canvas citations', () => {
     );
   });
 
+  it("asks for the board's own threads: a board answer's thread is not in the reader's list", async () => {
+    vi.mocked(threadsApi.list).mockResolvedValue([
+      { thread_id: 'thr_b', updated_at: '2026' },
+    ] as never);
+    vi.mocked(threadsApi.get).mockResolvedValue({
+      thread: {} as never,
+      messages: [message('msg_1', ['b1'])] as never,
+    });
+    const nodes = [toFlowNode(explanation('cn_1', 'msg_1'), 'ppr_1')];
+    const { result } = renderHook(() => useCardSources('ppr_1', nodes));
+    await waitFor(() => expect(result.current.explanations.has('msg_1')).toBe(true));
+    expect(threadsApi.list).toHaveBeenCalledWith('ppr_1', { includeBoard: true });
+  });
+
   it('gives no entry when the read fails', async () => {
     vi.mocked(threadsApi.list).mockRejectedValue(new Error('offline'));
     const nodes = [toFlowNode(explanation('cn_1', 'msg_1'), 'ppr_1')];
@@ -214,6 +228,18 @@ describe('the stale-version notice', () => {
       source_page_id: null,
       source_diagram_id: null,
       counts: null,
+      parent_id: null,
+      branch: null,
+      parent_span: null,
+      question: null,
+      uses: null,
+      offset_x: 0,
+      offset_y: 0,
+      folded: false,
+      final_text: null,
+      level: null,
+      model: null,
+      answer_status: null,
       version: 2,
       created_at: '',
       updated_at: '',

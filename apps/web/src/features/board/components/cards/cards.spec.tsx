@@ -6,7 +6,9 @@ import { explanationSource } from '../../model/cards';
 import { toFlowNode, type PtNode } from '../../model/flow';
 import { THREAD, cardRow, citation } from '../../model/test-data';
 import { CanvasActionsProvider, type CanvasActions } from '../BoardContext';
-import { ExplanationCard } from './ExplanationCard';
+import { AnswerCard } from './AnswerCard';
+import { BranchProvider, type BranchActions } from '../BranchContext';
+import { branchActions } from '../../../../../test/branch-harness';
 import { DiagramCard, NotebookCard } from './NotebookCard';
 import { NoteCard, QuestionCard } from './NoteCard';
 import { PassageCard } from './PassageCard';
@@ -33,13 +35,16 @@ function mount(
   Card: ComponentType<NodeProps<PtNode>>,
   row: CanvasNode,
   ctx: CanvasActions = actions(),
+  branch: BranchActions = branchActions([row]),
 ) {
   const node = toFlowNode(row, 'ppr_1');
   const props = { ...node, selected: false, dragging: false } as unknown as NodeProps<PtNode>;
   return render(
     <ReactFlowProvider>
       <CanvasActionsProvider value={ctx}>
-        <Card {...props} />
+        <BranchProvider value={branch}>
+          <Card {...props} />
+        </BranchProvider>
       </CanvasActionsProvider>
     </ReactFlowProvider>,
   );
@@ -52,85 +57,126 @@ const sources = (explanations = new Map(), pages = new Map(), diagrams = new Map
 });
 
 describe('passage card', () => {
-  it("shows the paper's words in the paper voice, its page tab and Open source", () => {
+  it("shows the paper's words in the paper voice, its page and the way to the paper", () => {
+    const branch = branchActions([]);
     const { container } = mount(
       PassageCard,
       cardRow('excerpt', {
         body: 'In this work we propose\nthe Transformer.',
         source_anchor: citation('b8', 1, 4).anchor,
       }),
+      actions(),
+      branch,
     );
     const quote = container.querySelector('blockquote[data-voice="paper"]');
     expect(quote?.textContent).toBe('“In this work we propose the Transformer.”');
-    expect(screen.getByText('p. 2')).not.toBeNull();
-    expect(screen.getByRole('link', { name: 'Open source' }).getAttribute('href')).toBe(
-      '/paper/ppr_1/read?focus=cn_excerpt',
+    fireEvent.click(screen.getByRole('button', { name: 'Show p. 2 in the paper' }));
+    expect(branch.openSource).toHaveBeenCalledWith('cn_excerpt');
+  });
+
+  it('is dragged by its top strip only, and has an Ask edge', () => {
+    const branch = branchActions([]);
+    const { container } = mount(
+      PassageCard,
+      cardRow('excerpt', { body: 'Words.' }),
+      actions(),
+      branch,
     );
+    expect(container.querySelector('.pt-tc__strip')).not.toBeNull();
+    expect(container.querySelector('.pt-tc__body')?.className).toMatch(/\bnodrag\b/);
+    fireEvent.click(screen.getByRole('button', { name: 'Ask about this card' }));
+    expect(branch.control.openAsk).toHaveBeenCalledWith('cn_excerpt');
   });
 });
 
-describe('explanation card', () => {
+describe('answer card', () => {
   const row = cardRow('explanation', {
     body: THREAD[1]!.content,
+    final_text: THREAD[1]!.content,
+    question: 'Explain this passage.',
+    model: 'MiniMax-M3',
     source_message_id: 'msg_a1',
   });
 
-  it('asks in your voice and answers in the AI voice, each paragraph with one source line, and its footer', () => {
+  it('asks in your voice on its strip, answers in the AI voice, and names the pages in its foot', () => {
     const source = explanationSource('thr_1', THREAD, 'msg_a1')!;
     const ctx = actions({ sources: sources(new Map([['msg_a1', source]])) });
-    const { container } = mount(ExplanationCard, row, ctx);
-    expect(container.querySelector('[data-voice="you"]')?.textContent).toBe(
+    const branch = branchActions([row]);
+    const { container } = mount(AnswerCard, row, ctx, branch);
+    expect(container.querySelector('.pt-tc__strip')?.textContent).toContain(
       'Explain this passage.',
     );
-    const slip = screen.getByRole('note', { name: "AI answer, not the paper's words" });
-    expect(slip.getAttribute('data-voice')).toBe('ai');
-    const pages = within(slip).getAllByRole('button', { name: /^Show p\. \d in the paper$/ });
+    expect(container.querySelector('[data-voice="ai"]')).not.toBeNull();
+    const pages = screen.getAllByRole('button', { name: /^Show p\. \d in the paper$/ });
     expect(pages.map((m) => m.getAttribute('aria-label'))).toEqual([
       'Show p. 1 in the paper',
       'Show p. 2 in the paper',
     ]);
-    expect(slip.querySelector('.pt-marker, .pt-chip, .pt-coverage')).toBeNull();
-    expect(slip.textContent).not.toMatch(/\[b\d|passages|citations/);
-    expect(within(slip).getByText('6,776 tokens · ≈ $0.0027 (estimate)')).not.toBeNull();
+    expect(container.textContent).not.toMatch(/\[b\d|passages|citations/);
+    expect(screen.getByText('MiniMax-M3')).not.toBeNull();
     fireEvent.click(pages[1]!);
-    expect(ctx.openCitation).toHaveBeenCalledWith('cn_explanation', 'cit_b6_1', 'thr_1');
+    expect(branch.openSource).toHaveBeenCalledWith('cn_explanation', 'cit_b6_1', 'thr_1');
   });
 
-  it('before its thread is read: the words only, no handles, no source lines, no footer', () => {
-    const { container } = mount(ExplanationCard, row, actions({ sources: sources() }));
-    expect(container.querySelector('[data-voice="you"]')).toBeNull();
-    const slip = screen.getByRole('note', { name: "AI answer, not the paper's words" });
-    expect(slip.textContent).toContain('The Transformer drops recurrence.');
-    expect(slip.textContent).not.toMatch(/\[b\d|passages|estimate|General knowledge/);
-    expect(slip.querySelector('.pt-source')).toBeNull();
+  it('before its thread is read: the words only, no handles, no pages', () => {
+    const { container } = mount(AnswerCard, row, actions({ sources: sources() }));
+    expect(container.textContent).toContain('The Transformer drops recurrence.');
+    expect(container.textContent).not.toMatch(/\[b\d|passages|estimate|General knowledge/);
+    expect(container.querySelector('.pt-tc__src')).toBeNull();
   });
 
   it('never shows the unterminated handle run a stopped answer ends with (S9-4)', () => {
-    const stopped = cardRow('explanation', {
-      body: 'The grid predicts boxes [b1]. Each cell predicts from fragments [b42, b43, b44, b4',
-      source_message_id: 'msg_a1',
-    });
+    const body =
+      'The grid predicts boxes [b1]. Each cell predicts from fragments [b42, b43, b44, b4';
+    const stopped = cardRow('explanation', { body, final_text: body, source_message_id: 'msg_a1' });
     const source = explanationSource('thr_1', THREAD, 'msg_a1')!;
-    mount(ExplanationCard, stopped, actions({ sources: sources(new Map([['msg_a1', source]])) }));
-    const slip = screen.getByRole('note', { name: "AI answer, not the paper's words" });
-    expect(slip.textContent).toContain('Each cell predicts from fragments');
-    expect(slip.textContent).not.toMatch(/\[|\bb\d{1,2}\b/);
+    const branch = branchActions([stopped], {
+      streams: new Map([
+        [
+          'cn_explanation',
+          {
+            text: body,
+            status: 'stopped',
+            citations: [],
+            runId: null,
+            thinking: false,
+            failure: null,
+          },
+        ],
+      ]),
+    });
+    const { container } = mount(
+      AnswerCard,
+      stopped,
+      actions({ sources: sources(new Map([['msg_a1', source]])) }),
+      branch,
+    );
+    expect(container.textContent).toContain('Each cell predicts from fragments');
+    expect(container.textContent).not.toMatch(/\[|\bb\d{1,2}\b/);
+    expect(screen.getByText('stopped')).not.toBeNull();
   });
 
-  it('unfolds when the keyboard reaches a page link below the fold', () => {
-    const height = (name: 'scrollHeight' | 'clientHeight', value: number) =>
-      vi.spyOn(HTMLElement.prototype, name, 'get').mockReturnValue(value);
-    const spies = [height('scrollHeight', 480), height('clientHeight', 120)];
-    const source = explanationSource('thr_1', THREAD, 'msg_a1')!;
-    const { container } = mount(
-      ExplanationCard,
-      row,
-      actions({ sources: sources(new Map([['msg_a1', source]])) }),
-    );
-    expect(container.querySelector('[data-expanded="false"]')).not.toBeNull();
-    fireEvent.focus(screen.getAllByRole('button', { name: 'Show p. 2 in the paper' })[0]!);
-    expect(container.querySelector('[data-expanded="true"]')).not.toBeNull();
-    spies.forEach((spy) => spy.mockRestore());
+  it('streams with "writing…" and Stop, and Stop stops it', () => {
+    const live = cardRow('explanation', { body: '' });
+    const branch = branchActions([live], {
+      streams: new Map([
+        [
+          'cn_explanation',
+          {
+            text: 'The grid',
+            status: 'writing',
+            citations: [],
+            runId: 'run_1',
+            thinking: false,
+            failure: null,
+          },
+        ],
+      ]),
+    });
+    mount(AnswerCard, live, actions(), branch);
+    expect(screen.getByText('writing…')).not.toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Stop' }));
+    expect(branch.stop).toHaveBeenCalledWith('cn_explanation');
   });
 });
 

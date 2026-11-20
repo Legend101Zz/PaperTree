@@ -15,6 +15,7 @@ import {
   rightChildren,
   siblingsOf,
   spanKnots,
+  withSubtrees,
 } from './tree';
 import { node, resetClock, spanOf } from './treeFixtures';
 
@@ -105,6 +106,30 @@ describe('child order', () => {
     ]);
     expect(ids(childrenOf(tree, 'p'))).toEqual(['right', 'down']);
     expect(downChild(tree, 'p')?.node_id).toBe('down');
+  });
+});
+
+describe('withSubtrees', () => {
+  const rows = [
+    node({ id: 'p' }),
+    node({ id: 'a1', parent: 'p', branch: 'down' }),
+    node({ id: 'b', parent: 'a1' }),
+    node({ id: 'b1', parent: 'b', branch: 'down' }),
+    node({ id: 'other', parent: 'p' }),
+    node({ id: 'loose', kind: 'note' }),
+  ];
+
+  it('takes everything under a chosen card, parents first', () => {
+    expect(ids(withSubtrees(rows, new Set(['a1'])))).toEqual(['a1', 'b', 'b1']);
+  });
+
+  it('lists a card chosen with its own ancestor once, under the ancestor', () => {
+    expect(ids(withSubtrees(rows, new Set(['b1', 'a1'])))).toEqual(['a1', 'b', 'b1']);
+  });
+
+  it('leaves a loose card alone, and a leaf is just itself', () => {
+    expect(ids(withSubtrees(rows, new Set(['loose', 'other'])))).toEqual(['other', 'loose']);
+    expect(withSubtrees(rows, new Set(['nope']))).toEqual([]);
   });
 });
 

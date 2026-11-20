@@ -175,6 +175,23 @@ def test_threads_list_most_recently_active_first(env: Env) -> None:
     assert [t["thread_id"] for t in env.db.list_threads(a.owner, a.paper_id)] == [older, newer]
 
 
+def test_a_board_threads_is_found_by_id_but_not_listed(env: Env) -> None:
+    a = env.alice
+    reader = _thread(env, a, "thr_01K63A9W4XJ7Q2N8R5T0V3Y6Z1")
+    env.db.create_thread(
+        a.owner,
+        a.paper_id,
+        thread_id="thr_01K63A9W4XJ7Q2N8R5T0V3Y6Z2",
+        kind="ask",
+        title="Board",
+        origin_anchor=None,
+        board_id="brd_1",
+    )
+    assert [t["thread_id"] for t in env.db.list_threads(a.owner, a.paper_id)] == [reader]
+    found = env.db.get_thread(a.owner, a.paper_id, "thr_01K63A9W4XJ7Q2N8R5T0V3Y6Z2")
+    assert found is not None and found["title"] == "Board"
+
+
 def test_a_thread_is_read_through_its_own_paper_only(env: Env) -> None:
     a = env.alice
     thread_id = _thread(env, a)

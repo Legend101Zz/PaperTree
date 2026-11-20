@@ -759,7 +759,11 @@ class Run {
   private tidied(): string {
     const kind = this.request.kind;
     if (kind !== 'explain' && kind !== 'ask') return this.finalText;
-    return tidyAnswer(this.finalText, this.request.check === true);
+    return tidyAnswer(
+      this.finalText,
+      this.request.check === true,
+      this.request.diagram !== 'never',
+    );
   }
 
   private done(promptError: unknown): DoneData {

@@ -102,6 +102,10 @@ ADDED: frozenset[tuple[str, str]] = frozenset(
         ("PATCH", "/boards/{board_id}/edges/{edge_id}"),
         ("DELETE", "/boards/{board_id}/edges/{edge_id}"),
         ("PATCH", "/boards/{board_id}"),
+        # v0.3 (#343): the branching board
+        ("POST", "/boards/{board_id}/nodes/{node_id}/asks"),
+        ("POST", "/boards/{board_id}/nodes/{node_id}/notes"),
+        ("POST", "/boards/{board_id}/tidy"),
         # v0.2 S5a (#206): the notebook
         ("POST", "/papers/{paper_id}/notebook/pages"),
         ("GET", "/papers/{paper_id}/notebook/pages"),

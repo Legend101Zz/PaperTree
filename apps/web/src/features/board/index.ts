@@ -3,7 +3,8 @@
  * typed threads. `app/paper/[id]/board` renders `BoardView` (`/canvas` redirects there, #214); the
  * reader's "Send to board" and "Open source" helpers keep their v0.1 home, `components/canvas`.
  */
-export { BoardView, citationHref } from './components/BoardView';
+export { BoardView } from './components/BoardView';
+export { citationHref } from './model/chrome';
 export { nodeTypes } from './components/cards';
 export { useBoardController, staleSubject } from './hooks/useBoardController';
 export { useCardSources } from './hooks/useCardSources';

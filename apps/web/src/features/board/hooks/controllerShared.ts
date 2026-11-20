@@ -9,6 +9,9 @@ import type { Viewport } from '@xyflow/react';
 import type { EdgeChange, NodeChange } from '@xyflow/react';
 import type { PtEdge, PtNode } from '../model/flow';
 import type { BoardHistory } from './useBoardHistory';
+import type { BoardStore } from './useBoardStore';
+import type { UndoOfferControl } from './useUndoOffer';
+import type { BoardWrites } from './useBoardWrites';
 
 export const NUDGE_DEBOUNCE_MS = 400;
 /** How long the Undo offer after a delete stays on screen. */
@@ -83,6 +86,15 @@ export interface BoardController {
   readonly groupNodes: (ids: readonly string[]) => Promise<void>;
   readonly saveViewport: (viewport: Viewport) => void;
   readonly initialViewport: Viewport | null;
+  /**
+   * The pieces the branching board (v0.3) builds on: the working copy, the write primitives and the
+   * Undo steps. The tree hooks ask and place cards through the same writes every gesture uses.
+   */
+  readonly internals: {
+    readonly store: BoardStore;
+    readonly writes: BoardWrites;
+    readonly offer: UndoOfferControl;
+  };
 }
 
 /**

@@ -46,6 +46,29 @@ async function mouseDrag(
   await page.mouse.up();
 }
 
+/**
+ * A point on the EMPTY pane (the hit element is the pane itself), searched from the lower part of
+ * the board. A v0.3 card's body takes no pan (its words stay selectable), so a pan or a wheel zoom
+ * that starts on a card does nothing: the journey must start on the bare pane wherever the Tidy
+ * layout put the cards.
+ */
+async function emptyPanePoint(
+  page: import('@playwright/test').Page,
+): Promise<{ x: number; y: number }> {
+  const point = await page.evaluate(() => {
+    for (let y = 860; y >= 300; y -= 20) {
+      for (let x = 160; x <= 1400; x += 20) {
+        if (document.elementFromPoint(x, y)?.classList.contains('react-flow__pane')) {
+          return { x, y };
+        }
+      }
+    }
+    return null;
+  });
+  if (point === null) throw new Error('no empty pane point to pan from');
+  return point;
+}
+
 test.describe('Journey D: the canvas', () => {
   test.use({ actionTimeout: 20_000 });
   test('send, drag, connect, note, group, reload, delete, open source', async ({
@@ -133,7 +156,11 @@ test.describe('Journey D: the canvas', () => {
 
     // ── 3. open the canvas from the toast's link: exactly 2 nodes ──
     await page.getByRole('link', { name: 'Show' }).click(); // the passage's toast (#203, #346)
-    await expect(page).toHaveURL(new RegExp(`/paper/${paperId}/board(\\?card=cn_[\\w-]+)?$`));
+    // v0.3: the link opens the board on the card this send made (`?card=<id>`, #342); once the board
+    // has panned to the card the address drops the parameter, so a reload stays put.
+    await expect(page).toHaveURL(
+      new RegExp(`/paper/${paperId}/board(\\?card=${excerpt.node_id})?$`),
+    );
     await expect(page.locator('.react-flow__node')).toHaveCount(2);
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(1440);
     await expect(
@@ -153,7 +180,9 @@ test.describe('Journey D: the canvas', () => {
     await page.waitForTimeout(1000);
     calls.length = 0;
     const head = await nodeBox(page, excerpt.node_id);
-    await mouseDrag(page, { x: head.x + 60, y: head.y + 24 }, { x: head.x + 60, y: head.y + 224 });
+    // v0.3: a card is dragged by its top strip (the words below stay selectable), and a tree card's
+    // drag is an OFFSET on the Tidy layout, not a new x, y.
+    await mouseDrag(page, { x: head.x + 60, y: head.y + 16 }, { x: head.x + 60, y: head.y + 216 });
     await page.waitForTimeout(1200);
     const patches = calls.filter((c) => PATCHES.test(c));
     expect(patches).toEqual([
@@ -161,7 +190,7 @@ test.describe('Journey D: the canvas', () => {
     ]);
     const afterDrag = await getBoard(stack.apiUrl, token, paperId);
     const moved = afterDrag.nodes.find((n) => n.node_id === excerpt.node_id)!;
-    expect(moved.y).toBeGreaterThan(excerpt.y + 100);
+    expect(moved.offset_y ?? 0).toBeGreaterThan(100);
     expect(moved.version).toBe(excerpt.version + 1);
 
     // ── 5. connect with "supports": the label is visible ──
@@ -276,8 +305,10 @@ test.describe('Journey D: the canvas', () => {
 
     // ── 8. pan and zoom: saved on the END only ──
     calls.length = 0;
-    await mouseDrag(page, { x: 700, y: 840 }, { x: 640, y: 800 });
-    await page.mouse.move(720, 600);
+    const bare = await emptyPanePoint(page);
+    await mouseDrag(page, bare, { x: bare.x - 40, y: bare.y - 20 });
+    // The wheel zooms where the pointer is, so it stays on the point the pan ended on (bare pane).
+    await page.mouse.move(bare.x - 40, bare.y - 20);
     await page.mouse.wheel(0, -240);
     await page.waitForTimeout(1500);
     const viewportPatches = calls.filter(
@@ -307,7 +338,10 @@ test.describe('Journey D: the canvas', () => {
       }));
       return { api: board, dom };
     };
-    await page.mouse.click(1000, 870); // deselect everything: a selected link adds its editor row
+    // Deselect everything: a selected link adds its editor row. A click on the bare pane clears it;
+    // a fixed point does not, because a tree card (or the stage's lower edge) may sit there.
+    const clear = await emptyPanePoint(page);
+    await page.mouse.click(clear.x, clear.y);
     await expect(page.getByRole('group', { name: 'Selected link' })).toBeHidden();
     await page.waitForTimeout(500);
     const beforeReload = await snapshot();
@@ -342,9 +376,10 @@ test.describe('Journey D: the canvas', () => {
     expect(afterDelete.edges).toHaveLength(0);
 
     // ── 11. Open source lands on, and flashes, the passage ──
+    // v0.3: the passage's page is a button on its strip; it opens the reader on those words.
     await page
       .locator(`.react-flow__node[data-id="${excerpt.node_id}"]`)
-      .getByRole('link', { name: 'Open source' })
+      .getByRole('button', { name: /in the paper$/ })
       .click();
     await expect(page).toHaveURL(new RegExp(`/paper/${paperId}/read\\?focus=${excerpt.node_id}$`));
     const flash = page.locator('polygon.pt-flash').first();

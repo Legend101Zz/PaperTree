@@ -15,7 +15,10 @@ import { answerModel } from '@/features/explain/model/answer';
 import { clipAnswer } from '@/features/explain/model/phone';
 import { foldedPreview } from '@/features/explain/model/states';
 import { CanvasActionsProvider } from '@/features/board/components/BoardContext';
-import { ExplanationCard } from '@/features/board/components/cards/ExplanationCard';
+import { AnswerCard } from '@/features/board/components/cards/AnswerCard';
+import { BranchProvider } from '@/features/board/components/BranchContext';
+
+import { branchActions } from './branch-harness';
 import { toFlowNode, type PtNode } from '@/features/board/model/flow';
 import { cardRow } from '@/features/board/model/test-data';
 import { Maths, typeset } from '@/lib/math';
@@ -174,7 +177,9 @@ describe('the board explanation card', () => {
             openCitation: vi.fn(),
           }}
         >
-          <ExplanationCard {...props} />
+          <BranchProvider value={branchActions()}>
+            <AnswerCard {...props} />
+          </BranchProvider>
         </CanvasActionsProvider>
       </ReactFlowProvider>,
     );

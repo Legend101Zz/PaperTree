@@ -190,3 +190,12 @@ describe('the check fence', () => {
     );
   });
 });
+
+describe('diagram: never (#343)', () => {
+  const plate = fence('diagram', [PLATE, A, B, C].join('\n'));
+  test('a diagram fence the model wrote anyway is removed', () => {
+    const text = `## TL;DR\nA.\n\n${plate}\n\n## In the paper\nB.`;
+    assert.match(tidyAnswer(text, false), /```diagram/);
+    assert.doesNotMatch(tidyAnswer(text, false, false), /```diagram/);
+  });
+});

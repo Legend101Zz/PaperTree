@@ -397,6 +397,15 @@ function seedPassages(systemPrompt: string): Array<{ handle: string; text: strin
  */
 function tutorAnswer(request: RunRequest, inPaper: string): string {
   const level = request.level ?? 'familiar';
+  // An ask (the board's and the reader's Ask box) says what it was asked and how much path it had,
+  // so a test can tell a branch's answer from its parent's, deterministically (#343).
+  const turns = (request.history?.entries ?? []).filter(
+    (entry) => (entry as { message?: { role?: string } }).message?.role === 'user',
+  ).length;
+  const echo =
+    request.kind === 'ask'
+      ? ` (Faux) Asked: "${words(request.question, request.datamark, 14)}", with ${String(turns)} earlier turn(s) on this path.`
+      : '';
   const diagram = [
     { t: 'plate', title: 'The idea in three steps' },
     { t: 'part', label: 'Input x', text: 'what goes in', kind: 'input', after: [], cite: null },
@@ -418,12 +427,14 @@ function tutorAnswer(request: RunRequest, inPaper: string): string {
     },
   ];
   const sections = [
-    '## TL;DR\n(Faux) The passage in one plain sentence: an idea the paper builds on.',
+    `## TL;DR\n(Faux) The passage in one plain sentence: an idea the paper builds on.${echo}`,
     level === 'expert'
       ? '## The trade-off\n(Faux) It buys a simpler optimisation and costs one extra addition.'
       : '## In plain words\n(Faux) Think of it as editing a draft instead of rewriting it.',
-    '## How it works\n(Faux) The block outputs $y = F(x) + x$.\n' +
-      `\`\`\`diagram\n${diagram.map((line) => JSON.stringify(line)).join('\n')}\n\`\`\``,
+    '## How it works\n(Faux) The block outputs $y = F(x) + x$.' +
+      (request.diagram === 'never'
+        ? ''
+        : `\n\`\`\`diagram\n${diagram.map((line) => JSON.stringify(line)).join('\n')}\n\`\`\``),
     `## In the paper\n${inPaper}`,
   ];
   if (request.check === true) {
@@ -452,6 +463,21 @@ function answerFromSeed(request: RunRequest): FauxStep {
     );
     return {
       thinking: 'The seed passages hold the selection.',
+      text: chunks(text),
+      usage: estimate(context, text),
+    };
+  };
+}
+
+/** An ask with no tools (a board ask whose paper is `off`): answered from the path alone. */
+function answerFromPath(request: RunRequest): FauxStep {
+  return (context) => {
+    const text = tutorAnswer(
+      request,
+      'This answer used only the board path, not the paper. (Faux answer.)',
+    );
+    return {
+      thinking: 'No paper text beyond the path.',
       text: chunks(text),
       usage: estimate(context, text),
     };
@@ -836,6 +862,7 @@ export const defaultBrain: FauxBrain = (request) => {
     ];
   }
   if (request.seed !== null && request.seed.passages.length > 0) return [answerFromSeed(request)];
+  if (request.limits.max_tool_calls === 0) return [answerFromPath(request)];
   const query =
     words(request.question, request.datamark, 6)
       .replace(/[^\p{L}\p{N} -]/gu, ' ')

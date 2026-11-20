@@ -81,7 +81,8 @@ test('cards, pins and a thread that persists with its ports', async ({ browser, 
 
   // The passage card: the paper's words, in the paper's voice, under its page tab.
   const card = page.locator(`.react-flow__node[data-id="${passageId}"]`);
-  await expect(card.locator('.pt-tab')).toHaveText(/^p\. \d+$/);
+  // v0.3: the page is a button on the card's top strip (it opens the paper on those words).
+  await expect(card.locator('.pt-tc__src')).toHaveText(/^p\. \d+$/);
   await expect(card.locator('blockquote[data-voice="paper"]')).toContainText('Deeper neural');
   await expect(card.getByRole('button', { name: 'evidence in' })).toBeVisible();
   await expect(page.getByRole('region', { name: 'Legend' })).toContainText(

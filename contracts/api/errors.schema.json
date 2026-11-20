@@ -280,6 +280,108 @@
             }
           ]
         },
+        "parent_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "branch": {
+          "anyOf": [
+            {
+              "enum": ["down", "right"],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "parent_span": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ParentSpan"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "question": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "uses": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/NodeUses"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "offset_x": {
+          "type": "number"
+        },
+        "offset_y": {
+          "type": "number"
+        },
+        "folded": {
+          "type": "boolean"
+        },
+        "final_text": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "level": {
+          "anyOf": [
+            {
+              "enum": ["new", "familiar", "expert"],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "model": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "answer_status": {
+          "anyOf": [
+            {
+              "enum": ["streaming", "complete", "partial", "error", "aborted"],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "version": {
           "maximum": 9223372036854775807,
           "minimum": 1,
@@ -311,6 +413,18 @@
         "source_page_id",
         "source_diagram_id",
         "counts",
+        "parent_id",
+        "branch",
+        "parent_span",
+        "question",
+        "uses",
+        "offset_x",
+        "offset_y",
+        "folded",
+        "final_text",
+        "level",
+        "model",
+        "answer_status",
         "version",
         "created_at",
         "updated_at"
@@ -357,6 +471,42 @@
       },
       "required": ["detail", "code", "retryable"],
       "title": "ErrorEnvelope",
+      "type": "object"
+    },
+    "NodeUses": {
+      "additionalProperties": false,
+      "description": "What an ask reads (spec §2 `uses_json`), shown above the ask box and stored on the card.\n`path` is always the card's ancestors; `paper` is `page` (the root passage's page and the\npages on each side, tools off), `whole` (tools on) or `off` (the path only); `extra_node_ids`\nare cards the user explicitly attached.",
+      "properties": {
+        "path": {
+          "default": true,
+          "type": "boolean"
+        },
+        "paper": {
+          "default": "page",
+          "enum": ["page", "whole", "off"],
+          "type": "string"
+        },
+        "level": {
+          "default": "familiar",
+          "enum": ["new", "familiar", "expert"],
+          "type": "string"
+        },
+        "diagram": {
+          "default": "may",
+          "enum": ["may", "never", "always"],
+          "type": "string"
+        },
+        "extra_node_ids": {
+          "items": {
+            "pattern": "^[a-z]{2,4}_[0-9A-Za-z-]{8,64}$",
+            "type": "string"
+          },
+          "maxItems": 12,
+          "type": "array"
+        }
+      },
+      "required": ["path", "paper", "level", "diagram", "extra_node_ids"],
+      "title": "NodeUses",
       "type": "object"
     },
     "NotebookCardCounts": {
@@ -406,6 +556,28 @@
       },
       "required": ["type", "index"],
       "title": "PageSelector",
+      "type": "object"
+    },
+    "ParentSpan": {
+      "additionalProperties": false,
+      "description": "The words of a parent answer a branch starts from (spec §1 rule 4): `start` and `end` are\nUTF-16 code units into the parent's stored final answer text (the Markdown the model wrote), and\n`quote` is exactly the words at those offsets, which the store checks.",
+      "properties": {
+        "start": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "end": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "quote": {
+          "maxLength": 2000,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": ["start", "end", "quote"],
+      "title": "ParentSpan",
       "type": "object"
     },
     "SectionPathSelector": {

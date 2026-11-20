@@ -72,3 +72,60 @@ describe('the default brain answers in the v0.3 shape', () => {
     assert.equal(tidyAnswer(run({}), false), run({}));
   });
 });
+
+describe('the default brain on a board ask (#343)', () => {
+  const run = (patch: Partial<RunRequest>): string => {
+    const request = {
+      ...(readExample('explain') as unknown as RunRequest),
+      kind: 'ask',
+      prompt_version: 'ask-v1',
+      question: 'What is a residual?',
+      ...patch,
+    } as RunRequest;
+    const [step] = defaultBrain(request);
+    assert.ok(step !== undefined);
+    const turn =
+      typeof step === 'function' ? step({ systemPrompt: SEED, messages: [], request: 1 }) : step;
+    return (turn.text ?? []).join('');
+  };
+
+  test('says what it was asked and how many earlier turns the path had', () => {
+    assert.match(run({}), /\(Faux\) Asked: "What is a residual\?", with 0 earlier turn\(s\)/);
+    const history = {
+      session_id: 'thr_01K63A9W4XJ7Q2N8R5T0V3Y6ZB',
+      entries: [
+        { message: { role: 'user' } },
+        { message: { role: 'assistant' } },
+        { message: { role: 'user' } },
+      ],
+    };
+    assert.match(run({ history } as Partial<RunRequest>), /with 2 earlier turn\(s\)/);
+  });
+
+  test('diagram: never writes no diagram fence; the tutor shape is otherwise the same', () => {
+    assert.doesNotMatch(run({ diagram: 'never' } as Partial<RunRequest>), /```diagram/);
+    assert.match(run({ diagram: 'always' } as Partial<RunRequest>), /```diagram/);
+    assert.match(
+      run({}),
+      /## TL;DR[\s\S]*## In plain words[\s\S]*## How it works[\s\S]*## In the paper/,
+    );
+  });
+
+  test('with no tools and no passages it answers from the path alone, without calling one', () => {
+    const base = readExample('explain') as unknown as RunRequest;
+    const request = {
+      ...base,
+      kind: 'ask',
+      prompt_version: 'ask-v1',
+      seed: { ...base.seed!, passages: [] },
+      limits: { ...base.limits, max_tool_calls: 0 },
+    } as RunRequest;
+    const steps = defaultBrain(request);
+    assert.equal(steps.length, 1);
+    const [step] = steps;
+    const turn =
+      typeof step === 'function' ? step({ systemPrompt: SEED, messages: [], request: 1 }) : step!;
+    assert.equal(turn.toolCalls, undefined);
+    assert.match((turn.text ?? []).join(''), /only the board path, not the paper/);
+  });
+});

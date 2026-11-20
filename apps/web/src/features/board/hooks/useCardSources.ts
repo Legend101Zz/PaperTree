@@ -65,7 +65,8 @@ async function readExplanations(
   wanted: readonly string[],
 ): Promise<Map<string, ExplanationSource>> {
   const found = new Map<string, ExplanationSource>();
-  const threads = [...(await threadsApi.list(paperId))]
+  // The board's own answers live in board threads, which the reader's list leaves out.
+  const threads = [...(await threadsApi.list(paperId, { includeBoard: true }))]
     .sort((a, b) => b.updated_at.localeCompare(a.updated_at))
     .slice(0, MAX_THREADS);
   for (const thread of threads) {

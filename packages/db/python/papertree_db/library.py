@@ -195,7 +195,8 @@ SELECT po.paper_id, po.source_hash, po.original_filename, po.byte_size, po.creat
            AND b.generation = pp.generation
            AND b.block_id = json_extract(p.metadata, '$.arxiv_id.source_block_id')) AS stamp_text,
        (SELECT COUNT(*) FROM ai_threads t
-         WHERE t.owner_id = po.owner_id AND t.paper_id = po.paper_id) AS thread_count,
+         WHERE t.owner_id = po.owner_id AND t.paper_id = po.paper_id
+           AND t.board_id IS NULL) AS thread_count,
        EXISTS (SELECT 1 FROM derivations d
                 WHERE d.owner_id = pp.owner_id AND d.paper_id = pp.paper_id
                   AND d.generation = pp.generation

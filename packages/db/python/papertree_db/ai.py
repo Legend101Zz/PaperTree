@@ -280,8 +280,13 @@ class AiMixin(_Base):
         kind: str,
         title: str,
         origin_anchor: Mapping[str, Any] | None,
+        board_id: str | None = None,
     ) -> Row:
-        """A new thread on one of this owner's papers. ``PaperNotFound`` if it is not theirs."""
+        """A new thread on one of this owner's papers. ``PaperNotFound`` if it is not theirs.
+
+        ``board_id`` marks the thread of a board answer (0016): it is the board path's record, not
+        one of the reader's conversations, so ``list_threads`` leaves it out.
+        """
         owner_id = self._resolve(owner)
         if kind not in THREAD_KINDS:
             raise ValueError(f"kind={kind!r} is not one of {sorted(THREAD_KINDS)}")
@@ -294,9 +299,9 @@ class AiMixin(_Base):
         now = _now()
         self._conn.execute(
             "INSERT INTO ai_threads (thread_id, owner_id, paper_id, kind, title, "
-            "origin_anchor_json, agent_state_json, created_at, updated_at) "
-            "VALUES (?, ?, ?, ?, ?, ?, NULL, ?, ?)",
-            (thread_id, owner_id, paper_id, kind, title, anchor_json, now, now),
+            "origin_anchor_json, agent_state_json, created_at, updated_at, board_id) "
+            "VALUES (?, ?, ?, ?, ?, ?, NULL, ?, ?, ?)",
+            (thread_id, owner_id, paper_id, kind, title, anchor_json, now, now, board_id),
         )
         row = self.get_thread(owner, paper_id, thread_id)
         assert row is not None  # just written, same connection
@@ -413,13 +418,23 @@ class AiMixin(_Base):
                     (_now(), owner_id, owner_id, message_id),
                 )
 
-    def list_threads(self, owner: OwnerId, paper_id: PaperId) -> list[Row]:
+    def list_threads(
+        self, owner: OwnerId, paper_id: PaperId, *, board_threads: bool = False
+    ) -> list[Row]:
         """This owner's threads on a paper, most recently active first (the order canvas code relies
-        on; do not change it), with ``message_count``, ``first_ask`` and ``last_status``."""
+        on; do not change it), with ``message_count``, ``first_ask`` and ``last_status``.
+
+        A board answer's thread (``board_id`` set, 0016) is not the reader's conversation and is
+        left out unless ``board_threads`` (the board reading its own answers' sources);
+        ``get_thread`` finds it by id either way.
+        """
         owner_id = self._resolve(owner)
+        scope = "" if board_threads else "AND t.board_id IS NULL "
         return self._all(
-            _THREAD_SELECT + " WHERE t.owner_id = ? AND t.paper_id = ? "
-            "GROUP BY t.thread_id ORDER BY t.updated_at DESC, t.thread_id DESC",
+            _THREAD_SELECT
+            + " WHERE t.owner_id = ? AND t.paper_id = ? "
+            + scope
+            + "GROUP BY t.thread_id ORDER BY t.updated_at DESC, t.thread_id DESC",
             (owner_id, paper_id),
         )
 

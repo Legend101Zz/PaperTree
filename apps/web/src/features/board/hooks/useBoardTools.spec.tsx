@@ -15,6 +15,7 @@ import { toFlowNode } from '../model/flow';
 import { cardRow } from '../model/test-data';
 import { useBoardController, type BoardController } from './useBoardController';
 import { useBoardTools, type BoardToolsInput } from './useBoardTools';
+import { branchBoard } from '../../../../test/branch-harness';
 
 import type { BoardSelection } from './useBoardSelection';
 import type { LinkAs } from './useLinkAs';
@@ -76,6 +77,7 @@ function tools(s: Stubs, nodes: string[], edges: string[] = []): BoardToolbarPro
     areaMode: false,
     setAreaMode: vi.fn(),
     fitOptions: {},
+    branch: branchBoard(),
   };
   return renderHook(() => useBoardTools(input), { wrapper: ReactFlowProvider }).result.current;
 }
@@ -180,6 +182,7 @@ describe('Remove frame (v0.1’s Ungroup) through the controller', () => {
           areaMode: false,
           setAreaMode: vi.fn(),
           fitOptions: {},
+          branch: branchBoard(),
         };
         return { ctl, tools: useBoardTools(input) };
       },

@@ -37,7 +37,7 @@ async function citationAnchor(
   const ids =
     threadId !== null
       ? [threadId]
-      : [...(await threadsApi.list(paperId))]
+      : [...(await threadsApi.list(paperId, { includeBoard: true }))]
           .sort((a, b) => b.updated_at.localeCompare(a.updated_at))
           .slice(0, MAX_THREADS)
           .map((t) => t.thread_id);

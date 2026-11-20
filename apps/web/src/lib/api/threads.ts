@@ -51,7 +51,14 @@ export const threadsApi = {
     signal?: AbortSignal,
   ): AsyncGenerator<SseEvent> =>
     streamSse(`/papers/${seg(paperId)}/threads/${seg(threadId)}/messages`, body, signal),
-  list: (paperId: string) => request<Thread[]>(`/papers/${seg(paperId)}/threads`),
+  /**
+   * The reader's threads. A board answer's thread is not one of them (0016); the board reads its
+   * own answers' sources with `includeBoard`.
+   */
+  list: (paperId: string, options?: { includeBoard?: boolean }) =>
+    request<Thread[]>(
+      `/papers/${seg(paperId)}/threads${options?.includeBoard === true ? '?include_board=true' : ''}`,
+    ),
   get: (paperId: string, threadId: string) =>
     request<{ thread: Thread; messages: Message[] }>(
       `/papers/${seg(paperId)}/threads/${seg(threadId)}`,

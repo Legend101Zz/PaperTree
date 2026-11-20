@@ -345,7 +345,8 @@ def test_0008_carries_every_row_fk_and_the_trigger(tmp_path: Path) -> None:
         after_edges = _rows(conn, EDGES_SQL)
         assert before_nodes == [r[: len(before_nodes[0])] for r in after_nodes]
         assert before_edges == [r[: len(before_edges[0])] for r in after_edges]
-        assert all(r[len(before_nodes[0]) :] == (None, None) for r in after_nodes)
+        width = len(before_nodes[0])
+        assert all(r[width : width + 2] == (None, None) for r in after_nodes)
         assert [r[len(before_edges[0]) :] for r in after_edges] == [(None, None)] * 2
         assert _rows(conn, "SELECT from_port, to_port FROM canvas_edges") == [(None, None)] * 2
         assert _rows(conn, "PRAGMA foreign_key_check") == []

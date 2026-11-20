@@ -49,9 +49,10 @@ export function cleanCheckFence(body: string): string | null {
 /**
  * @param text - `final_text` of an explain or ask run.
  * @param check - Whether the request asked for a check fence.
+ * @param diagram - Whether a diagram fence may stay (false: the request said `diagram: never`).
  * @returns The text with the fences tidied as described above.
  */
-export function tidyAnswer(text: string, check: boolean): string {
+export function tidyAnswer(text: string, check: boolean, diagram = true): string {
   const lines = text.split('\n');
   const out: string[] = [];
   let diagrams = 0;
@@ -79,7 +80,7 @@ export function tidyAnswer(text: string, check: boolean): string {
     }
     let kept: string | null = null;
     if (closed) {
-      if (lang === 'diagram' && diagrams === 0) kept = cleanDiagramFence(body);
+      if (lang === 'diagram' && diagrams === 0 && diagram) kept = cleanDiagramFence(body);
       if (lang === 'check' && checks === 0 && check) kept = cleanCheckFence(body);
     }
     if (kept === null) removed = true;

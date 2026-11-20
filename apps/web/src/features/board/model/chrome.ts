@@ -76,6 +76,27 @@ export function readerHref(paperId: string): string {
   return `/paper/${encodeURIComponent(paperId)}/read`;
 }
 
+/**
+ * The reader URL that opens a card's cited passage and flashes it (`useFocusFromCanvas`).
+ *
+ * @param paperId The paper.
+ * @param nodeId The card the marker is on.
+ * @param citationId The citation behind the marker; absent for a passage card (the passage itself).
+ * @param threadId The thread the answer is in, so the reader reads that one thread only.
+ * @returns `/paper/<id>/read?focus=<card>[&cite=<citation>][&thread=<thread>]`.
+ */
+export function citationHref(
+  paperId: string,
+  nodeId: string,
+  citationId?: string,
+  threadId?: string,
+): string {
+  const q = new URLSearchParams({ focus: nodeId });
+  if (citationId !== undefined) q.set('cite', citationId);
+  if (threadId !== undefined) q.set('thread', threadId);
+  return `${readerHref(paperId)}?${q.toString()}`;
+}
+
 /** A route's query string as Next hands it to a page. */
 export type RouteQuery = Readonly<Record<string, string | readonly string[] | undefined>>;
 

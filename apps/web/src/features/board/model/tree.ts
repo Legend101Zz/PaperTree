@@ -238,6 +238,39 @@ export function descendantsOf<N extends TreeNodeInput>(tree: BoardTree<N>, id: s
 }
 
 /**
+ * The cards a delete takes, parents first: each chosen card with everything below it (the server
+ * deletes the whole subtree, so the screen and the Undo must hold the same set). A card chosen
+ * together with its own ancestor is listed once, under that ancestor.
+ *
+ * @param rows Every card of the board.
+ * @param chosen The ids the reader chose.
+ * @returns The chosen cards and their descendants, every parent before its children.
+ */
+export function withSubtrees<N extends TreeNodeInput>(
+  rows: readonly N[],
+  chosen: ReadonlySet<string>,
+): N[] {
+  const tree = buildTree(rows);
+  const underChosen = (row: N): boolean => {
+    const seen = new Set<string>();
+    let at = row.parent_id ?? null;
+    while (at !== null && !seen.has(at)) {
+      if (chosen.has(at)) return true;
+      seen.add(at);
+      at = tree.byId.get(at)?.parent_id ?? null;
+    }
+    return false;
+  };
+  const out = new Map<string, N>();
+  for (const row of rows) {
+    if (!chosen.has(row.node_id) || underChosen(row)) continue;
+    out.set(row.node_id, row);
+    for (const below of descendantsOf(tree, row.node_id)) out.set(below.node_id, below);
+  }
+  return [...out.values()];
+}
+
+/**
  * Rule 3: which way an ask from `parentId` goes. `down` exists only under ANSWER cards: any ask on
  * a passage or a note is always `right` (the question and its answer are one card, placed to the
  * right). On an answer, an ask with no span and no "Ask differently" is `down` ("Follow up") when

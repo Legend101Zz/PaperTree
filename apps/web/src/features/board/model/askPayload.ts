@@ -18,6 +18,7 @@ import {
   type TreeNodeInput,
 } from './tree';
 
+import type { AskBody, QuickAskName } from '@/lib/api/boards';
 import type { AskLevel, AskUses, BoardBranch, ParentSpan } from '@/lib/api/types';
 
 /** The level every ask starts at. */
@@ -26,7 +27,7 @@ export const DEFAULT_LEVEL: AskLevel = 'familiar';
 export const MAX_QUESTION_LENGTH = 2000;
 
 /** The three quick asks of the span mini menu (Simpler, Example, Diagram). */
-export type QuickAsk = 'simpler' | 'example' | 'diagram';
+export type QuickAsk = QuickAskName;
 
 /** What a quick ask sets. `level` and `diagram` are left out when the quick ask keeps the reader's. */
 export const QUICK_ASKS: Readonly<
@@ -127,16 +128,6 @@ export function defaultUses(level: AskLevel = DEFAULT_LEVEL): AskUses {
 export function quickAskUses(quick: QuickAsk, uses: AskUses): AskUses {
   const spec = QUICK_ASKS[quick];
   return { ...uses, level: spec.level ?? uses.level, diagram: spec.diagram ?? uses.diagram };
-}
-
-/** The body of `POST /boards/{board_id}/nodes/{node_id}/asks`. */
-export interface AskBody {
-  question: string;
-  span?: ParentSpan;
-  ask_differently?: boolean;
-  quick?: QuickAsk;
-  uses: AskUses;
-  level: AskLevel;
 }
 
 /** What the reader did to start an ask. */

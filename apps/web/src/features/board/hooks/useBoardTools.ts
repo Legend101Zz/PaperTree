@@ -9,8 +9,10 @@ import { useReactFlow, type FitViewOptions } from '@xyflow/react';
 import { type RefObject } from 'react';
 
 import { threadTool } from '../model/chrome';
+import { tidyResets } from '../model/layout';
 
 import type { BoardController } from './useBoardController';
+import type { BranchBoard } from './useBranchBoard';
 import type { BoardHistory } from './useBoardHistory';
 import type { BoardSelection } from './useBoardSelection';
 import type { LinkAs } from './useLinkAs';
@@ -28,6 +30,8 @@ export interface BoardToolsInput {
   readonly areaMode: boolean;
   readonly setAreaMode: (next: boolean) => void;
   readonly fitOptions: FitViewOptions<PtNode>;
+  /** The branching board (v0.3): Tidy, Fold and Outline act on it. */
+  readonly branch: BranchBoard;
 }
 
 /** The history's keys, said in a tool's tooltip and given to assistive technology. */
@@ -64,7 +68,7 @@ export function historyTool(verb: 'Undo' | 'Redo', history: BoardHistory): Board
  * @returns The props for `BoardToolbar`.
  */
 export function useBoardTools(input: BoardToolsInput): BoardToolbarProps {
-  const { ctl, selection, drawing, link, stage, areaMode, setAreaMode, fitOptions } = input;
+  const { ctl, selection, drawing, link, stage, areaMode, setAreaMode, fitOptions, branch } = input;
   const flow = useReactFlow<PtNode, PtEdge>();
   const ready = ctl.status === 'ready';
   const kindOf = (id: string) => ctl.nodes.find((n) => n.id === id)?.data.node.kind;
@@ -78,7 +82,45 @@ export function useBoardTools(input: BoardToolsInput): BoardToolbarProps {
     return flow.screenToFlowPosition({ x: r.left + r.width / 2, y: r.top + r.height / 2 });
   };
 
+  const { tree } = branch.view;
+  const untidy = tree.roots.some((root) => tidyResets(tree, root.node_id).length > 0);
+  const focusId = branch.control.ui.focusId;
+  const focused = focusId === null ? undefined : tree.byId.get(focusId);
+  const foldable =
+    focused?.kind === 'explanation' && (tree.children.get(focused.node_id)?.length ?? 0) > 0;
+  const folded = focused?.folded === true;
+
   return {
+    branch: {
+      tidy: {
+        label: 'Tidy',
+        icon: 'tidy',
+        enabled: ready && untidy,
+        hint: untidy
+          ? 'Re-flow every branch to the grid; dragging moves a whole branch, Tidy puts it back.'
+          : 'Every branch is already where the board puts it.',
+        run: () => void branch.ask.tidy(),
+      },
+      fold: {
+        label: folded ? 'Unfold' : 'Fold',
+        icon: 'fold',
+        enabled: foldable && focused !== undefined,
+        hint: foldable
+          ? 'Fold the focused answer and everything under it into one pill.'
+          : 'Click an answer that has branches, then fold it.',
+        run: () => {
+          if (focused !== undefined) branch.ask.fold(focused.node_id, !folded);
+        },
+      },
+      outline: {
+        label: 'Outline',
+        icon: 'outline',
+        enabled: ready,
+        pressed: branch.control.ui.outline,
+        hint: 'The tree as an indented study doc, with Markdown export.',
+        run: () => branch.control.setOutline(!branch.control.ui.outline),
+      },
+    },
     select: {
       label: 'Select',
       icon: 'select',

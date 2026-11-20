@@ -117,7 +117,10 @@ describe('“board”, never “canvas”, around the board (#214)', () => {
     } as unknown as Anchor;
     await sendToCanvas('ppr_1', { kind: 'excerpt', anchor });
     await vi.waitFor(() => expect(toast()?.textContent).toContain('Passage added to your board.'));
-    expect(toast()!.querySelector('a')?.getAttribute('href')).toBe('/paper/ppr_1/board');
+    // The link opens the board on the card this send made (#342).
+    expect(toast()!.querySelector('a')?.getAttribute('href')).toMatch(
+      /^\/paper\/ppr_1\/board\?card=cn_/,
+    );
     expect(said(toast()!)).not.toMatch(/canvas/i);
 
     vi.mocked(boardsApi.get).mockResolvedValue({
