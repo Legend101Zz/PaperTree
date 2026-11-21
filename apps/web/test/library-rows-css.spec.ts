@@ -42,3 +42,22 @@ describe('a sideways row at scale', () => {
     expect(ROW_SCROLL_PADDING).toBeGreaterThan(ROW_BOOKEND);
   });
 });
+
+describe('the plank shelf', () => {
+  /** A declaration's raw value inside the first rule whose selector is exactly `selector`. */
+  function raw(selector: string, property: string): string | undefined {
+    const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const rule = new RegExp(`(?:^|\\n)${escaped} \\{([^}]+)\\}`).exec(css)?.[1] ?? '';
+    return new RegExp(`(?:^|\\s)${property}:\\s*([^;]+);`).exec(rule)?.[1]?.trim();
+  }
+
+  it('has room inside its scroll box for the end holders, so a short shelf never scrolls', () => {
+    // A holder reaches past its row by its negative margin; the shelf's inline padding must cover
+    // that reach, or the last holder overflows (a stray scrollbar, its count clipped).
+    const reach = -Number.parseFloat(raw('.pt-plank__holder', 'margin-inline') ?? 'NaN');
+    expect(reach).toBeGreaterThan(0);
+    expect(Number.parseFloat(raw('.pt-shelf', 'padding-inline') ?? 'NaN')).toBe(reach);
+    // ...and the shelf gives the padding back, so its spines stay where the bookends put them.
+    expect(Number.parseFloat(raw('.pt-shelf', 'margin-inline') ?? 'NaN')).toBe(-reach);
+  });
+});
