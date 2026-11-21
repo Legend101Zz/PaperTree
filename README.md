@@ -4,18 +4,21 @@
 
 **Read research papers with an AI that shows its sources.**
 
-<a href="docs/assets/readme/v0.2/papertree-v0.2.mp4"><img src="docs/assets/readme/v0.2/demo.gif" alt="A short loop from the PaperTree v0.2.0 product video" width="100%"/></a>
+<img src="docs/assets/readme/v0.3/demo.gif" alt="A 31-second loop of PaperTree v0.3.0: the shelf, Attention Is All You Need taken off the shelf, its spread with the AI glance, Continue at page 4, a passage selected, Explain streaming in, and its Mermaid flowchart" width="100%"/>
 
-<sub>A real session on v0.2.0 with the live model: select a passage, Explain, and a marker flashes the
-passage it stands on. <a href="docs/assets/readme/v0.2/papertree-v0.2.mp4"><b>Watch the full 90-second product
-video (MP4)</b></a> · made with HyperFrames, narrated with Kokoro.</sub>
+<sub>A real session on v0.3.0 with the live model, 31 seconds on a loop: the shelf, "Attention Is All You Need"
+taken off it, its spread with the AI glance, Continue at p. 4, a passage selected, Explain streaming in, and
+its Mermaid flowchart. <a href="docs/assets/readme/v0.2/papertree-v0.2.mp4">The v0.2 product video (MP4)</a>
+is still here.</sub>
 
 <br/>
 
 PaperTree is a reading room for research papers that runs on your machine. Your papers stand on a shelf.
-The reader shows the real PDF. Select a passage and the AI explains it with numbered markers, each of which
-flashes the passage it stands on, or draws a diagram whose every part is cited. Dive in from an answer to a
-notebook page, and lay out what you found on a board.
+A click takes a paper off the shelf and opens it. The reader shows the real PDF. Select a passage, or click
+a figure, and the AI answers like a tutor: a TL;DR, the idea in plain words, how it works (with a diagram
+when one helps) and where it is in the paper, with a source line whose pages flash the passage. Dive in from
+an answer to a notebook page, and send answers to a board that grows as a branching tree you can lay beside
+the paper.
 
 [![Release](https://img.shields.io/github/v/release/Legend101Zz/PaperTree?label=release&color=2b5797)](https://github.com/Legend101Zz/PaperTree/releases/latest)
 [![CI](https://github.com/Legend101Zz/PaperTree/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Legend101Zz/PaperTree/actions/workflows/ci.yml)
@@ -33,13 +36,12 @@ notebook page, and lay out what you found on a board.
 [![uv](https://img.shields.io/badge/uv-workspace-DE5FE9)](https://docs.astral.sh/uv/)
 [![Model: MiniMax](https://img.shields.io/badge/model-MiniMax%20M3%20%2B%20M3.1%20Flash-E5484D)](#model-policy)
 
-[![TS tests](https://img.shields.io/badge/TS%20tests-3%2C152%20passing-brightgreen)](#tests-and-quality-gates)
-[![pytest](https://img.shields.io/badge/pytest-2%2C562%20passing-brightgreen)](#tests-and-quality-gates)
-[![e2e](https://img.shields.io/badge/e2e-88%2F88%20Playwright-brightgreen)](#tests-and-quality-gates)
-[![axe](https://img.shields.io/badge/axe-0%20serious%20or%20critical-brightgreen)](#how-v020-compares-with-the-last-release)
+[![TS tests](https://img.shields.io/badge/TS%20tests-3%2C807%20passing-brightgreen)](#tests-and-quality-gates)
+[![pytest](https://img.shields.io/badge/pytest-2%2C688%20passing-brightgreen)](#tests-and-quality-gates)
+[![e2e](https://img.shields.io/badge/e2e-103%20Playwright%20specs-blue)](#tests-and-quality-gates)
 
 [Quick start](#quick-start) · [Features](#features) · [Screenshots](#screenshots) ·
-[Release notes](#release-notes-v020) · [v0.3 plans](#v03-plans) · [Docs](#docs)
+[Release notes](#release-notes-v030) · [Known limits](#known-limits-v030) · [Docs](#docs)
 
 </div>
 
@@ -50,8 +52,8 @@ notebook page, and lay out what you found on a board.
 - [Why PaperTree](#why-papertree)
 - [Features](#features)
   - [Library](#library) · [Reader and explain](#reader-and-explain) · [Diagrams](#diagrams) ·
-    [Notebook](#notebook) · [Board](#board) · [Phone and tablet](#phone-and-tablet) ·
-    [Light and lamp-lit](#light-and-lamp-lit) ·
+    [Images](#images) · [Notebook](#notebook) · [Board](#board) · [Phone and tablet](#phone-and-tablet) ·
+    [Page colour and lamp-lit](#page-colour-and-lamp-lit) ·
     [Accessibility and reduced motion](#accessibility-and-reduced-motion) · [Honesty rules](#honesty-rules)
 - [Screenshots](#screenshots)
 - [How it works](#how-it-works)
@@ -59,11 +61,10 @@ notebook page, and lay out what you found on a board.
 - [Configuration](#configuration)
 - [Model policy](#model-policy)
 - [Tests and quality gates](#tests-and-quality-gates)
-- [Release notes (v0.2.0)](#release-notes-v020)
-  - [What's new](#whats-new) ·
-    [How v0.2.0 compares with the last release](#how-v020-compares-with-the-last-release)
-- [Known limits (v0.2.0)](#known-limits-v020)
-- [v0.3 plans](#v03-plans)
+- [Release notes (v0.3.0)](#release-notes-v030)
+  - [What's new](#whats-new) · [How v0.3.0 compares with v0.2.0](#how-v030-compares-with-v020)
+- [Known limits (v0.3.0)](#known-limits-v030)
+- [Next](#next)
 - [Troubleshooting](#troubleshooting)
 - [Docs](#docs)
 - [Contributing](#contributing)
@@ -78,9 +79,10 @@ check. PaperTree keeps the paper as the paper:
 
 - **You read the real pages.** Source mode is the PDF itself with selectable text. Guided mode reflows the
   paper's own words into one column, and Split shows both.
-- **Every AI claim points back to the page.** An answer carries a numbered marker after each claim, and
-  lists the passages it stands on. Click a marker and the reader scrolls to its passage and flashes it. A
-  claim with no citation says so: "no citation · the AI's own reading".
+- **Answers point back to the page.** Each answer ends with a source line ("From the paper: p. 7 · p. 2").
+  Click a page and the reader scrolls to its passage and flashes it. An answer that drew on nothing in the
+  paper says "General knowledge". PaperTree does not score claims: since v0.3 no screen says "verified" or
+  "not verified", so read the passage.
 - **Three voices, kept apart.** The paper's words, the AI's words and yours are styled differently on every
   screen: the reader, the notebook and the board.
 - **Highlights stay where you put them.** They are stored as anchors and painted from stored coordinates,
@@ -97,11 +99,11 @@ check. PaperTree keeps the paper as the paper:
 
 ## Features
 
-What **v0.2.0** does, by area. The facts below come from each feature's README (linked under each
-heading), where the rules, the data flow and the tests are. The CI suite of 88 Playwright specs runs the
-app in Chromium against a scripted test model. Among them, the prototype-flow spec walks the design's
-14-step flow, from the shelf to a thread on the board, at 1440 and 390 px in both colour schemes. During the
-build the real model was called five times ([Metrics](#how-v020-compares-with-the-last-release)).
+What **v0.3.0** does, by area. The facts below come from each feature's README (linked under each
+heading), where the rules, the data flow and the tests are. The e2e suite lists 103 Playwright specs; CI
+runs them in Chromium against a scripted test model (the v0.3 metrics pass listed them and did not run them).
+Every live-model figure in this README comes from MiniMax-M3.1-Flash runs made for the v0.3 build
+([Metrics](#how-v030-compares-with-v020)).
 
 ### Library
 
@@ -109,21 +111,28 @@ build the real model was called five times ([Metrics](#how-v020-compares-with-th
 [`features/book`](apps/web/src/features/book/README.md)
 
 - **Add papers** from the header, or drop PDFs anywhere on the page. Each upload shows progress and Cancel.
-- **The shelf:** the papers stand as cloth spines on a walnut plank, a row per topic under a brass label
-  holder. Arrange by Topic, Year, Title or Recently opened. A spine shows its state. A red ribbon means you
-  are reading it, a kraft wrap means it is still being read, and a torn red label means it could not be
-  read (its card offers Retry). Twelve papers or fewer stand face-out as covers. Past 40, each row scrolls
-  sideways and ends in a "+n more" bookend.
+- **The shelf:** the papers stand as cloth spines on walnut planks, at every library size, a row per topic
+  under a brass label holder. A spine's width follows its paper's page count. Arrange by Topic, Year, Title
+  or Recently opened. A red ribbon means you are reading it, a kraft wrap means it is still being read, and
+  a torn red label means it could not be read. Past 40 papers, each row scrolls sideways and ends in a "+n
+  more" bookend.
 - **Search** ("/") dims what does not match and never reorders anything; the field says "2 of 24". The
   shelf is one tab stop: ←/→ walk along it, Home and End jump to its ends.
 - **Reading now:** up to three papers you have a place in, each with its page ("p. 4 of 15") and
   Continue. The place is kept on the server, so it follows you to another browser.
-- **Pull out and open the book:** Enter takes a spine out and turns it face-out; Enter again opens the
-  spread. The left page is a bookplate ("From the library of …"). It asks for the name once and never
-  makes one up from your email. When the parser found the paper's Figure 1, you can choose it as the plate
-  instead. The right page has the topic and where it came from, then year · arXiv id · pages, the figures
-  the parser found, the title and authors. Then come the abstract in the paper's words with its page tab,
-  your place, the counts, Read and Summary. Esc puts the book back.
+- **Take a book off the shelf:** a click (or Enter, or Space) on any spine, on any plank, takes that book
+  out and opens it in one motion of about 880 ms: it slides out, turns to face you, grows into a cover, and
+  the cover swings open. A click or any key skips to the end, Esc puts the book back, and reduced motion is
+  a cross-fade. There is no card in between, so the book that opens is the one you clicked.
+- **The spread:** the left page is a bookplate ("From the library of …"). It asks for the name once and
+  never makes one up from your email. When the parser found the paper's Figure 1, you can choose it as the
+  plate instead. The right page has the topic and where it came from, then year · arXiv id · pages, the
+  figures the parser found, the title and authors. Then come the abstract in the paper's words, with its
+  page tab, and **Paper at a glance**: a short AI sheet (problem, idea, how it works, results, limits, what
+  to read first, words to know) made in the background when the paper is added and cached. Each block that
+  names a page links to it. **Read** says "Continue at p. 4" once you have started. The **⋯** menu has
+  Rename (the name is kept beside the paper and wins over the parsed title), Topic, and Delete, which closes
+  the book and offers Undo for 10 s. Esc puts the book back.
 - **Topics:** a card per topic with its cloth, counts and a skyline of its spines. A new paper is offered
   a topic: one of yours that already holds a paper of the same arXiv category, else one short AI run,
   labelled "suggested by the AI (model)". An offer never shelves a paper; you accept it, refuse it or
@@ -144,46 +153,83 @@ build the real model was called five times ([Metrics](#how-v020-compares-with-th
 - **Three modes:** Source (the PDF, rendered with pdf.js, with selectable text), Guided (the paper's words
   in one column) and Split. Zoom, the mode and your place survive a reload. Contents has Outline (the real
   headings), Pages and Highlights.
-- **The selection toolbar** sits in the page margin beside the selection, or docked at the top of the
-  column, and never covers a selected line. It has Explain, Ask, Highlight in five washes, Send to board,
-  Copy and Explain with a diagram.
+- **The selection menu** sits in the page margin beside the selection, or docks over the column when there
+  is no margin, and never covers a selected line. It has Explain, Ask…, Send to board (to Board beside, or
+  "just send"), Note and five highlight colours. A selection is painted as one band per line, so it reads
+  as one wash across italics and inline maths. Enter on a fresh selection is Explain.
 - **Highlights:** a sentence, a table cell, a figure label or a passage across paragraphs. Change the
   colour, add a note, open one with a click, and delete it with Undo.
-- **The explain exchange** (ask → answer → trace): your ask on a call slip, then the answer with a
-  numbered marker after each claim, then the numbered passages it stands on. A coverage line sits above
-  the passages: "Stands on 4 passages · 11 citations · 1 paragraph uncited". A marker's number is its
-  passage's, the same in the answer, the trace and every later exchange of the thread. A marker and its
-  trace row light each other, and either flashes the passage, with a margin tab "from marker 2 in the
-  answer".
+- **The tutor answer.** The ask goes on a call slip; the AI's answer comes in sections: **TL;DR**, **In
+  plain words**, **How it works** (maths typeset with KaTeX, and a diagram when one helps; see
+  [Diagrams](#diagrams)) and **In the paper**. An answer can end with an optional "Check yourself" blank,
+  which is marked in the browser. A **level switch** (New to this, Familiar, Expert) writes the answer again at another level: a level is
+  asked once, and switching back shows the one already fetched. "Go deeper" chips under the last answer ask
+  for a simpler version or one of a few fixed follow-ups.
+- **Sources are quiet.** There are no chips between the words. Each answer ends with one line, "From the
+  paper: p. 7 · p. 2", and each page is a button: hover or focus peeks the passage's first words, and a click
+  scrolls the reader to it and flashes it. An answer that cites nothing says "General knowledge" there.
 - **Ask** about the selection or about the whole paper, and ask follow-ups. The thread menu names each
   thread by its ask, and New thread starts another. A long thread opens with its earlier answers folded.
 - **Streaming, Stop and Retry:** the working label ("Reading the paper…", "Writing…") and Stop stay in
   view. Stop says "Stopped. The part that arrived is kept." A refused ask keeps your words in the box. When
-  the daily cap is reached, a card shows the figures and today's usage by kind.
-- **The summary** is an exchange too: bullets with markers, each citation the check does not support
-  marked "not verified", cached after the first run ("no new tokens used").
+  the daily cap is reached, a card shows the figures and today's usage by kind. If the model stops
+  responding, the answer says so and offers a retry.
+- **The summary** is an exchange too: bullets, each with its source line, cached after the first run. It
+  no longer shows how many passages it stands on.
+- **Every run kind runs on MiniMax-M3.1-Flash** (explain and the spread's glance at effort low; ask, summary
+  and image at effort medium). See [Model policy](#model-policy).
 
 ### Diagrams
 
 [`features/diagram`](apps/web/src/features/diagram/README.md)
 
-- **"Explain with a diagram"** on a selection draws an engraved plate of lettered parts (up to A–L) in the
-  explain panel. Parts stream in and never move once placed.
-- **Every part says where it stands:** **cited** (its quote is found word for word in the passage), **not
-  verified** (its quote is near a passage, or found nowhere), or **inferred** (no quote; drawn dashed). The
-  readout counts them: "5 parts · 5 cited · drawn by AI from p. 4".
-- **The key is the plate's text alternative:** each row is a button with the part's words and its passage.
-  Tapping a part, in the drawing or the key, flashes its passage.
-- **Stop** keeps the parts that arrived, **Redraw** makes a new plate in the same thread with the same
-  passage numbers, and **Send to board** makes a diagram card.
+- **A diagram inside "How it works", when one helps.** The model writes it as a ` ```mermaid ` fence and
+  picks the kind that fits the idea: a flowchart, sequence diagram, state diagram, mindmap, timeline,
+  quadrant chart, xy chart or class diagram.
+- **Checked before you see it.** The agent runs Mermaid's own parser on the fence before the answer is
+  stored. It repairs what it can (statements split onto separate lines, shape characters quoted, one mindmap
+  root), asks the model once to repair the rest, and otherwise drops the fence. A fence with HTML, a
+  `click` or `href`, a directive, an unlisted kind or an oversized drawing is dropped. What you see live is
+  what a reload shows.
+- **Drawn in the browser, lazily.** Mermaid 12.2.0 is loaded only once a fence has closed; until then a
+  quiet "drawing…" placeholder stands in its place, never raw code. It runs with Mermaid's strict security
+  level and is themed from the app's own tokens, so Light, Sepia and Dark pages and the Daylight and
+  Lamp-lit rooms each get their own colours, and it is redrawn when the theme changes. A fence that does not
+  parse draws nothing.
+- **Wide diagrams scroll.** A figure scales to its room but never below 70 % of its drawn size; a wider one
+  scrolls sideways inside its box, and the box is a keyboard-reachable region. "Larger" shows it at its
+  natural width. On a board card the figure is a whole-diagram preview, and "larger" opens it in a dialog.
+  Its text alternative is "Diagram, flowchart: first labels".
+- **Stress test.** Four rounds of live answers (96, 96, 96 and 64 from MiniMax-M3.1-Flash, over the eight
+  corpus papers, with asks aimed at every kind) found 4 diagrams in 91 that did not render before the checks above, and 0
+  in the 237 the reader was left looking at in rounds 2 to 4, in light and dark.
+- **Diagrams from v0.2 still open.** A stored v0.2 diagram thread (the engraved plate of lettered parts)
+  still renders in the panel and can be redrawn or sent to the board. "Explain with a diagram" is no longer
+  a selection action, and the plate's "cited / not verified / inferred" labels are gone: a part that has a
+  passage behind it says "From the paper: p. 4".
+
+### Images
+
+[`features/reader`](apps/web/src/features/reader/README.md#selecting-a-picture-v03-348)
+
+- **One click selects a figure.** A figure, table, algorithm or display equation is outlined and labelled
+  when you hover it, and a click selects the whole of it with its caption. Tab walks the figures in reading
+  order and Enter selects one.
+- **Or drag an area.** "Select area" in the reader's bar, or Alt and drag, draws a rectangle with eight
+  handles; the arrow keys move it. Shift pairs a picture with words you selected.
+- **The action bar:** Explain, Ask…, Board, Note and the highlight colours. Explain and Ask start an `image`
+  run: the model is shown a tight, high-resolution crop of what you selected, and the crop stays on top of
+  the thread. Send to board makes an image card. Note and a colour make a highlight over the region.
+- Beside the board, the frame's chip can be dragged in, and the card lands where you drop it. An answer
+  cannot yet point at a part of the picture ([#359](https://github.com/Legend101Zz/PaperTree/issues/359)).
 
 ### Notebook
 
 [`features/notebook`](apps/web/src/features/notebook/README.md)
 
 - **Dive in** under an answer makes a bound page for it, one page per answer. The page holds the ask, the
-  answer, the coverage line and one quote card per passage it cites, numbered as in the answer. A quote
-  card's "Open source" goes back to its passage and flashes it.
+  answer and one quote card per passage it cites. A quote card's "Open source" goes back to its passage and
+  flashes it.
 - **Your own things:** typed notes, stickies, shapes (rectangle, ellipse, arrow) and five paper templates
   (blank, dot grid, lined, Cornell, derivation grid).
 - **Ink:** pen, highlighter, stroke eraser and a lasso (keys P, H, E and L), three nibs and six colours.
@@ -198,50 +244,59 @@ build the real model was called five times ([Metrics](#how-v020-compares-with-th
 
 ### Board
 
-[`features/board`](apps/web/src/features/board/README.md)
+[`features/board`](apps/web/src/features/board/README.md),
+[`features/split`](apps/web/src/features/split/README.md)
 
-- **The board**, formerly the canvas (`/paper/<id>/canvas` redirects to `/paper/<id>/board`). Index
-  cards (passage, note, question, notebook page, diagram) and AI-slip cards (answers), sent from the
-  reader, the notebook or the plate.
-- **Brass pins:** evidence in, question in, claim out, answer out. Drag a thread from a brass pin; every
-  pin that can take it lights, and a drop on the wrong pin is refused, in words.
-- **Seven thread kinds** (supports, contradicts, derives from, answers, compares with, references, plain
-  link), each with a colour **and** a second cue (a stitch or glyph, plus a paper tag). **Link as** opens at
-  the thread's midpoint (keys 1–7; Esc keeps a plain link), and every new thread offers Undo.
-- **By keyboard:** L on a focused card starts a thread, and Tab or the arrows walk the cards and pins it
-  can reach.
-- **Frames, a minimap, a toolbar** (Select, Add note, Add frame, Thread, Fit all, zoom 20–200 %) and an
-  empty-board card. **Undo and redo** of moves, resizes, threads, edits and deletes (100 steps). An undo
-  never overwrites a card changed in another tab without saying so; threads are checked on the client
-  only, until they get a version ([#283](https://github.com/Legend101Zz/PaperTree/issues/283)).
-- **500 cards:** on a big board only the cards in view are drawn, and below 45 % zoom each card is a
-  glance (its kind and first words). A settled board makes no requests.
-- A numbered marker on an answer card opens the reader at the cited passage and flashes it.
+- **A branching tree.** Send a passage or an answer to the board and it becomes a card; ask on a card and
+  the answer grows from it. **Down is a follow-up** (it continues the conversation), **right is a branch**
+  (a different question from the same card). Select words in an answer and branch from them: the words stay
+  underlined with a count. A card's "Uses" line says what the ask reads (this path, the paper, the level,
+  whether it may draw a diagram), and an ask sends its path and anything you selected, never a sibling
+  branch.
+- **Moving around a tree.** Focus a path and the rest dims, with a **path breadcrumb**. **Fold** collapses
+  what is under a card to a pill. **Tidy** lays the trees out; a drag moves a card with its whole branch,
+  and a tree that grows a branch pushes its neighbour clear instead of sliding under it. **Keep as note**
+  makes a note from words with no AI call.
+- **Outline** shows the same tree as a study document, and exports it as **Markdown**.
+- **Board beside** (key B, or from the selection menu) puts the paper on the left and the board on the
+  right, with a draggable divider, a strip to fold either side, and a flash on the paper when you click a
+  card's "p. n" while the board stays put. Drag a selection across the divider and it lands as a card at the
+  drop point. Explain and the board share the right side, so opening one closes the other. Under 768 px the
+  board opens full width instead.
+- **The older cards still work.** Index cards (passage, note, question, notebook page, diagram) and AI-slip
+  cards (answers); brass pins; seven thread kinds, each with a colour **and** a second cue, with Link as
+  (keys 1–7) and threading by keyboard (L); frames, a minimap, a toolbar and an empty-board card; undo and
+  redo (100 steps); and 500 cards, drawn as glances below 45 % zoom. A v0.2 card with no parent reads as a
+  loose card and Tidy leaves it alone. The board was the canvas before v0.2
+  (`/paper/<id>/canvas` redirects to `/paper/<id>/board`).
 
 ### Phone and tablet
 
-- **Library** (up to 900 px wide): the books lie flat in stacks. A book opens its card as a bottom sheet,
-  and "Open the book" opens the spread, which stacks at 390 px.
+- **Library** (up to 900 px wide): the books lie flat in stacks. A book opens its spread, which stacks at
+  390 px.
 - **Reader** (below 768 px): the header is one row, with Contents, the mode, zoom and Board in a menu. The
   explain panel is a bottom sheet over a peek of the page. Each answer shows its first paragraph and "Read
-  the whole answer". The markers and trace rows are 44 px targets. The usage line, Dive in and To board are
-  pinned above the follow-up box.
+  the whole answer". The page buttons of a source line are 44 px targets. The usage line, Dive in and To
+  board are pinned above the follow-up box.
 - **Notebook:** on a tablet (768–1279 px) the tools become a rail, with pen input and palm rejection. On a
   phone the page reads as a stack with view-only ink. The pen works only when switched on, and the bar says
   that the lasso, shapes and templates are for a tablet or computer.
 - **Board:** on a phone, Select and the zoom fold into More, and the minimap folds behind a Map button.
+  The branching tree and Board beside were not designed for a phone or a tablet
+  ([#347](https://github.com/Legend101Zz/PaperTree/issues/347) lists it as still to design).
 - In the library no page scrolls sideways at 320, 390 or 768 px, and on a phone or a touch screen the
   controls in its header, title row and hints are 44 px.
 
-### Light and lamp-lit
+### Page colour and lamp-lit
 
 [`features/settings`](apps/web/src/features/settings/README.md)
 
-- **Aa** in the library header switches **System**, **Daylight** or **Lamp-lit**, kept per browser. A
-  script inlined in the page applies the choice before the app's code runs, so a lamp-lit reader never sees
-  a daylight flash on load.
-- **The PDF page stays paper** in the lamp-lit scheme: a dimmed ivory with black type. The flash ring, the
-  selection and the highlight washes on the page use colours chosen for it.
+- **Aa** in the library header switches the room: **System**, **Daylight** or **Lamp-lit**, kept per
+  browser. A script inlined in the page applies the choice before the app's code runs, so a lamp-lit reader
+  never sees a daylight flash on load.
+- **The paper's page has its own colour:** in the reader's Aa menu, Page is **Auto, Light, Sepia or Dark**.
+  Auto follows the room. Figures sit on a light mat that never covers a caption or a label, and the
+  selection, the flash and the highlight washes are re-tuned for each page colour.
 - Contrast is recomputed from the stylesheet by tests in both schemes. On the board, every thread colour,
   pin and glance edge must reach 3:1, and the words on cards, tags and the legend 4.5:1.
 
@@ -249,90 +304,83 @@ build the real model was called five times ([Metrics](#how-v020-compares-with-th
 
 - **Keyboard:** the shelf, the Topics grid and the phone's stacks are one tab stop each, walked with the
   arrows. The book is a modal dialog with focus kept inside it. The board has keyboard threading (L) and
-  Link as by number, and the notebook has its tool keys. After a delete, focus moves to the next item
-  rather than falling to the page.
-- **Text alternatives:** the plate's key, the Map's text list, and named pins and buttons on the board.
-- **axe** found 0 serious or critical issues after each of the prototype flow's 14 steps, at 1440 and 390
-  px, daylight and lamp-lit ([Metrics](#how-v020-compares-with-the-last-release)).
-- **Reduced motion:** every moment has a reduced path, measured by a spec against the design's reduced
-  column. Pull out, open, put back, Read and Dive in are one 120 ms fade each. Explain, Back to the paper,
-  the plate's parts and a new thread on the board have no motion, and the flash keeps only a 120 ms colour
-  change between marker and trace row. The flash's scroll jumps straight to the passage.
+  Link as by number, and the notebook has its tool keys. A diagram too wide for its box is a region you can
+  scroll with the keys. After a delete, focus moves to the next item rather than falling to the page.
+- **Text alternatives:** a diagram's name ("Diagram, flowchart: …"), the Map's text list, and named pins
+  and buttons on the board.
+- **axe** found 0 serious or critical issues after each of v0.2's prototype flow's 14 steps, at 1440 and
+  390 px, daylight and lamp-lit. The v0.3 metrics pass did not re-run it
+  ([Metrics](#how-v030-compares-with-v020)).
+- **Reduced motion:** every moment has a reduced path. The book's opening is a cross-fade, the other
+  moves are one 120 ms fade or none, and the diagram has no motion at all.
 
 ### Honesty rules
 
 These hold across the app.
 
 - **The three voices are marked apart:** the paper's, the AI's and yours.
-- **Every AI claim is cited or labelled.** A citation the grounding check does not support is marked "not
-  verified". A claim with no citation is "the AI's own reading". A diagram part is cited, not verified, or
-  inferred. The check is lexical, so it can be fooled
-  ([Known limits](#known-limits-v020)).
+- **Sources are shown, not scored.** An answer's source line names the pages it drew on, and "General
+  knowledge" says it drew on none. v0.3 removed the lexical grounding check and with it every "verified"
+  and "not verified" mark, so nothing on screen says a claim was checked. Read the passage.
 - **No screen says "verified", "fact-checked" or "accurate".** A test scans the interface's strings for
-  those words, and the prototype flow checks the screen after each step.
+  those words.
 - **Every cost is an estimate, and says so.** A usage line under each answer gives tokens and the
   estimated cost, ending "(estimate)". Each run is recorded in `ai_runs` with its model, provider, tokens,
   cost, first-text time, latency, request id and code path. A daily budget caps your spend.
 - **Nothing is invented to fill a gap:** no topic is set unless you accept or choose it, no "similar
   papers" are drawn on the Map, no bookplate name you did not give, and no figure count the parser did not
-  find. A missing value is a dash.
-- **The paper's figure is the only figure shown as the paper's.** An AI diagram is drawn on the AI's slip,
+  find. A missing value is a dash. A diagram that cannot be drawn is left out, not shown as code.
+- **The paper's figure is the only figure shown as the paper's.** A diagram is drawn on the AI's slip,
   under the AI tab.
 
 ## Screenshots
 
-These show the v0.2 interface on `release/v0.2` at `a8eb3e5`; v0.2.0 adds S8's
-[#320](https://github.com/Legend101Zz/PaperTree/pull/320) after it (the flow tests and two fixes to where a
-sent card lands). They were taken from a production build (`next build` + `next start`) in Playwright's
-Chromium at 1440 × 900 (1440 × 1000 for the notebook, 390 × 844 for the phone), on 2026-10-17, against a
-copy of the demo data with nine more corpus papers uploaded, 13 in all (credited under
+These show the v0.3 interface: the release build (`next build` + `next start`) of `release/v0.3` plus
+[#373](https://github.com/Legend101Zz/PaperTree/pull/373), the pull request that holds these shots and six
+small fixes to the shelf and the board. They were taken on 2026-11-21 in Chromium at 1440 × 900 (390 × 844
+at 2× for the phone), on a fresh data root with the eight corpus papers uploaded (credited under
 [Acknowledgements](#acknowledgements)).
 
-**What is real in these shots.** Every paper was parsed by PaperTree. The explain thread on "Attention Is
-All You Need" is real model output (MiniMax-M3.1-Flash-Preview, recorded on 2026-10-15 and stored in the
-demo data). The plate is one live diagram run made for these screenshots (MiniMax-M3.1-Flash-Preview, 4,318
-tokens, ≈ $0.0015, an estimate on M3 rates). The notebook page, the board's new cards and its three new
-threads were made in the app from that thread (Dive in, Send to board, Send page to board, a brass pin, Link
-as); the board's passage card, first answer, note and supports thread were already in the demo data. The
-typed note, the sticky, the ink and the board's note are the demo account's own words. The topics, three reading places, the
-bookplate's name and the board's layout were set through the API routes the app calls. No shot shows the
-test model's answers.
+**What is real in these shots.** Every paper was parsed by PaperTree. Every answer is live
+MiniMax-M3.1-Flash output, made for these shots; none is the test model's. The Mermaid diagram is the one
+the same answer carried. Three of the board's answers were sent from the reader, and the follow-up and the
+branch on the middle one were asked on the board. Four things were set by hand, through the app's own API
+routes and screens: the topics, two titles (A3C's parsed title was "Abstract", and BERT's was cut short, so
+both were renamed), and the bookplate's name, "The Reading Room". The demo loop above is a 31-second
+recording of the same app.
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/assets/readme/v0.2/library-shelf.png" alt="The library: Reading now with three papers and Continue, then 13 papers as cloth spines on a walnut shelf, grouped under five topic label holders"/><br/><sub><b>The shelf.</b> A row per topic; a ribbon marks a paper you are reading; Reading now above.</sub></td>
-    <td width="50%"><img src="docs/assets/readme/v0.2/book-open.png" alt="The opened book: an Ex libris bookplate on the left, and on the right the topic, year, arXiv id, pages, figures found, title, authors, the abstract with its page tab, reading progress, Read and Summary"/><br/><sub><b>The opened book.</b> Enter pulls a spine out, Enter again opens it; Esc puts it back.</sub></td>
+    <td width="50%"><img src="docs/assets/readme/v0.3/library-shelf.png" alt="The library: Reading now with two papers, each with its progress and Continue, then paper spines of different widths standing on walnut planks under topic label holders"/><br/><sub><b>The shelf.</b> Reading now above; a spine's width follows its page count; a row per topic.</sub></td>
+    <td width="50%"><img src="docs/assets/readme/v0.3/book-open.png" alt="ResNet taken off the shelf: the Ex libris bookplate on the left, and on the right the topic, year, arXiv id, figures found, title, authors, the abstract, and the AI sheet Paper at a glance with problem, idea, how it works and results"/><br/><sub><b>Off the shelf.</b> One click opens the spread: the abstract in the paper's words, then the AI's glance.</sub></td>
   </tr>
   <tr>
-    <td><img src="docs/assets/readme/v0.2/topics.png" alt="Topics view: five topic cards with cloth banners, counts, a skyline of their spines and where the topic came from"/><br/><sub><b>Topics.</b> Each says where it came from: chosen by you, or suggested from the arXiv category and accepted.</sub></td>
-    <td><img src="docs/assets/readme/v0.2/map.png" alt="Map view: the plan of the reading room with topic islands and dotted citation links labelled cites it, matched by title or by arXiv id"/><br/><sub><b>The Map.</b> Only real citation links, each labelled with how it was matched.</sub></td>
+    <td><img src="docs/assets/readme/v0.3/reader-explain.png" alt="The reader with Explain on section 3.2.1 of Attention Is All You Need: the ask on a call slip with its page tab, the level switch, then the TL;DR, In plain words and How it works sections of the answer"/><br/><sub><b>A tutor answer.</b> The ask on its call slip, the level switch, then TL;DR, In plain words, How it works.</sub></td>
+    <td><img src="docs/assets/readme/v0.3/reader-diagram.png" alt="The same answer's Mermaid flowchart: query and key into a dot product, divided by the square root of d k, then softmax, weights on the values, and a weighted sum, beside the paper's own Figure 2"/><br/><sub><b>A diagram in the answer.</b> The flowchart of scaled dot-product attention, beside the paper's own Figure 2.</sub></td>
   </tr>
   <tr>
-    <td><img src="docs/assets/readme/v0.2/table.png" alt="Table view: a ruled catalogue with title, authors, year, topic and its source, pages, state, highlights and last opened"/><br/><sub><b>The Table.</b> Sort, filter and choose columns; a missing value is a dash, never a guess.</sub></td>
-    <td><img src="docs/assets/readme/v0.2/reader-explain.png" alt="The reader with the explain panel: the ask on a call slip, the answer with numbered markers and page tabs; marker 2 is lit and its passage on page 2 is outlined with a margin tab saying from marker 2 in the answer"/><br/><sub><b>Ask → answer → trace.</b> Marker 2 lights its passage on p. 2 and says so in the margin.</sub></td>
+    <td><img src="docs/assets/readme/v0.3/reader-diagram-dark.png" alt="The same reader and diagram on the Dark page: a dark page, the paper's figures on light mats, and the diagram drawn in dark-scheme colours"/><br/><sub><b>The same, on a dark page.</b> The figures stay on light mats; the diagram takes the dark tokens.</sub></td>
+    <td><img src="docs/assets/readme/v0.3/image-select.png" alt="One click on Figure 2 of the paper selects the whole figure, outlined and labelled, with the action bar below: Explain, Ask, Board, Note and the highlight colours"/><br/><sub><b>One click selects a figure.</b> Explain, Ask…, Board, Note, or a highlight colour.</sub></td>
   </tr>
   <tr>
-    <td><img src="docs/assets/readme/v0.2/diagram-plate.png" alt="An AI plate titled Scaled Dot-Product Attention steps with five lettered parts and a key quoting the paper for each; part C is selected and its passage on page 4 is outlined"/><br/><sub><b>The plate.</b> Five parts, five cited; tapping part C flashes the paragraph it quotes.</sub></td>
-    <td><img src="docs/assets/readme/v0.2/notebook.png" alt="A notebook page: the ask, the AI answer, the coverage line, four numbered quote cards, a typed note, a sticky and a hand-drawn arrow, with the template and counts panel on the right"/><br/><sub><b>The notebook.</b> Dive in makes a page from the answer: quote cards, then your notes and ink.</sub></td>
+    <td><img src="docs/assets/readme/v0.3/image-ask.png" alt="A new thread that opens with the crop of Figure 2, the question What does the right half add to the left half, and why run several in parallel, and the answer below"/><br/><sub><b>Asking about a figure.</b> The crop heads the thread; the question is the reader's own; the answer follows.</sub></td>
+    <td><img src="docs/assets/readme/v0.3/board.png" alt="The board: answer cards with their TL;DR and In plain words sections. The second has a follow-up card below it, joined by a short line, and a branch card to its right; the board's toolbar above has Select, Add note, Add frame, Thread, Paper beside, Tidy, Fold and Outline, and a minimap sits at the lower right"/><br/><sub><b>The board.</b> Down is a follow-up, right is a branch; the last tree has been moved clear of the branch.</sub></td>
   </tr>
   <tr>
-    <td><img src="docs/assets/readme/v0.2/board.png" alt="The board: a passage card, two answer cards, a notebook page card, the plate card and a note, joined by supports, derives from, references and plain link threads, with the thread legend and minimap"/><br/><sub><b>The board.</b> Threads of four kinds here, each a colour and a second cue (+, », dots, a line).</sub></td>
-    <td><img src="docs/assets/readme/v0.2/reader-explain-dark.png" alt="The same reader and explain panel in the lamp-lit dark scheme, with the PDF page shown as dimmed ivory"/><br/><sub><b>Lamp-lit.</b> The dark scheme keeps the PDF page paper-coloured.</sub></td>
+    <td colspan="2"><img src="docs/assets/readme/v0.3/board-beside.png" alt="Board beside: the paper on the left, and on the right the board's branching tree of answer cards"/><br/><sub><b>Board beside.</b> The paper on the left, the board's tree on the right.</sub></td>
   </tr>
 </table>
 
 <p align="center">
-  <img src="docs/assets/readme/v0.2/phone-library.png" alt="The library at phone width: Reading now, then books lying flat in stacks under a topic holder" width="24%"/>
+  <img src="docs/assets/readme/v0.3/phone-library.png" alt="The library at phone width: Reading now, then books lying flat in stacks under a topic holder" width="24%"/>
   &nbsp;
-  <img src="docs/assets/readme/v0.2/phone-explain.png" alt="The explain sheet at phone width: the ask, the first paragraph of the answer with Read the whole answer, Dive in and To board, and the pinned footer with Dive in to answer 2 and Send answer 2 to board above the follow-up box" width="24%"/>
-  &nbsp;
-  <img src="docs/assets/readme/v0.2/phone-notebook.png" alt="The notebook at phone width: the exchange and the quote cards as a stack, with Text, Sticky, Highlight and Pen: off at the foot" width="24%"/>
-  <br/><sub><b>Phone (390 px).</b> The library, the explain sheet and the notebook.</sub>
+  <img src="docs/assets/readme/v0.3/phone-explain.png" alt="The explain sheet at phone width: the ask, the first part of the answer, and the pinned footer with Dive in and Send answer to board" width="24%"/>
+  <br/><sub><b>Phone (390 px).</b> The library, and the explain sheet with Dive in and Send answer to board.</sub>
 </p>
 
-Each slice's own shots, compared against the design's frames, are in
-[`research/build/v0.2-ui/shots/`](research/build/v0.2-ui/shots/); the frames themselves are in
-[`research/build/v0.2-ui/reference/`](research/build/v0.2-ui/reference/).
+The v0.2 screenshots (Topics, the Map, the Table, the plate, the notebook, the lamp-lit reader) are still in
+[`docs/assets/readme/v0.2/`](docs/assets/readme/v0.2/), and the v0.2 slice shots, compared against the
+design's frames, are in [`research/build/v0.2-ui/shots/`](research/build/v0.2-ui/shots/).
 
 ## How it works
 
@@ -340,24 +388,24 @@ Each slice's own shots, compared against the design's frames, are in
 flowchart TB
   B["Browser<br/>Next.js 14 web app"] -- "REST + SSE" --> A["API<br/>FastAPI"]
   A -- "parse jobs" --> W["Worker<br/>PyMuPDF → document IR"]
-  A -- "AI runs: explain, ask, summary,<br/>diagram, topic (shared secret)" --> G["Agent<br/>Node, Pi harness SDK"]
+  A -- "AI runs: explain, ask, summary, diagram,<br/>topic, glance, image (shared secret)" --> G["Agent<br/>Node, Pi harness SDK"]
   G -- "paper tools<br/>(internal routes)" --> A
-  A --- D[("Data root<br/>SQLite (WAL), migrations 0001–0011,<br/>PDFs, figures")]
+  A --- D[("Data root<br/>SQLite (WAL), migrations 0001–0017,<br/>PDFs, figures")]
   W --- D
   G -- "the only process<br/>with the key" --> M["MiniMax API"]
 ```
 
 - **Web** (`apps/web`): Next.js 14. The browser talks to the API and to nothing else. The interface
   lives in one folder per feature, `apps/web/src/features/<feature>/` (library, book, reader, explain,
-  diagram, notebook, board, highlights, settings, design-system), each with a README; the shared components
+  diagram, notebook, board, split, highlights, settings, design-system), each with a README; the shared components
   and the design tokens are in `packages/ui`. The reader renders pages with pdf.js; the board uses React
-  Flow (`@xyflow/react`); notebook ink is `perfect-freehand` outlines on an SVG layer; motion is CSS and the
+  Flow (`@xyflow/react`); notebook ink is `perfect-freehand` outlines on an SVG layer; maths is KaTeX and diagrams are Mermaid, loaded only when an answer needs them; motion is CSS and the
   Web Animations API, with no animation library
   ([ADR-004](research/architecture-decisions/ADR-004-v0.2-ui-stack.md)).
 - **API** (`services/api`): FastAPI, the only public edge. Accounts, uploads, the paper store, highlights,
   reading state, topics, threads, summaries, notebooks, boards and the `ai_runs` ledger. Data lives in one
   SQLite file plus a few folders under the data root. The schema moves forward by numbered migrations
-  (`infrastructure/migrations/`, 0001–0011; v0.2 adds 0006–0011), which the API and the worker apply when
+  (`infrastructure/migrations/`, 0001–0017; v0.3 adds 0012–0017), which the API and the worker apply when
   they start.
 - **Worker** (`python -m papertree_api.worker`): parses uploaded PDFs with PyMuPDF into the paper's
   structure (sections, blocks, figures, tables, equations) while you wait. It shares the API's data root.
@@ -377,29 +425,30 @@ flowchart TB
   ([#123](https://github.com/Legend101Zz/PaperTree/issues/123)).
 - **Citations.** The paper's text reaches the model marked as untrusted data, in passages labelled with
   handles such as `[b3]`, and the model cites by handle. Only handles issued in that run count: an
-  invented one is dropped and logged. Each citation gets an Anchor. Each claim is checked against the
-  passages it cites by a lexical check, and a citation carried by a claim that fails is shown as "not
-  verified". A citation's locator (page, ¶, section) is derived from the parse when it is read, never
-  stored.
-- **The flash.** A marker, a trace row, a plate part, a quote card or an answer card on the board brings
-  the reader to the passage's anchor. It scrolls (240 ms, and only if the passage is off screen), then
-  flashes (in 180 ms, hold 900 ms, out 600 ms), then leaves a faint outline until your next key or press.
-  A margin tab says where the flash came from ("from marker 2 in the answer", "from part C, …"). It works
-  in Source mode; Guided does not have it yet
-  ([#245](https://github.com/Legend101Zz/PaperTree/issues/245)).
+  invented one is dropped and logged. Each citation gets an Anchor. The web never draws the handles: it
+  gathers them into one source line of pages at the end of the answer. v0.3 does not check a claim against
+  the passages it cites (the lexical check and its stored verdicts were removed, migration 0015), so a
+  source line says where the model looked, not that a claim is right. A citation's locator (page, ¶,
+  section) is derived from the parse when it is read, never stored.
+- **The flash.** A page in a source line, a plate part, a quote card or a board card's "p. n" brings the
+  reader to the passage's anchor. It scrolls (240 ms, and only if the passage is off screen), then flashes
+  (in 180 ms, hold 900 ms, out 600 ms), then leaves a faint outline until your next key or press. On a board
+  beside the paper, the paper flashes and the board stays where it is.
 
 ### The flows
 
-| Flow            | What happens                                                                                                                                                                                                                                                                                                                       | Stored in                                                               |
-| --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
-| Library         | `GET /papers` carries each paper's reading state, the year and category from its arXiv id and stamp, counts, its topic and its plate. The reader writes your place with `PUT /papers/{id}/reading-state`.                                                                                                                          | `reading_state` (0006)                                                  |
-| Topics          | `GET /papers/{id}/topic` offers a topic: first your topic that already holds papers of the same arXiv category; when that finds nothing, one short `topic` run in the background (once per paper). An offer never shelves a paper; only `PUT /papers/{id}/topic` does.                                                             | `topics`, `paper_topics` (0009)                                         |
-| Map             | `GET /library/links` matches each paper's references to your other papers by arXiv id or by normalised title, and says which.                                                                                                                                                                                                      | nothing: computed on read                                               |
-| The book        | `GET /papers/{id}/figures` and `/abstract`; `PUT`/`DELETE /papers/{id}/plate` chooses a figure as the cover; `PATCH /papers/{id}` renames a paper; `PATCH /auth/me` sets the bookplate's name.                                                                                                                                     | `paper_plate` (0010), `paper_title` (0012), `users.display_name` (0006) |
-| Explain and ask | `POST /papers/{id}/threads` and `…/messages` stream the answer (SSE). Each citation's locator (page, ¶, section) and each answer's coverage are derived from the parse when read.                                                                                                                                                  | `ai_threads`, `ai_messages`, `ai_citations`, `ai_runs`                  |
-| Diagram         | `POST /papers/{id}/threads` with `kind: "diagram"`. The agent streams the plate as JSON lines (the title, each part, each link), each checked as it arrives; the API resolves each part's quote to an anchor (cited, not verified, or inferred when there is none) and streams `plate`, `part` and `link` events.                  | `ai_diagram_parts`, `ai_messages.diagram_json` (0011)                   |
-| Notebook        | Dive in is `POST /papers/{id}/notebook/pages` with the answer's message id: the server seeds the page with the ask, the answer and one quote card per cited passage (each an anchor). Items and ink strokes are saved under `/notebook/pages/{id}`; `GET /papers/{id}/notebook/search` searches typed text, quotes and the answer. | `notebook_pages`, `notebook_items`, `notebook_strokes` (0007)           |
-| Board           | `GET /papers/{id}/board`; cards and threads are created, moved and deleted one request per gesture. A thread names its pins (`from_port`, `to_port`), and the API refuses a pin pair its table does not allow (422).                                                                                                               | `canvas_nodes`, `canvas_edges` (rebuilt in 0008)                        |
+| Flow            | What happens                                                                                                                                                                                                                                                                                                                                                                                    | Stored in                                                               |
+| --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| Library         | `GET /papers` carries each paper's reading state, the year and category from its arXiv id and stamp, counts, its topic and its plate. The reader writes your place with `PUT /papers/{id}/reading-state`.                                                                                                                                                                                       | `reading_state` (0006)                                                  |
+| Topics          | `GET /papers/{id}/topic` offers a topic: first your topic that already holds papers of the same arXiv category; when that finds nothing, one short `topic` run in the background (once per paper). An offer never shelves a paper; only `PUT /papers/{id}/topic` does.                                                                                                                          | `topics`, `paper_topics` (0009)                                         |
+| Map             | `GET /library/links` matches each paper's references to your other papers by arXiv id or by normalised title, and says which.                                                                                                                                                                                                                                                                   | nothing: computed on read                                               |
+| The book        | `GET /papers/{id}/figures` and `/abstract`; `PUT`/`DELETE /papers/{id}/plate` chooses a figure as the cover; `PATCH /papers/{id}` renames a paper; `PATCH /auth/me` sets the bookplate's name.                                                                                                                                                                                                  | `paper_plate` (0010), `paper_title` (0012), `users.display_name` (0006) |
+| Explain and ask | `POST /papers/{id}/threads` and `…/messages` stream the answer (SSE). Each citation's locator (page, ¶, section) and each answer's coverage are derived from the parse when read.                                                                                                                                                                                                               | `ai_threads`, `ai_messages`, `ai_citations`, `ai_runs`                  |
+| Diagram         | A stored v0.2 diagram thread is read from `GET /papers/{id}/threads/{tid}` and can be redrawn with `POST …/messages` and `redraw_of`. Nothing in v0.3 starts one from a selection: an answer's diagram is a `mermaid` fence in its text, parse-checked and repaired by the agent before the answer is stored.                                                                                   | `ai_diagram_parts`, `ai_messages.diagram_json` (0011)                   |
+| Notebook        | Dive in is `POST /papers/{id}/notebook/pages` with the answer's message id: the server seeds the page with the ask, the answer and one quote card per cited passage (each an anchor). Items and ink strokes are saved under `/notebook/pages/{id}`; `GET /papers/{id}/notebook/search` searches typed text, quotes and the answer.                                                              | `notebook_pages`, `notebook_items`, `notebook_strokes` (0007)           |
+| Board           | `GET /papers/{id}/board`; cards and threads are created, moved and deleted one request per gesture. A card hangs from a parent as a follow-up (down) or a branch (right), optionally from a span of the parent's answer, and `POST /boards/{b}/nodes/{n}/asks` asks on a card. A thread names its pins (`from_port`, `to_port`), and the API refuses a pin pair its table does not allow (422). | `canvas_nodes`, `canvas_edges` (rebuilt in 0008; tree columns in 0016)  |
+| Glance          | `GET /papers/{id}/glance`: the spread's "Paper at a glance" sheet, made by a background `glance` run when a paper is added and cached.                                                                                                                                                                                                                                                          | `paper_glance` (0013)                                                   |
+| Images          | `GET /papers/{id}/crop` renders a tight, high-DPI crop of a page region; `POST /papers/{id}/threads` with `kind: "image"` and the picture's anchor starts an `image` run that is shown the crop.                                                                                                                                                                                                | `ai_runs` (rebuilt in 0017), the thread's anchor                        |
 
 ### AI run kinds
 
@@ -413,8 +462,10 @@ records the model, tokens, estimated cost and code path. The limits are the API'
 | `explain` | Explain or Ask on a selection, and every follow-up in that thread                   | 45 s     | 4,096         | 8          | 1       |
 | `ask`     | A question about the whole paper (no selection), and its follow-ups                 | 60 s     | 4,096         | 8          | 1       |
 | `summary` | Summarize paper (cached afterwards)                                                 | 90 s     | 6,144         | 12         | 1       |
-| `diagram` | Explain with a diagram, and Redraw                                                  | 90 s     | 2,048         | 4          | 1       |
+| `diagram` | Redraw of a stored v0.2 diagram thread                                              | 90 s     | 2,048         | 4          | 1       |
 | `topic`   | A paper the arXiv-category rule has no topic for, once per paper, in the background | 30 s     | 1,024         | none       | none    |
+| `glance`  | The spread's "Paper at a glance" sheet, in the background                           | 60 s     | 3,072         | none       | 1       |
+| `image`   | Explain or Ask on a selected figure or area                                         | 75 s     | 4,096         | 4          | 1       |
 
 A follow-up runs as its thread's kind. A topic run that fails or answers badly is simply "no suggestion".
 
@@ -428,7 +479,7 @@ A follow-up runs as its thread's kind. A topic run that fails or answers badly i
 - A MiniMax API key for the AI features. Without one you can still upload, read, highlight and use the
   board; every AI request fails visibly, and the notebook has nothing to start from, since a page starts
   from an AI answer.
-- A current Chrome (or another Chromium browser). v0.2.0's checks run in Playwright's Chromium. **In
+- A current Chrome (or another Chromium browser). v0.3.0's checks run in Playwright's Chromium. **In
   Safari (26.3.1), selecting text in Source mode does not open Explain or Ask**
   ([#327](https://github.com/Legend101Zz/PaperTree/issues/327)); use Chrome for now. Other browsers are
   untested (Safari's handling of the 3D book is not checked either).
@@ -443,7 +494,7 @@ Run these from the repository root. You need four terminals, one per process; us
 ```sh
 git clone https://github.com/Legend101Zz/PaperTree.git
 cd PaperTree
-git checkout v0.2.0          # the latest release
+git checkout v0.3.0          # the latest release
 corepack enable
 uv sync --locked --all-packages
 pnpm install --frozen-lockfile
@@ -493,11 +544,12 @@ account and add a PDF:
 
 - Press **Add papers** in the header, or drop PDFs anywhere on the library. A paper being read stands in a
   kraft wrap.
-- Once it has been read, press Enter on it to take it out, Enter again to open the book, then **Read**.
-  You can also click it to open its card.
-- Select a sentence and use the toolbar in the margin: **Explain** (its numbered markers flash the
-  passage), **Ask**, **Highlight**, **Send to board** or **Explain with a diagram**.
-- **Dive in** under an answer opens its notebook page; **Board** in the reader's header opens the board.
+- Once it has been read, click it (or press Enter) to take it off the shelf and open the book, then **Read**.
+- Select a sentence and use the menu beside it: **Explain** (the pages in its source line flash the
+  passage), **Ask…**, a highlight colour, **Note** or **Send to board**. Click a figure to select it, and
+  ask about that.
+- **Dive in** under an answer opens its notebook page; **Board** in the reader's header opens the board,
+  and **Board beside** (key B) puts it next to the paper.
 
 Check that everything is up: `curl http://127.0.0.1:8000/healthz` and `curl http://127.0.0.1:8200/healthz`
 (the agent's reply names the model per kind and says `key_present: true`).
@@ -507,8 +559,8 @@ Start the web app with `pnpm`, not `next dev` directly. Its `predev` step copies
 
 Your data is in `~/.papertree` (SQLite, uploaded PDFs, extracted figures). Delete that folder to start
 clean; set `PAPERTREE_DATA_ROOT` to keep it elsewhere. A data root from the earlier release works on
-v0.2.0: the API applies the new migrations when it starts. Before the two table rebuilds it first copies the
-database to `papertree.sqlite.pre-0008.bak` and `.pre-0011.bak`.
+v0.3.0: the API applies the new migrations (0012 to 0017) when it starts. Before the three table rebuilds it
+first copies the database to `papertree.sqlite.pre-0013.bak`, `.pre-0015.bak` and `.pre-0017.bak`.
 
 ## Configuration
 
@@ -558,13 +610,15 @@ The agent decides which MiniMax model answers which kind of run (`services/agent
 ([`MODEL-AB.md`](docs/release/v0.1/MODEL-AB.md), [`QUALITY.md`](docs/release/v0.1/QUALITY.md)), and it is the default for
 every kind:
 
-| Kind                                                   | Model                               | Why this effort                                                   |
-| ------------------------------------------------------ | ----------------------------------- | ----------------------------------------------------------------- |
-| `explain`: a selection (and follow-ups in that thread) | `MiniMax-M3.1-Flash`, effort low    | A short answer from one selection: speed matters                  |
-| `ask`: a question about the paper (and its follow-ups) | `MiniMax-M3.1-Flash`, effort medium | An open question over a path through the paper: more reasoning    |
-| `summary`                                              | `MiniMax-M3.1-Flash`, effort medium | The whole paper: structure and citations to keep straight         |
-| `diagram`                                              | `MiniMax-M3.1-Flash`, effort low    | A short, structured plate from one selection, shaped like explain |
-| `topic`                                                | `MiniMax-M3.1-Flash`, effort low    | One short JSON answer per paper, no tools                         |
+| Kind                                                    | Model                               | Why this effort                                                   |
+| ------------------------------------------------------- | ----------------------------------- | ----------------------------------------------------------------- |
+| `explain`: a selection (and follow-ups in that thread)  | `MiniMax-M3.1-Flash`, effort low    | A short answer from one selection: speed matters                  |
+| `ask`: a question about the paper (and its follow-ups)  | `MiniMax-M3.1-Flash`, effort medium | An open question over a path through the paper: more reasoning    |
+| `summary`                                               | `MiniMax-M3.1-Flash`, effort medium | The whole paper: structure and citations to keep straight         |
+| `diagram`: redrawing a stored v0.2 plate                | `MiniMax-M3.1-Flash`, effort low    | A short, structured plate from one selection, shaped like explain |
+| `topic`                                                 | `MiniMax-M3.1-Flash`, effort low    | One short JSON answer per paper, no tools                         |
+| `glance`: the spread's Paper at a glance                | `MiniMax-M3.1-Flash`, effort low    | A short JSON sheet from the seed, no tools                        |
+| `image`: a selected figure or area (and its follow-ups) | `MiniMax-M3.1-Flash`, effort medium | The model reads a crop before it writes; it must accept images    |
 
 A follow-up stays on its thread's model. `PAPERTREE_MODEL=MiniMax-M3` puts every kind on M3, and
 `PAPERTREE_MODEL_ASK=MiniMax-M3` puts one kind there (M3 takes no effort). The cost recorded in `ai_runs` for Flash
@@ -609,185 +663,139 @@ installs a pre-commit hook (lefthook) that runs Prettier and the linters on stag
 - A few timing tests (`test_30k_*`, the migrations spec's 30k insert) are wall-clock bounds and can flake
   on a loaded machine: re-run them alone before diagnosing.
 
-**The counts for v0.2.0** (each read from its own run's log):
+**The counts for v0.3.0** (from the v0.3 metrics pass on the build, not from a release CI run;
+[`docs/METRICS.md`](docs/METRICS.md#v03-against-v02) has the sources):
 
-- **TypeScript: 3,152 tests**: vitest 2,973 (web 1,571, document-ir 864, anchoring 336, ui 202) and 179
-  agent tests. First counted on `release/v0.2` at `91857a4` (with S8) with
-  `pnpm exec turbo run test --force`, 2026-10-17, load average 2.24 at the start. Re-run uncached for this
-  README on `release/v0.2` at `065f709` (the commits since `91857a4` change only docs and two test names):
-  the same 3,152, 0 of 9 turbo tasks cached, load average 2.74 at the start.
-- **pytest: 2,562 passed**, 4 skipped, 1 expected failure, with the peak-RSS test passing in its own process.
-  The local gate on `cbe70fa` (the head of [#320](https://github.com/Legend101Zz/PaperTree/pull/320), S8),
-  2026-10-17, load average 19.32 at the start; the CI run on #320 counted the same.
-- **e2e: 88 of 88** Playwright specs passed in 30.1 min, none skipped, in the CI run on #320
-  ([run 39015930115](https://github.com/Legend101Zz/PaperTree/actions/runs/39015930115)), which tested
-  `cbe70fa` merged into `release/v0.2`.
+- **TypeScript: 3,807 tests**: vitest 3,547 (web 2,125, document-ir 864, anchoring 341, ui 217) and 260 agent
+  tests. `pnpm exec turbo run test --force` on `e3dd830`, 0 tasks cached, 2026-11-20, 1-minute load 31 at the
+  start (other sessions were running).
+- **pytest: 2,688 passed**, 24 skipped or expected failures, 0 failed (2,712 collected). `uv run pytest -q
+services packages` on `c32dba8`, 2026-11-20, run once, with the machine's load rising to 68 meanwhile.
+- **e2e: 103 specs** in 54 files, as listed by `playwright test --list`. The metrics pass did not run
+  them: CI does. v0.2's count of 88 was specs that passed in CI.
 
-## Release notes (v0.2.0)
+## Release notes (v0.3.0)
 
-**v0.2.0** is the "Ex Libris" release: the whole interface rebuilt from one design, plus a notebook and AI
-diagrams. It was built on the `release/v0.2` branch and tracked in
-[#182](https://github.com/Legend101Zz/PaperTree/issues/182). The design has 32 frames: 16 are done and 16
-are partial, and each partial frame has an issue in [v0.3 plans](#v03-plans). The build's plan, audit and
-results are in [`research/build/v0.2-ui/`](research/build/v0.2-ui/), with a verdict per frame in
-[`RESULT.md`](research/build/v0.2-ui/RESULT.md). The notes are also on the
-[GitHub release](https://github.com/Legend101Zz/PaperTree/releases/tag/v0.2.0).
+**v0.3.0** is the "tutor" release: a book comes off the shelf and opens in one move, an answer reads like a
+tutor explaining it, a figure can be selected and asked about, and the board becomes a branching tree you
+can lay beside the paper. It was built on the `release/v0.3` branch to the approved clickable prototype
+(the journey in [#347](https://github.com/Legend101Zz/PaperTree/issues/347)) and tracked in
+[#329](https://github.com/Legend101Zz/PaperTree/issues/329). Its pull requests are #350 and #352 to #373
+([`CHANGELOG.md`](CHANGELOG.md#030---unreleased) lists them, and the issues they closed). For what v0.2 looked like, see
+[the v0.2 product video](docs/assets/readme/v0.2/papertree-v0.2.mp4).
 
 ### What's new
 
 Each area is described in full under [Features](#features).
 
-- **Library:** the shelf of cloth spines, a row per topic; search that dims; Reading now with Continue; a
-  book you pull out and open, with a bookplate; Topics with suggestions that say where they came from; a
-  Map of only real citation links; the Table; a phone layout of flat books.
-- **Reader:** a new header and reader desk; the selection toolbar in the page margin; the explain exchange
-  (ask → answer → trace) with markers numbered by passage, each of which flashes its passage with a margin
-  tab; folded answers; the summary as an exchange; highlight delete with Undo; the explain panel as a
-  bottom sheet on a phone.
-- **Diagrams (new):** an engraved plate whose parts stream in, each cited, not verified or inferred.
-- **Notebook (new):** Dive in from an answer to a bound page with quote cards, notes, ink and a lasso, on a
-  computer, a tablet or a phone.
-- **Board** (formerly the canvas): new cards with brass pins, seven thread kinds told apart by colour and a
-  second cue, Link as, keyboard threading, frames, a minimap, undo and redo, and 500 cards.
-- **Lamp-lit**, a dark scheme that keeps the PDF page paper, and the System / Daylight / Lamp-lit switch.
-- **Reduced motion:** every animation has a reduced path, measured against the design.
-- **Under the hood:** feature folders with pure, tested models; lint rules for docs, imports and
-  accessibility; docstrings on new Python modules; Prettier on `apps/web`; a pre-commit hook; migrations
-  0006–0011; the agent's `diagram` and `topic` kinds. New runtime dependencies: `perfect-freehand` 1.2.3
-  (MIT) and five Fontsource font packages (SIL OFL 1.1)
-  ([ADR-004 §3](research/architecture-decisions/ADR-004-v0.2-ui-stack.md)).
+- **The shelf and the spread:** spines on planks, widths that follow the page count; a click takes the book
+  off the shelf and opens it; the spread has the abstract, an AI "Paper at a glance", Continue, Rename,
+  Topic, and Delete with Undo.
+- **Tutor answers:** TL;DR, In plain words, How it works and In the paper; maths typeset in KaTeX; a level
+  switch; Check yourself; Go deeper; sources reduced to one quiet line of page buttons.
+- **Mermaid diagrams:** flowchart, sequence, state, mindmap, timeline, quadrant, xy chart and class
+  diagrams in "How it works", parse-checked and repaired by the agent before the answer is stored, drawn
+  lazily from the app's tokens, keyboard-scrollable when wide, with a larger view in a dialog on board
+  cards.
+- **Images:** one click selects a figure, or drag an area; then Explain, Ask, Send to board or Note.
+- **The branching board:** down is a follow-up, right is a branch, branch from words in an answer, path
+  breadcrumb, Fold, Tidy, Outline with Markdown export, and **Board beside** for the paper and the board
+  side by side.
+- **Page colour:** the paper itself can be Light, Sepia or Dark, with figures on a mat.
+- **Flash for every run kind** (explain, ask, summary, diagram, topic, glance, image), priced at MiniMax's
+  published Flash rates. Prompts are about 55 % shorter.
+- **Removed:** citation chips and the "verified" and "grounded" readouts, with the API's grounding
+  verdicts (migration 0015); the catalogue card; "Explain with a diagram" as a selection action.
+- **Under the hood:** migrations 0012 to 0017 (the database is copied to `.pre-0013.bak`, `.pre-0015.bak`
+  and `.pre-0017.bak` before the three table rebuilds); the agent's `glance` and `image` run kinds with
+  `PAPERTREE_MODEL_GLANCE` and `PAPERTREE_MODEL_IMAGE`; the `mermaid` 12.2.0 and `katex` dependencies; a
+  one-arm agent bench.
 
-### How v0.2.0 compares with the last release
+### How v0.3.0 compares with v0.2.0
 
-| Metric               | v0.1.0                                                                        | v0.2.0                                                                                                                                                                          | Source                                                                                               |
-| -------------------- | ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| TypeScript tests     | 1,858                                                                         | **3,152**                                                                                                                                                                       | v0.1: `docs/METRICS.md`; v0.2: `turbo run test --force` on `91857a4`, re-run on `065f709`            |
-| pytest               | 2,236 passed                                                                  | **2,562 passed**, 4 skipped, 1 expected failure                                                                                                                                 | v0.1: `docs/METRICS.md`; v0.2: CI run 39015930115 on #320                                            |
-| e2e (Playwright)     | 60 of 60                                                                      | **88 of 88**, in 30.1 min                                                                                                                                                       | v0.1: `docs/METRICS.md`; v0.2: CI run 39015930115 on #320                                            |
-| axe                  | 0 serious or critical in 12 combinations; canvas and explain panel not tested | **0 serious or critical** after each of the 14 steps of the prototype flow, at 1440 and 390 px, daylight and lamp-lit: library, book, reader, explain panel, notebook and board | v0.1: `docs/METRICS.md`; v0.2: S8's `e2e/v02/prototype-flow.spec.ts` (#320)                          |
-| Design frames        | none                                                                          | 32: 16 done, 16 partial (each with its issue)                                                                                                                                   | `RESULT.md`, "Frames"                                                                                |
-| 500 cards on a board | all 500 drawn; first view at the 0.2 zoom floor, unreadable; loaded in 553 ms | only the cards in view drawn; all 500 readable as glances at 20 %; first card 198–245 ms                                                                                        | v0.1: [`GAP-AUDIT.md`](research/build/v0.2-ui/GAP-AUDIT.md) on `79f637d`; v0.2: S8; different probes |
-| Live AI spend        | —                                                                             | 11 live runs, ≈ $0.022 in all (estimates): 5 during the build, 2 for the product video, 4 in the release's live journey                                                         | `RESULT.md`, "Live AI spend"                                                                         |
+| Metric                 | v0.2.0                                  | v0.3.0                                                                                                                     | Source                                         |
+| ---------------------- | --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
+| TypeScript tests       | 3,152                                   | **3,807** (web 2,125, agent 260, ui 217, anchoring 341, document-ir 864)                                                   | `docs/METRICS.md`; `turbo run test --force`    |
+| pytest                 | 2,562 passed                            | **2,688 passed**, 24 skipped or expected failures, 0 failed                                                                | `docs/METRICS.md`; a local full run            |
+| e2e (Playwright) specs | 88 of 88 passed in CI                   | **103** listed; not run for the metrics pass                                                                               | `docs/METRICS.md`                              |
+| Explain input tokens   | 4,004 (one run)                         | **median 2,447** over 18 runs (−39 %)                                                                                      | v0.3 live bench, quiet re-run                  |
+| Explain cost           | ≈ $0.00084 at Flash rates (one run)     | **median $0.00073**, mean $0.00086 (−13 % on the median, +2 % on the mean)                                                 | the same; v0.2's run re-priced at Flash rates  |
+| Explain first text     | 2.20 s (one run)                        | **p50 2.97 s**, p90 6.58 s                                                                                                 | the same: no change one run can show           |
+| Explain total time     | 3.8 s for 394 output tokens (one run)   | **p50 6.8 s**, p90 22.3 s, for a median 618 output tokens                                                                  | the same: the price of a longer answer (below) |
+| Live AI by kind        | explain once, diagram twice, topic once | **every shipped kind measured** (explain, ask, follow-up, summary, glance, image, board ask): 39 of 39 quiet runs complete | the same                                       |
+| Mermaid stress test    | none                                    | **237 diagrams in rounds 2 to 4, 0 render errors**, in light and dark (round 1, before the checks: 4 of 91)                | four rounds of live answers on the real stack  |
 
-**Got worse:** the CI Python job went from 15 min 55 s to 18 min 44 s, and the E2E job from 19 min 33 s
-with 60 specs to 31 min 14 s with 88. Selecting text in Safari's Source mode is a new known break
-([#327](https://github.com/Legend101Zz/PaperTree/issues/327)). The live journey (the real model:
-register, upload, explain, follow-up, summary, cancel) did not run during the build; it ran once at release,
-on this README's code, and passed (CI run 39037754641). The rest, with sources, machine loads, the numbers at scale and
-what was not measured, is in [`docs/METRICS.md`](docs/METRICS.md#v02-against-v01).
+**The trade: a richer, longer answer.** The tutor answer has sections, maths, a diagram and levels, so it is
+longer: a median 618 output tokens against 394 (+57 %). At the measured rate of about 104 tokens per second
+after the first text, that length accounts for about 2.2 s of the 2.9 s by which the median explain is now longer.
+The first text did not move, and the answer streams, so you are reading it from about 3 s. Longer answers
+are the intended result of v0.3, not a regression.
 
-Earlier releases: [v0.1.0](https://github.com/Legend101Zz/PaperTree/releases/tag/v0.1.0) · full history in [CHANGELOG.md](CHANGELOG.md) and [docs/METRICS.md](docs/METRICS.md).
+**Also worse, or not known.** A summary is heavier than v0.1's one measured run (5.2 tool calls per run, a
+median cost of $0.00194), and its latency was measured only on a busy machine. One explain in 18 ended in a
+model timeout in the loaded run (none in the quiet 18); the reader says "The model stopped responding" and
+offers a retry. The v0.2 figures above are single runs, so a "change" is one run against a median. The
+numbers come from the build's heads, not from a release CI run. **Not measured:** the quality of answers (no
+judge scored any), axe, reduced motion, the board at 500 cards, the library at 400 papers, bundle size, CI
+wall clock, other browsers and real devices. Sources, machine loads and the rest are in
+[`docs/METRICS.md`](docs/METRICS.md#v03-against-v02).
 
-## Known limits (v0.2.0)
+The Mermaid stress test is four rounds of live MiniMax-M3.1-Flash answers (96, 96, 96 and 64) over the eight
+corpus papers. Round 1, with the prompt alone, drew 91 diagrams of which 4 failed to render (4.4 %) and 28
+were too wide. The agent's parse-check and repair, the soft size caps and the token palette came after it;
+rounds 2, 3 and 4 left the reader 85, 91 and 61 diagrams, none failing in light or dark. Its raw record is
+kept outside the repository, in the build's evidence store.
 
-- **Safari:** selecting paper text in Source mode does not open Explain or Ask in Safari 26.3.1; it works in
-  Chrome ([#327](https://github.com/Legend101Zz/PaperTree/issues/327)). CI's e2e runs Chromium only, and
-  Playwright's WebKit build does not reproduce it. Firefox is untested.
-- **Design frames still partial** (S8's verdicts): Enter in the library search opens the card instead of
-  pulling the book out ([#313](https://github.com/Legend101Zz/PaperTree/issues/313)); topic banners never
-  show the paper's Figure 1 ([#314](https://github.com/Legend101Zz/PaperTree/issues/314)); small library
-  differences ([#315](https://github.com/Legend101Zz/PaperTree/issues/315)); Back from the notebook has no
-  reverse page turn ([#316](https://github.com/Legend101Zz/PaperTree/issues/316)); the notebook has no
-  figure crop tool and draws ink under the cards ([#317](https://github.com/Legend101Zz/PaperTree/issues/317));
-  explain says "Summarize paper", shows no first-text time and no live trace while streaming
-  ([#318](https://github.com/Legend101Zz/PaperTree/issues/318)); a diagram part stands on one passage and
-  there is no crafted-figure job ([#319](https://github.com/Legend101Zz/PaperTree/issues/319)); the shelf's
-  first and last label holders are clipped by its ends ([#324](https://github.com/Legend101Zz/PaperTree/issues/324)).
-- **Citations:** the flash does not work in Guided mode yet
-  ([#245](https://github.com/Legend101Zz/PaperTree/issues/245)); a ¶ number can be one off after a
-  paragraph that continues across columns ([#234](https://github.com/Legend101Zz/PaperTree/issues/234));
-  the coverage count treats a paragraph as cited when its only handles match no citation
-  ([#246](https://github.com/Legend101Zz/PaperTree/issues/246)); summary citations have no ¶ or section
-  ([#257](https://github.com/Legend101Zz/PaperTree/issues/257)); board passage cards say "p. 2" without the
-  ¶ ([#255](https://github.com/Legend101Zz/PaperTree/issues/255)); a plate's flash marks the whole
-  paragraph, not the quoted words ([#123](https://github.com/Legend101Zz/PaperTree/issues/123)). The
-  grounding check is still lexical ([#179](https://github.com/Legend101Zz/PaperTree/issues/179)).
-- **Missing actions:** the daily cap cannot be changed in the app
-  ([#256](https://github.com/Legend101Zz/PaperTree/issues/256)); no Dive in or Send to board from the
-  summary ([#258](https://github.com/Legend101Zz/PaperTree/issues/258)); no Add to notebook for a plate
-  ([#276](https://github.com/Legend101Zz/PaperTree/issues/276)); pinch does not zoom the notebook on a
-  tablet ([#292](https://github.com/Legend101Zz/PaperTree/issues/292)).
-- **Phone and theme:** the flash's margin tab on a phone is off-screen or over the passage
-  ([#279](https://github.com/Legend101Zz/PaperTree/issues/279)); on a phone after Fit all, the board's
-  in-card pins and buttons are under the 24 px target size
-  ([#282](https://github.com/Legend101Zz/PaperTree/issues/282)); two theme transitions leave a label
-  unreadable for about 100 ms ([#308](https://github.com/Legend101Zz/PaperTree/issues/308)).
-- **Board and notebook defects:** a notebook page's card squeezes its title under the miniature
-  ([#322](https://github.com/Legend101Zz/PaperTree/issues/322)); the board accepts any id as a diagram
-  card's plate ([#277](https://github.com/Legend101Zz/PaperTree/issues/277)); a notebook item's undo after
-  a failed create can leave the item on the server
-  ([#284](https://github.com/Legend101Zz/PaperTree/issues/284)); Dive in's page id is global, not per
-  owner ([#300](https://github.com/Legend101Zz/PaperTree/issues/300)).
-- **Parser:** A3C's title parses as "Abstract" ([#298](https://github.com/Legend101Zz/PaperTree/issues/298));
-  two older parser issues are still open
-  ([#101](https://github.com/Legend101Zz/PaperTree/issues/101),
-  [#103](https://github.com/Legend101Zz/PaperTree/issues/103)).
-- **Not in v0.2.0:** audio and paper replay ([#5](https://github.com/Legend101Zz/PaperTree/issues/5)), OCR
+Earlier releases: [v0.2.0](https://github.com/Legend101Zz/PaperTree/releases/tag/v0.2.0) ·
+[v0.1.0](https://github.com/Legend101Zz/PaperTree/releases/tag/v0.1.0) · full history in
+[CHANGELOG.md](CHANGELOG.md) and [docs/METRICS.md](docs/METRICS.md).
+
+## Known limits (v0.3.0)
+
+- **Nothing checks an answer.** v0.3 removed the grounding check, so no claim is marked verified or not.
+  A source line says which pages the AI drew on, and the model can still be wrong. A Mermaid diagram is
+  parse-checked, which says it can be drawn and nothing about whether it is right. The metrics pass did not
+  score answer quality.
+- **Safari:** selecting paper text in Source mode does not open Explain or Ask in Safari 26.3.1; it works
+  in Chrome ([#327](https://github.com/Legend101Zz/PaperTree/issues/327)). CI's e2e runs Chromium only, and
+  Firefox is untested.
+- **Diagrams:** a fence the agent cannot repair is dropped, so that answer has no diagram. A wide diagram
+  (mostly timelines and sequence diagrams) scrolls sideways at 70 % scale. Image answers cannot point at a
+  part of the picture ([#359](https://github.com/Legend101Zz/PaperTree/issues/359)).
+- **Phone and tablet:** the branching board and Board beside were not designed for a phone or a tablet.
+  Under 768 px Board beside opens the full-width board instead. The prototype also left open a
+  reading-size card, "Ask differently", branches from passages and notes, how deep a path is sent, and what
+  "the paper" means in a card's Uses line ([#347](https://github.com/Legend101Zz/PaperTree/issues/347)).
+- **Latency:** the explain takes longer than v0.2's (median 6.8 s, p90 22.3 s) because the answer is
+  longer. The summary reads the paper with tools and is the slowest kind (about 17 s in the median, measured on a busy machine).
+- **Anchors and the parser:** an anchor minted on the server covers a whole block, so a flash marks the
+  whole paragraph ([#123](https://github.com/Legend101Zz/PaperTree/issues/123)). A3C's title parses as
+  "Abstract" ([#298](https://github.com/Legend101Zz/PaperTree/issues/298); rename it from the spread's ⋯
+  menu). Open parser issues: [#101](https://github.com/Legend101Zz/PaperTree/issues/101),
+  [#103](https://github.com/Legend101Zz/PaperTree/issues/103) and
+  [#180](https://github.com/Legend101Zz/PaperTree/issues/180).
+- **Map:** the "cites it" tags can overlap each other and the lines
+  ([#332](https://github.com/Legend101Zz/PaperTree/issues/332)).
+- **Missing actions and open defects:** the daily cap cannot be changed in the app
+  ([#256](https://github.com/Legend101Zz/PaperTree/issues/256)); a notebook item's undo after a failed
+  create can leave the item on the server ([#284](https://github.com/Legend101Zz/PaperTree/issues/284));
+  Dive in's page id is global, not per owner ([#300](https://github.com/Legend101Zz/PaperTree/issues/300));
+  the board accepts any id as a diagram card's plate
+  ([#277](https://github.com/Legend101Zz/PaperTree/issues/277)).
+- **CI and tests:** the e2e job can hang until its timeout with no output
+  ([#361](https://github.com/Legend101Zz/PaperTree/issues/361)); some dark-scheme axe checks may run in
+  daylight ([#269](https://github.com/Legend101Zz/PaperTree/issues/269)); faux `ai_runs` rows look real
+  ([#181](https://github.com/Legend101Zz/PaperTree/issues/181)).
+- **Not in v0.3.0:** audio and paper replay ([#5](https://github.com/Legend101Zz/PaperTree/issues/5)), OCR
   or scanned PDFs, memory write-back, a hosted version and a Docker setup.
 
-## v0.3 plans
+## Next
 
-v0.3 is tracked in [#329](https://github.com/Legend101Zz/PaperTree/issues/329), and every issue in it
-carries the [`v0.3` label](https://github.com/Legend101Zz/PaperTree/issues?q=is%3Aopen+label%3Av0.3) (41
-open as of this README). It finishes the Ex Libris design, makes PaperTree work in every major browser, and
-tightens the reading truth. This section lists only what those issues hold; new work gets an issue before
-it starts.
-
-1. **Finish the Ex Libris design** (the 16 partial frames). Enter in the library search pulls the book
-   out ([#313](https://github.com/Legend101Zz/PaperTree/issues/313)); topic banners show the paper's Figure 1
-   ([#314](https://github.com/Legend101Zz/PaperTree/issues/314)); Dive in gets a reverse page turn on Back
-   ([#316](https://github.com/Legend101Zz/PaperTree/issues/316)); the notebook gets a figure crop tool
-   ([#317](https://github.com/Legend101Zz/PaperTree/issues/317)); explain gets the first-text time and a live
-   trace ([#318](https://github.com/Legend101Zz/PaperTree/issues/318)); diagram parts can stand on several
-   passages ([#319](https://github.com/Legend101Zz/PaperTree/issues/319)). Also
-   [#315](https://github.com/Legend101Zz/PaperTree/issues/315),
-   [#255](https://github.com/Legend101Zz/PaperTree/issues/255),
-   [#322](https://github.com/Legend101Zz/PaperTree/issues/322) and
-   [#324](https://github.com/Legend101Zz/PaperTree/issues/324).
-2. **Every major browser.** Explain and Ask from a selection in Safari
-   ([#327](https://github.com/Legend101Zz/PaperTree/issues/327)); the theme transitions that leave a label
-   unreadable ([#308](https://github.com/Legend101Zz/PaperTree/issues/308)); dark-scheme axe checks that may
-   run in daylight ([#269](https://github.com/Legend101Zz/PaperTree/issues/269)). Then WebKit and Firefox in
-   CI's e2e and a manual real-Safari check on the release checklist (its issue is filed when it starts).
-3. **Reading truth: citations, anchors, the parser.** The flash in Guided mode
-   ([#245](https://github.com/Legend101Zz/PaperTree/issues/245)), ¶ locators
-   ([#234](https://github.com/Legend101Zz/PaperTree/issues/234)), the coverage count
-   ([#246](https://github.com/Legend101Zz/PaperTree/issues/246)), summary citation locators
-   ([#257](https://github.com/Legend101Zz/PaperTree/issues/257)), the phone margin tab
-   ([#279](https://github.com/Legend101Zz/PaperTree/issues/279)), sub-block anchors
-   ([#123](https://github.com/Legend101Zz/PaperTree/issues/123)) and the reader's leftovers
-   ([#176](https://github.com/Legend101Zz/PaperTree/issues/176)). Parser: a held-out set, pinned corpus URLs
-   and text beside tables ([#180](https://github.com/Legend101Zz/PaperTree/issues/180)), plus
-   [#101](https://github.com/Legend101Zz/PaperTree/issues/101),
-   [#103](https://github.com/Legend101Zz/PaperTree/issues/103) and
-   [#298](https://github.com/Legend101Zz/PaperTree/issues/298).
-4. **Notebook and board depth.** Board threads get a version, like cards
-   ([#283](https://github.com/Legend101Zz/PaperTree/issues/283)); Dive in and Send to board from the summary
-   ([#258](https://github.com/Legend101Zz/PaperTree/issues/258)); a plate in the notebook
-   ([#276](https://github.com/Legend101Zz/PaperTree/issues/276)); pinch zoom on a tablet
-   ([#292](https://github.com/Legend101Zz/PaperTree/issues/292)). Also
-   [#284](https://github.com/Legend101Zz/PaperTree/issues/284),
-   [#300](https://github.com/Legend101Zz/PaperTree/issues/300),
-   [#277](https://github.com/Legend101Zz/PaperTree/issues/277),
-   [#282](https://github.com/Legend101Zz/PaperTree/issues/282),
-   [#178](https://github.com/Legend101Zz/PaperTree/issues/178) and
-   [#309](https://github.com/Legend101Zz/PaperTree/issues/309).
-5. **AI.** The grounding check's limits, Flash re-tests, M3 latency and the Stop copy
-   ([#179](https://github.com/Legend101Zz/PaperTree/issues/179)); changing the daily cap in the app
-   ([#256](https://github.com/Legend101Zz/PaperTree/issues/256)).
-6. **CI, tooling and docs.** Faux `ai_runs` rows, the Linux network-deny audit and the Python job's time
-   ([#181](https://github.com/Legend101Zz/PaperTree/issues/181)); also
-   [#219](https://github.com/Legend101Zz/PaperTree/issues/219),
-   [#268](https://github.com/Legend101Zz/PaperTree/issues/268) and
-   [#129](https://github.com/Legend101Zz/PaperTree/issues/129).
-
-**Beyond v0.3.** EPIC 4, Audiobook and Paper Replay
-([#5](https://github.com/Legend101Zz/PaperTree/issues/5)): a narration generated from the paper's section
-tree, in which tapping a paragraph jumps the audio there and every spoken segment knows which blocks it came
-from. The tracker also lists three owner-only issues that builds leave alone
-([#136](https://github.com/Legend101Zz/PaperTree/issues/136),
-[#54](https://github.com/Legend101Zz/PaperTree/issues/54),
-[#62](https://github.com/Legend101Zz/PaperTree/issues/62)).
+Open work is tracked in [#329](https://github.com/Legend101Zz/PaperTree/issues/329) and under the
+[`v0.3` label](https://github.com/Legend101Zz/PaperTree/issues?q=is%3Aopen+label%3Av0.3); what is open is
+the list under [Known limits](#known-limits-v030), and the prototype's undesigned parts in
+[#347](https://github.com/Legend101Zz/PaperTree/issues/347). New work gets an issue before it starts.
+Audio and paper replay is [#5](https://github.com/Legend101Zz/PaperTree/issues/5).
 
 ## Troubleshooting
 
@@ -842,7 +850,7 @@ from. The tracker also lists three owner-only issues that builds leave alone
 - **The features**, one README each: [library](apps/web/src/features/library/README.md),
   [book](apps/web/src/features/book/README.md), [reader](apps/web/src/features/reader/README.md),
   [explain](apps/web/src/features/explain/README.md), [diagram](apps/web/src/features/diagram/README.md),
-  [notebook](apps/web/src/features/notebook/README.md), [board](apps/web/src/features/board/README.md),
+  [notebook](apps/web/src/features/notebook/README.md), [board](apps/web/src/features/board/README.md), [split](apps/web/src/features/split/README.md),
   [highlights](apps/web/src/features/highlights/README.md), [settings](apps/web/src/features/settings/README.md),
   [design system](apps/web/src/features/design-system/README.md)
 - **The v0.2 build** ([`research/build/v0.2-ui/`](research/build/v0.2-ui/)):
@@ -877,7 +885,8 @@ work.
 ## Acknowledgements
 
 - Built on [pdf.js](https://mozilla.github.io/pdf.js/), [PyMuPDF](https://pymupdf.readthedocs.io/),
-  [React Flow](https://reactflow.dev/) (`@xyflow/react`), [perfect-freehand](https://github.com/steveruizok/perfect-freehand),
+  [React Flow](https://reactflow.dev/) (`@xyflow/react`), [Mermaid](https://mermaid.js.org/) (MIT) and
+  [KaTeX](https://katex.org/) (MIT), [perfect-freehand](https://github.com/steveruizok/perfect-freehand),
   [Next.js](https://nextjs.org/), [FastAPI](https://fastapi.tiangolo.com/), the Pi harness SDK
   (`@earendil-works/pi-coding-agent`) and [MiniMax](https://www.minimax.io/) models.
 - The v0.2 typefaces are Libre Caslon Display and Text, Alegreya Sans and Alegreya Sans SC, and Courier
@@ -887,7 +896,7 @@ work.
   timings from [whisper.cpp](https://github.com/ggml-org/whisper.cpp) (MIT); the click sound is HyperFrames'
   bundled `click-soft.mp3` (Pixabay Content License). Full credits:
   [`docs/assets/readme/v0.2/VIDEO-CREDITS.md`](docs/assets/readme/v0.2/VIDEO-CREDITS.md).
-- The screenshots and the product video show these papers, used as examples; they belong to their authors:
+- The v0.3 screenshots and demo loop, and the v0.2 screenshots and product video, show these papers, used as examples; they belong to their authors:
   - Vaswani et al., [_Attention Is All You Need_](https://arxiv.org/abs/1706.03762) (2017).
   - Redmon et al., [_You Only Look Once: Unified, Real-Time Object Detection_](https://arxiv.org/abs/1506.02640) (2016).
   - He et al., [_Deep Residual Learning for Image Recognition_](https://arxiv.org/abs/1512.03385) (2016).
