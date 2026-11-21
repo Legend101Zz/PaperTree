@@ -61,7 +61,17 @@
   align-items: baseline;
   gap: 10px;
   min-inline-size: 0;
+  overflow: hidden;
   white-space: nowrap;
+  /* The tools take the bar first: at 1440px this is squeezed to a few px. The counts are never cut
+     short, so they go when there is no room for them, rather than running under the tools. */
+  container-type: inline-size;
+}
+
+@container (max-width: 80px) {
+  .pt-boardbar__counts {
+    display: none;
+  }
 }
 
 .pt-boardbar__h1 {

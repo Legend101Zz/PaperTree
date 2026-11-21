@@ -42,3 +42,18 @@ describe('the header sits over the stage', () => {
     }
   });
 });
+
+describe('the header title never runs under the tools', () => {
+  // At 1440px the tools take the bar and the title is squeezed to a few px. The card counts are
+  // `flex: none`, so without this they spilled out and sat under the Select tool.
+  it('clips its title, and drops the counts when it has no room for them', () => {
+    const sheet = css('chrome.css');
+    const start = sheet.indexOf('\n.pt-boardbar__title {');
+    const rule = sheet.slice(start, sheet.indexOf('\n}', start));
+    expect(rule).toMatch(/overflow:\s*hidden;/);
+    expect(rule).toMatch(/container-type:\s*inline-size;/);
+    expect(sheet).toMatch(
+      /@container \(max-width: \d+px\) \{\s*\.pt-boardbar__counts \{\s*display: none;/,
+    );
+  });
+});
