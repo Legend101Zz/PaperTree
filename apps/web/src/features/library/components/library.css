@@ -109,6 +109,10 @@
   gap: 32px;
   align-items: flex-end;
   padding-block-start: 24px; /* room for a lifted spine and its focus ring */
+  /* The end holders reach 16px past their row (.pt-plank__holder): room for them inside the scroll box,
+     so the first is not clipped and the last does not make the shelf scroll. */
+  padding-inline: 16px;
+  margin-inline: -16px;
   overflow-x: auto;
   overscroll-behavior-x: contain;
 }
