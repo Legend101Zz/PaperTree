@@ -72,6 +72,16 @@
   .pt-boardbar__counts {
     display: none;
   }
+
+  /* A few px of the title would show a sliver of its first letter: keep the heading for screen
+     readers only. */
+  .pt-boardbar__h1 {
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
 }
 
 .pt-boardbar__h1 {

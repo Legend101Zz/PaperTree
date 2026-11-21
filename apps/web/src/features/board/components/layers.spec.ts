@@ -55,5 +55,16 @@ describe('the header title never runs under the tools', () => {
     expect(sheet).toMatch(
       /@container \(max-width: \d+px\) \{\s*\.pt-boardbar__counts \{\s*display: none;/,
     );
+    // ...and the heading stays for screen readers, never as a sliver of its first letter.
+    const query = sheet.slice(sheet.indexOf('@container (max-width:'));
+    expect(query.slice(0, query.indexOf('\n}'))).toMatch(
+      /\.pt-boardbar__h1 \{[^}]*clip-path: inset\(50%\);/,
+    );
+  });
+});
+
+describe('a key hint on a filled button', () => {
+  it('takes the button ink, not the dark hint ink (unreadable on the accent)', () => {
+    expect(css('tree/tree.css')).toMatch(/\n\.pt-ask__send kbd \{[^}]*color: inherit;/);
   });
 });

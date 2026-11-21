@@ -691,6 +691,12 @@
   border-radius: 3px;
 }
 
+/* On the filled primary button the hint takes the button's own ink: dark ink on the accent was unreadable. */
+.pt-ask__send kbd {
+  color: inherit;
+  border-color: color-mix(in srgb, currentColor 55%, transparent);
+}
+
 .pt-span-menu__item:hover {
   background: var(--pt-ai-slip);
 }
