@@ -8,7 +8,7 @@ import type { AddressInfo } from 'node:net';
 
 import type { Model } from '@earendil-works/pi-ai';
 
-import { type AgentApp, createAgentApp } from '../../src/app.ts';
+import { type AgentApp, type AppOptions, createAgentApp } from '../../src/app.ts';
 import { type AgentConfig, preparePiEnvironment } from '../../src/config.ts';
 import type { FauxBrain } from '../../src/faux.ts';
 import { createLogger, type Level } from '../../src/log.ts';
@@ -43,6 +43,7 @@ export async function startAgent(options: {
   readonly key?: string;
   readonly policy?: ModelPolicy;
   readonly providerTimeoutMs?: number;
+  readonly parseMermaid?: AppOptions['parseMermaid'];
 }): Promise<Agent> {
   const faux = options.faux ?? true;
   const config: AgentConfig = {
@@ -72,6 +73,7 @@ export async function startAgent(options: {
     ...(options.providerTimeoutMs === undefined
       ? {}
       : { providerTimeoutMs: options.providerTimeoutMs }),
+    ...(options.parseMermaid === undefined ? {} : { parseMermaid: options.parseMermaid }),
   });
   const port = await app.listen(0);
   return { app, url: `http://127.0.0.1:${String(port)}`, logs, rawLogs, close: () => app.close() };

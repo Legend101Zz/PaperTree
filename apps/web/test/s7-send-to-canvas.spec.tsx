@@ -13,11 +13,14 @@ import { boardsApi } from '@/lib/api/boards';
 import { threadsApi } from '@/lib/api/threads';
 import { ApiError, type Anchor, type CanvasNode } from '@/lib/api/types';
 
-vi.mock('@/lib/api/boards', () => ({ boardsApi: { get: vi.fn(), createNode: vi.fn() } }));
+vi.mock('@/lib/api/boards', () => ({
+  boardsApi: { get: vi.fn(), createNode: vi.fn(), patchNode: vi.fn() },
+}));
 vi.mock('@/lib/api/threads', () => ({ threadsApi: { list: vi.fn(), get: vi.fn() } }));
 
 const get = vi.mocked(boardsApi.get);
 const createNode = vi.mocked(boardsApi.createNode);
+const patchNode = vi.mocked(boardsApi.patchNode);
 const PAPER = 'ppr_TESTTESTTEST';
 const ANCHOR = {
   id: 'a1',
@@ -45,6 +48,19 @@ function existing(x: number, y: number): CanvasNode {
     source_page_id: null,
     source_diagram_id: null,
     counts: null,
+    parent_id: null,
+    branch: null,
+    parent_span: null,
+    question: null,
+    uses: null,
+    offset_x: 0,
+    offset_y: 0,
+    folded: false,
+    final_text: null,
+    level: null,
+    model: null,
+    answer_status: null,
+    citations: null,
     version: 1,
     created_at: '',
     updated_at: '',
@@ -54,6 +70,7 @@ function existing(x: number, y: number): CanvasNode {
 beforeEach(() => {
   get.mockReset();
   createNode.mockReset();
+  patchNode.mockReset();
   vi.mocked(threadsApi.list).mockReset();
   vi.mocked(threadsApi.get).mockReset();
   get.mockResolvedValue({ board: null, nodes: [], edges: [] });
@@ -63,6 +80,73 @@ afterEach(() => {
   dismissCanvasToast();
   cleanup();
   document.getElementById('pt-canvas-toast-host')?.remove();
+});
+
+describe('sendToCanvas, a picture (#348)', () => {
+  const PICTURE = {
+    id: 'img1',
+    doc: { paperId: PAPER },
+    targetKind: 'figure',
+    selectors: [
+      { type: 'PageSelector', index: 5 },
+      { type: 'ShapeSelector', pageIndex: 5, quads: [[100.2, 120.4, 400, 300]], polygons: [] },
+    ],
+  } as unknown as Anchor;
+
+  it('sends an excerpt whose anchor is the picture and whose body is the caption it was given', async () => {
+    await sendToCanvas(PAPER, {
+      kind: 'excerpt',
+      anchor: PICTURE,
+      body: 'Figure 4. Training on CIFAR-10.',
+    });
+    const [, body] = createNode.mock.calls[0]!;
+    expect(body.kind).toBe('excerpt');
+    expect(body.source_anchor).toBe(PICTURE);
+    expect(body.body).toBe('Figure 4. Training on CIFAR-10.');
+  });
+
+  it('the same picture twice is one card: it says so and sends nothing', async () => {
+    get.mockResolvedValue({
+      board: { board_id: 'brd_1' } as never,
+      nodes: [{ ...existing(0, 0), node_id: 'cn_pic', kind: 'excerpt', source_anchor: PICTURE }],
+      edges: [],
+    });
+    // A hair's difference in the rectangle (the same figure picked twice) is still the same picture.
+    const again = {
+      ...PICTURE,
+      id: 'img2',
+      selectors: [
+        { type: 'PageSelector', index: 5 },
+        {
+          type: 'ShapeSelector',
+          pageIndex: 5,
+          quads: [[100.4, 120.1, 400.3, 300.2]],
+          polygons: [],
+        },
+      ],
+    } as unknown as Anchor;
+    const id = await sendToCanvas(PAPER, { kind: 'excerpt', anchor: again, body: 'x' });
+    expect(id).toBe('cn_pic');
+    expect(createNode).not.toHaveBeenCalled();
+  });
+
+  it('a different region of the same page is another card', async () => {
+    get.mockResolvedValue({
+      board: { board_id: 'brd_1' } as never,
+      nodes: [{ ...existing(0, 0), node_id: 'cn_pic', kind: 'excerpt', source_anchor: PICTURE }],
+      edges: [],
+    });
+    const other = {
+      ...PICTURE,
+      id: 'img3',
+      selectors: [
+        { type: 'PageSelector', index: 5 },
+        { type: 'ShapeSelector', pageIndex: 5, quads: [[100, 400, 400, 500]], polygons: [] },
+      ],
+    } as unknown as Anchor;
+    await sendToCanvas(PAPER, { kind: 'excerpt', anchor: other, body: '' });
+    expect(createNode).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('sendToCanvas', () => {
@@ -83,7 +167,8 @@ describe('sendToCanvas', () => {
     const link = document.querySelector<HTMLAnchorElement>('[data-testid="canvas-toast"] a');
     // #203: the toolbar says "Send to board", and its toast agrees.
     expect(link?.textContent).toBe('Open board');
-    expect(link?.getAttribute('href')).toBe(`/paper/${PAPER}/board`);
+    // #342: the board opens ON the card this send made.
+    expect(link?.getAttribute('href')).toBe(`/paper/${PAPER}/board?card=${body.node_id}`);
   });
 
   it('places the new node clear of the nodes already on the board', async () => {
@@ -96,6 +181,40 @@ describe('sendToCanvas', () => {
       body.x + body.w <= -GAP ||
       body.y + body.h <= -GAP;
     expect(clear).toBe(true);
+  });
+
+  it('puts a new passage below the lowest tree, not on the old grid', async () => {
+    const root = { ...existing(40, 60), node_id: 'cn_root', kind: 'excerpt' as const };
+    const answer = {
+      ...existing(0, 0),
+      node_id: 'cn_answer',
+      kind: 'explanation' as const,
+      parent_id: 'cn_root',
+      branch: 'right' as const,
+      final_text: 'x',
+    };
+    const next = { ...answer, node_id: 'cn_next', parent_id: 'cn_answer', branch: 'down' as const };
+    get.mockResolvedValue({ board: {} as never, nodes: [root, answer, next], edges: [] });
+    await sendToCanvas(PAPER, { kind: 'excerpt', anchor: ANCHOR });
+    const body = createNode.mock.calls[0]![1];
+    // Both cards of the tree are taller than 60 + 150: the root goes under all of them.
+    expect(body.y).toBeGreaterThan(60 + 150 + GAP);
+    expect(body.x).toBe(40);
+  });
+
+  it('returns the id of the card it made, and puts a dropped passage at the drop point (#344)', async () => {
+    get.mockResolvedValue({ board: {} as never, nodes: [existing(0, 0)], edges: [] });
+    const id = await sendToCanvas(PAPER, {
+      kind: 'excerpt',
+      anchor: ANCHOR,
+      toast: 'none',
+      at: { x: 356, y: 372 },
+    });
+    const body = createNode.mock.calls[0]![1];
+    expect([body.x, body.y]).toEqual([356, 372]);
+    expect(id).toBe(body.node_id);
+    // With the board beside the paper, the board says it by arriving: no toast.
+    expect(document.querySelector('[data-testid="canvas-toast"]')).toBeNull();
   });
 
   it('sends an explanation with the answer text and its message id, found in the newest thread', async () => {
@@ -193,8 +312,77 @@ describe('sendToCanvas', () => {
       );
       const toast = document.querySelector('[data-testid="canvas-toast"]')!;
       expect(toast.textContent).toContain('Already on your board');
-      expect(toast.querySelector('a')?.getAttribute('href')).toBe(`/paper/${PAPER}/board`);
+      // It opens on the card that is already there.
+      expect(toast.querySelector('a')?.getAttribute('href')).toBe(
+        `/paper/${PAPER}/board?card=cn_passage0001`,
+      );
       expect(toast.querySelector('a')?.textContent).toBe('Open board');
+    });
+
+    describe('a drop of a passage that is already on the board (#344 review)', () => {
+      const at = { x: 356, y: 372 };
+      const drop = (outcomes: string[]) =>
+        sendToCanvas(PAPER, {
+          kind: 'excerpt',
+          anchor: withPage(2, 'Residual learning framework'),
+          toast: 'none',
+          at,
+          onOutcome: (o) => outcomes.push(o),
+        });
+
+      it('moves a root with no tree yet to the drop point, and says it moved', async () => {
+        patchNode.mockResolvedValue({} as never);
+        get.mockResolvedValue({
+          board: { board_id: 'brd_1' } as never,
+          nodes: [onBoard(withPage(2, 'Residual learning framework'))],
+          edges: [],
+        });
+        const outcomes: string[] = [];
+        expect(await drop(outcomes)).toBe('cn_passage0001');
+        expect(patchNode).toHaveBeenCalledWith('brd_1', 'cn_passage0001', {
+          version: 1,
+          x: 356,
+          y: 372,
+        });
+        expect(createNode).not.toHaveBeenCalled();
+        expect(outcomes).toEqual(['moved']);
+      });
+
+      it('leaves a passage that has a tree where it is, and says it exists (the board pans)', async () => {
+        get.mockResolvedValue({
+          board: { board_id: 'brd_1' } as never,
+          nodes: [
+            onBoard(withPage(2, 'Residual learning framework')),
+            {
+              ...existing(0, 0),
+              node_id: 'cn_answer00001',
+              kind: 'explanation',
+              parent_id: 'cn_passage0001',
+            },
+          ],
+          edges: [],
+        });
+        const outcomes: string[] = [];
+        expect(await drop(outcomes)).toBe('cn_passage0001');
+        expect(patchNode).not.toHaveBeenCalled();
+        expect(outcomes).toEqual(['existing']);
+      });
+    });
+
+    it('with the board about to open, finds the card without a toast and returns its id', async () => {
+      get.mockResolvedValue({
+        board: {} as never,
+        nodes: [onBoard(withPage(2, 'Residual learning framework'))],
+        edges: [],
+      });
+      const id = await sendToCanvas(PAPER, {
+        kind: 'excerpt',
+        anchor: withPage(2, 'Residual learning framework'),
+        toast: 'none',
+      });
+      expect(id).toBe('cn_passage0001');
+      expect(createNode).not.toHaveBeenCalled();
+      expect(document.querySelector('[data-testid="canvas-toast"]')).toBeNull();
     });
 
     it('still adds the same words on another page, and other words on the same page', async () => {

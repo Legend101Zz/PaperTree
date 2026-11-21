@@ -62,11 +62,6 @@ export const PROCESSING_DETAIL: Record<ProcessingState, string> = {
   failed: 'We could not read this paper. Retry, or open the original PDF.',
 };
 
-/** Guided mode and questions are gated on the IR; SOURCE MODE NEVER IS. */
-export function derivedFeaturesReady(state: ProcessingState): boolean {
-  return state === 'complete' || state === 'partial';
-}
-
 /** True while the server is still working on the row: the only time the library polls. */
 export function isNonTerminal(processing: Processing): boolean {
   return processing === 'queued' || processing === 'reading';

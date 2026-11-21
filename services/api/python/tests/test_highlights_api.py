@@ -263,6 +263,58 @@ def test_anchor_incomplete_is_422(tmp_path: Path) -> None:
         assert _rows(h.settings) == NO_ROWS
 
 
+def _image_record(
+    kind: str = "figure_region", quads: Any = None, number: int = 0
+) -> dict[str, Any]:
+    """An image anchor (v0.3 #348): the captured record's doc, a PageSelector and ONE ShapeSelector
+    quad, no TextQuoteSelector."""
+    record = _record()
+    record["id"] = f"7e1f0c3a-5b2d-4c8e-9a64-1d2e3f4a5b6{number}"
+    record["targetKind"] = kind
+    record["selectors"] = [
+        s for s in record["selectors"] if s["type"] in ("PageSelector", "ShapeSelector")
+    ]
+    for selector in record["selectors"]:
+        if selector["type"] == "ShapeSelector":
+            selector["quads"] = [[98.3, 78.4, 231.6, 155.8]] if quads is None else quads
+            selector["polygons"] = []
+    return record
+
+
+def test_an_image_highlight_needs_no_text_quote(tmp_path: Path) -> None:
+    """A figure or a free region is highlighted by its page and its rectangle (v0.3 #348); the same
+    record as text, or an image anchor with no rectangle, is still anchor_incomplete."""
+    with harness(tmp_path) as h:
+        alice = register(h.client, "alice@example.com")
+        paper_id = seed_paper(h.settings, h.client, alice, SLUG)
+        for number, kind in enumerate(("figure", "figure_region")):
+            made = _post(
+                h.client,
+                alice,
+                paper_id,
+                _body(
+                    highlight_id=f"hl_01K0APIIMAGEHL00000000{number:03d}",
+                    anchors=[{"anchor": _image_record(kind, number=number)}],
+                    resolutions=[],
+                ),
+            )
+            assert made.status_code == 201, made.text
+            stored = made.json()["anchors"][0]["anchor"]
+            assert stored["targetKind"] == kind
+            assert not [s for s in stored["selectors"] if s["type"] == "TextQuoteSelector"]
+        listed = h.client.get(f"/papers/{paper_id}/highlights", headers=auth(alice)).json()
+        kinds = sorted(a["anchor"]["targetKind"] for hl in listed for a in hl["anchors"])
+        assert kinds == ["figure", "figure_region"]
+        text_without_quote = {**_image_record(number=5), "targetKind": "text"}
+        for bad in (_image_record(quads=[], number=4), text_without_quote):
+            _assert_envelope(
+                _post(h.client, alice, paper_id, _body(anchors=[{"anchor": bad}], resolutions=[])),
+                422,
+                "anchor_incomplete",
+            )
+        assert _rows(h.settings)["highlights"] == 2
+
+
 def test_a_paper_with_no_promoted_generation_is_409_not_parsed(tmp_path: Path) -> None:
     """Contracts §2.4: ``created_generation`` is the promoted generation, so none means 409."""
     with harness(tmp_path) as h:

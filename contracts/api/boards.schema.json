@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "PaperTree API contract: boards",
-  "description": "GENERATED from services/api/python/papertree_api/schemas.py by `uv run python -m papertree_api.contracts export` (contracts.md §0). Do not edit: change the model and re-export. Models: Board, CanvasNode, CanvasEdge, BoardView, NodeCreated, NodeCreate, NodePatch, EdgeCreate, EdgePatch, BoardPatch.",
+  "description": "GENERATED from services/api/python/papertree_api/schemas.py by `uv run python -m papertree_api.contracts export` (contracts.md §0). Do not edit: change the model and re-export. Models: Board, CanvasNode, CanvasEdge, BoardView, NodeCreated, NodeCreate, NodePatch, AskCreate, NoteCreate, TidyRequest, Tidied, EdgeCreate, EdgePatch, BoardPatch.",
   "$defs": {
     "AnchorCreated": {
       "additionalProperties": false,
@@ -211,6 +211,60 @@
         "created"
       ],
       "title": "AnchorV1In",
+      "type": "object"
+    },
+    "AskCreate": {
+      "additionalProperties": false,
+      "description": "`POST /boards/{bid}/nodes/{nid}/asks` (spec §3): ask about the card, as a branch of it.\n`question` is required unless `quick` names one. The server decides `branch` (rule 3): `down`\nfor the first plain ask on a card, `right` for every other, including `ask_differently` and\nevery ask with a `span`. `level` (when sent) overrides `uses.level`. `redo_of` is a retry or a\nre-level of an answer card of this board (rule 6): a failed answer with no branches is replaced\nin place, any other answer gets a `right` sibling.",
+      "properties": {
+        "node_id": {
+          "pattern": "^[a-z]{2,4}_[0-9A-Za-z-]{8,64}$",
+          "type": "string"
+        },
+        "question": {
+          "anyOf": [
+            {
+              "maxLength": 2000,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "span": {
+          "$ref": "#/$defs/ParentSpan"
+        },
+        "ask_differently": {
+          "default": false,
+          "type": "boolean"
+        },
+        "quick": {
+          "anyOf": [
+            {
+              "enum": ["simpler", "example", "diagram"],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "uses": {
+          "$ref": "#/$defs/NodeUses-Input"
+        },
+        "level": {
+          "enum": ["new", "familiar", "expert"],
+          "type": "string"
+        },
+        "redo_of": {
+          "type": "string"
+        }
+      },
+      "title": "AskCreate",
       "type": "object"
     },
     "BlockSelector": {
@@ -533,6 +587,121 @@
             }
           ]
         },
+        "parent_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "branch": {
+          "anyOf": [
+            {
+              "enum": ["down", "right"],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "parent_span": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ParentSpan"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "question": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "uses": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/NodeUses-Output"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "offset_x": {
+          "type": "number"
+        },
+        "offset_y": {
+          "type": "number"
+        },
+        "folded": {
+          "type": "boolean"
+        },
+        "final_text": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "level": {
+          "anyOf": [
+            {
+              "enum": ["new", "familiar", "expert"],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "model": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "answer_status": {
+          "anyOf": [
+            {
+              "enum": ["streaming", "complete", "partial", "error", "aborted"],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "citations": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/Citation"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "version": {
           "maximum": 9223372036854775807,
           "minimum": 1,
@@ -564,11 +733,54 @@
         "source_page_id",
         "source_diagram_id",
         "counts",
+        "parent_id",
+        "branch",
+        "parent_span",
+        "question",
+        "uses",
+        "offset_x",
+        "offset_y",
+        "folded",
+        "final_text",
+        "level",
+        "model",
+        "answer_status",
+        "citations",
         "version",
         "created_at",
         "updated_at"
       ],
       "title": "CanvasNode",
+      "type": "object"
+    },
+    "Citation": {
+      "additionalProperties": false,
+      "properties": {
+        "citation_id": {
+          "type": "string"
+        },
+        "ordinal": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "marker": {
+          "pattern": "^b[0-9]+$",
+          "type": "string"
+        },
+        "page_index": {
+          "maximum": 9223372036854775807,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "anchor": {
+          "$ref": "#/$defs/AnchorV1"
+        },
+        "locator": {
+          "$ref": "#/$defs/PassageLocator"
+        }
+      },
+      "required": ["citation_id", "ordinal", "marker", "page_index", "anchor"],
+      "title": "Citation",
       "type": "object"
     },
     "EdgeCreate": {
@@ -763,6 +975,37 @@
             }
           ],
           "default": null
+        },
+        "parent_id": {
+          "type": "string"
+        },
+        "branch": {
+          "enum": ["down", "right"],
+          "type": "string"
+        },
+        "parent_span": {
+          "$ref": "#/$defs/ParentSpan"
+        },
+        "question": {
+          "maxLength": 2000,
+          "minLength": 1,
+          "type": "string"
+        },
+        "uses": {
+          "$ref": "#/$defs/NodeUses-Input"
+        },
+        "offset_x": {
+          "maximum": 1000000.0,
+          "minimum": -1000000.0,
+          "type": "number"
+        },
+        "offset_y": {
+          "maximum": 1000000.0,
+          "minimum": -1000000.0,
+          "type": "number"
+        },
+        "folded": {
+          "type": "boolean"
         }
       },
       "required": ["node_id", "kind", "x", "y", "w", "h"],
@@ -849,10 +1092,115 @@
         },
         "source_diagram_id": {
           "type": "string"
+        },
+        "offset_x": {
+          "maximum": 1000000.0,
+          "minimum": -1000000.0,
+          "type": "number"
+        },
+        "offset_y": {
+          "maximum": 1000000.0,
+          "minimum": -1000000.0,
+          "type": "number"
+        },
+        "folded": {
+          "type": "boolean"
         }
       },
       "required": ["version"],
       "title": "NodePatch",
+      "type": "object"
+    },
+    "NodeUses-Input": {
+      "additionalProperties": false,
+      "description": "What an ask reads (spec §2 `uses_json`), shown above the ask box and stored on the card.\n`path` is always the card's ancestors; `paper` is `page` (the root passage's page and the\npages on each side, tools off), `whole` (tools on) or `off` (the path only); `extra_node_ids`\nare cards the user explicitly attached.",
+      "properties": {
+        "path": {
+          "default": true,
+          "type": "boolean"
+        },
+        "paper": {
+          "default": "page",
+          "enum": ["page", "whole", "off"],
+          "type": "string"
+        },
+        "level": {
+          "default": "familiar",
+          "enum": ["new", "familiar", "expert"],
+          "type": "string"
+        },
+        "diagram": {
+          "default": "may",
+          "enum": ["may", "never", "always"],
+          "type": "string"
+        },
+        "extra_node_ids": {
+          "items": {
+            "pattern": "^[a-z]{2,4}_[0-9A-Za-z-]{8,64}$",
+            "type": "string"
+          },
+          "maxItems": 12,
+          "type": "array"
+        }
+      },
+      "title": "NodeUses",
+      "type": "object"
+    },
+    "NodeUses-Output": {
+      "additionalProperties": false,
+      "description": "What an ask reads (spec §2 `uses_json`), shown above the ask box and stored on the card.\n`path` is always the card's ancestors; `paper` is `page` (the root passage's page and the\npages on each side, tools off), `whole` (tools on) or `off` (the path only); `extra_node_ids`\nare cards the user explicitly attached.",
+      "properties": {
+        "path": {
+          "default": true,
+          "type": "boolean"
+        },
+        "paper": {
+          "default": "page",
+          "enum": ["page", "whole", "off"],
+          "type": "string"
+        },
+        "level": {
+          "default": "familiar",
+          "enum": ["new", "familiar", "expert"],
+          "type": "string"
+        },
+        "diagram": {
+          "default": "may",
+          "enum": ["may", "never", "always"],
+          "type": "string"
+        },
+        "extra_node_ids": {
+          "items": {
+            "pattern": "^[a-z]{2,4}_[0-9A-Za-z-]{8,64}$",
+            "type": "string"
+          },
+          "maxItems": 12,
+          "type": "array"
+        }
+      },
+      "required": ["path", "paper", "level", "diagram", "extra_node_ids"],
+      "title": "NodeUses",
+      "type": "object"
+    },
+    "NoteCreate": {
+      "additionalProperties": false,
+      "description": "`POST /boards/{bid}/nodes/{nid}/notes` (Keep as note): the selected words become a note\ncard to the right of the answer. No AI call.",
+      "properties": {
+        "node_id": {
+          "pattern": "^[a-z]{2,4}_[0-9A-Za-z-]{8,64}$",
+          "type": "string"
+        },
+        "span": {
+          "$ref": "#/$defs/ParentSpan"
+        },
+        "text": {
+          "maxLength": 20000,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": ["span", "text"],
+      "title": "NoteCreate",
       "type": "object"
     },
     "NotebookCardCounts": {
@@ -902,6 +1250,66 @@
       },
       "required": ["type", "index"],
       "title": "PageSelector",
+      "type": "object"
+    },
+    "ParentSpan": {
+      "additionalProperties": false,
+      "description": "The words of a parent answer a branch starts from (spec §1 rule 4): `start` and `end` are\nUTF-16 code units into the parent's stored final answer text (the Markdown the model wrote), and\n`quote` is exactly the words at those offsets, which the store checks.",
+      "properties": {
+        "start": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "end": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "quote": {
+          "maxLength": 2000,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": ["start", "end", "quote"],
+      "title": "ParentSpan",
+      "type": "object"
+    },
+    "PassageLocator": {
+      "additionalProperties": false,
+      "description": "Where a cited passage sits, DERIVED on read from the parse (never stored; #201).\n\nThe UI shows `p. 2 ¶3 · Introduction`; `passage_key` is only a display key that numbers\n\"the same passage\" within one answer, so it is never kept on a user row.",
+      "properties": {
+        "passage_key": {
+          "type": "string"
+        },
+        "page_index": {
+          "maximum": 9223372036854775807,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "para_index": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "section_heading": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": ["passage_key", "page_index", "para_index", "section_heading"],
+      "title": "PassageLocator",
       "type": "object"
     },
     "SectionPathSelector": {
@@ -1140,6 +1548,33 @@
         "suffixNormalised"
       ],
       "title": "TextQuoteSelector",
+      "type": "object"
+    },
+    "Tidied": {
+      "additionalProperties": false,
+      "description": "The cards Tidy changed, with their new versions (one tree, never the loose cards).",
+      "properties": {
+        "nodes": {
+          "items": {
+            "$ref": "#/$defs/CanvasNode"
+          },
+          "type": "array"
+        }
+      },
+      "required": ["nodes"],
+      "title": "Tidied",
+      "type": "object"
+    },
+    "TidyRequest": {
+      "additionalProperties": false,
+      "description": "`POST /boards/{bid}/tidy`: reset the drag offsets of the tree that holds `root_id`.",
+      "properties": {
+        "root_id": {
+          "type": "string"
+        }
+      },
+      "required": ["root_id"],
+      "title": "TidyRequest",
       "type": "object"
     },
     "Viewport": {

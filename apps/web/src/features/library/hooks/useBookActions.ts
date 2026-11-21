@@ -1,6 +1,5 @@
 /**
- * useBookActions: Retry and Remove for one book, shared by the catalogue card (#195) and a Table
- * row (#197): the inline confirmation's state, a busy flag while a request runs (a second press
+ * useBookActions: Retry and Remove for one book, used by a Table row (#197): the inline confirmation's state, a busy flag while a request runs (a second press
  * meanwhile does nothing, so a double click sends one request), and a failure said as a sentence
  * (never a raw error).
  */

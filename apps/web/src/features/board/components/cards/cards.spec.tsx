@@ -2,16 +2,18 @@ import { cleanup, fireEvent, render, screen, within } from '@testing-library/rea
 import { ReactFlowProvider, type NodeProps } from '@xyflow/react';
 import { afterEach, describe, expect, it, vi, type Mock } from 'vitest';
 
-import { explanationSource } from '../../model/cards';
 import { toFlowNode, type PtNode } from '../../model/flow';
 import { THREAD, cardRow, citation } from '../../model/test-data';
 import { CanvasActionsProvider, type CanvasActions } from '../BoardContext';
-import { ExplanationCard } from './ExplanationCard';
+import { AnswerCard } from './AnswerCard';
+import { BranchProvider, type BranchActions } from '../BranchContext';
+import { branchActions } from '../../../../../test/branch-harness';
 import { DiagramCard, NotebookCard } from './NotebookCard';
 import { NoteCard, QuestionCard } from './NoteCard';
 import { PassageCard } from './PassageCard';
 import storedPlate from '../../../../../test/fixtures/diagram-thread.json';
 
+import type { Anchor } from '@papertree/anchoring';
 import type { CanvasNode, MessageDiagram } from '@/lib/api/types';
 import type { ComponentType } from 'react';
 
@@ -24,7 +26,6 @@ function actions(extra: Partial<CanvasActions> = {}): CanvasActions {
     commitBody: vi.fn(),
     commitTitle: vi.fn(),
     commitSize: vi.fn(),
-    openCitation: vi.fn(),
     ...extra,
   };
 }
@@ -33,106 +34,139 @@ function mount(
   Card: ComponentType<NodeProps<PtNode>>,
   row: CanvasNode,
   ctx: CanvasActions = actions(),
+  branch: BranchActions = branchActions([row]),
 ) {
   const node = toFlowNode(row, 'ppr_1');
   const props = { ...node, selected: false, dragging: false } as unknown as NodeProps<PtNode>;
   return render(
     <ReactFlowProvider>
       <CanvasActionsProvider value={ctx}>
-        <Card {...props} />
+        <BranchProvider value={branch}>
+          <Card {...props} />
+        </BranchProvider>
       </CanvasActionsProvider>
     </ReactFlowProvider>,
   );
 }
 
-const sources = (explanations = new Map(), pages = new Map(), diagrams = new Map()) => ({
-  explanations,
-  pages,
-  diagrams,
-});
+const sources = (pages = new Map(), diagrams = new Map()) => ({ pages, diagrams });
 
 describe('passage card', () => {
-  it("shows the paper's words in the paper voice, its page tab and Open source", () => {
+  it("shows the paper's words in the paper voice, its page and the way to the paper", () => {
+    const branch = branchActions([]);
     const { container } = mount(
       PassageCard,
       cardRow('excerpt', {
         body: 'In this work we propose\nthe Transformer.',
         source_anchor: citation('b8', 1, 4).anchor,
       }),
+      actions(),
+      branch,
     );
     const quote = container.querySelector('blockquote[data-voice="paper"]');
     expect(quote?.textContent).toBe('“In this work we propose the Transformer.”');
-    expect(screen.getByText('p. 2')).not.toBeNull();
-    expect(screen.getByRole('link', { name: 'Open source' }).getAttribute('href')).toBe(
-      '/paper/ppr_1/read?focus=cn_excerpt',
+    fireEvent.click(screen.getByRole('button', { name: 'Show p. 2 in the paper' }));
+    expect(branch.openSource).toHaveBeenCalledWith('cn_excerpt');
+  });
+
+  it('is dragged by its top strip only, and has an Ask edge', () => {
+    const branch = branchActions([]);
+    const { container } = mount(
+      PassageCard,
+      cardRow('excerpt', { body: 'Words.' }),
+      actions(),
+      branch,
     );
+    expect(container.querySelector('.pt-tc__strip')).not.toBeNull();
+    expect(container.querySelector('.pt-tc__body')?.className).toMatch(/\bnodrag\b/);
+    fireEvent.click(screen.getByRole('button', { name: 'Ask about this card' }));
+    expect(branch.control.openAsk).toHaveBeenCalledWith('cn_excerpt');
   });
 });
 
-describe('explanation card', () => {
+describe('answer card', () => {
   const row = cardRow('explanation', {
     body: THREAD[1]!.content,
+    final_text: THREAD[1]!.content,
+    question: 'Explain this passage.',
+    model: 'MiniMax-M3',
     source_message_id: 'msg_a1',
+    // The board read carries the answer's citations: no thread read finds them.
+    citations: THREAD[1]!.citations,
   });
 
-  it('asks in your voice and answers in the AI voice, with numbered markers and its footer', () => {
-    const source = explanationSource('thr_1', THREAD, 'msg_a1')!;
-    const ctx = actions({ sources: sources(new Map([['msg_a1', source]])) });
-    const { container } = mount(ExplanationCard, row, ctx);
-    expect(container.querySelector('[data-voice="you"]')?.textContent).toBe(
+  it('asks in your voice on its strip, answers in the AI voice, and names the pages in its foot', () => {
+    const branch = branchActions([row]);
+    const { container } = mount(AnswerCard, row, actions(), branch);
+    expect(container.querySelector('.pt-tc__strip')?.textContent).toContain(
       'Explain this passage.',
     );
-    const slip = screen.getByRole('note', { name: "AI answer, not the paper's words" });
-    expect(slip.getAttribute('data-voice')).toBe('ai');
-    const markers = within(slip).getAllByRole('button', { name: /^Passage \d/ });
-    expect(markers.map((m) => m.getAttribute('aria-label'))).toEqual([
-      'Passage 1, p. 1 ¶1',
-      'Passage 2, p. 2 ¶2',
-      'Passage 3, p. 2 ¶3',
-      'Passage 4, p. 2 ¶4',
+    expect(container.querySelector('[data-voice="ai"]')).not.toBeNull();
+    const pages = screen.getAllByRole('button', { name: /^Show p\. \d in the paper$/ });
+    expect(pages.map((m) => m.getAttribute('aria-label'))).toEqual([
+      'Show p. 1 in the paper',
+      'Show p. 2 in the paper',
     ]);
-    expect(slip.textContent).not.toMatch(/\[b\d/);
-    expect(within(slip).getByText('4 passages · 11 citations')).not.toBeNull();
-    expect(within(slip).getByText('6,776 tokens · ≈ $0.0027 (estimate)')).not.toBeNull();
-    fireEvent.click(markers[1]!);
-    expect(ctx.openCitation).toHaveBeenCalledWith('cn_explanation', 'cit_b6_1', 'thr_1');
+    expect(container.textContent).not.toMatch(/\[b\d|passages|citations/);
+    expect(screen.getByText('MiniMax-M3')).not.toBeNull();
+    fireEvent.click(pages[1]!);
+    expect(branch.openSource).toHaveBeenCalledWith('cn_explanation', 'cit_b6_1');
   });
 
-  it('before its thread is read: the words only, no handles, no markers, no footer', () => {
-    const { container } = mount(ExplanationCard, row, actions({ sources: sources() }));
-    expect(container.querySelector('[data-voice="you"]')).toBeNull();
-    const slip = screen.getByRole('note', { name: "AI answer, not the paper's words" });
-    expect(slip.textContent).toContain('The Transformer drops recurrence.');
-    expect(slip.textContent).not.toMatch(/\[b\d|passages|estimate/);
-    expect(within(slip).queryAllByRole('button', { name: /^Passage/ })).toHaveLength(0);
+  it('an answer with no citations: the words only, no handles, no pages', () => {
+    const bare = { ...row, citations: [] };
+    const { container } = mount(AnswerCard, bare, actions());
+    expect(container.textContent).toContain('The Transformer drops recurrence.');
+    expect(container.textContent).not.toMatch(/\[b\d|passages|estimate|General knowledge/);
+    expect(container.querySelector('.pt-tc__src')).toBeNull();
   });
 
   it('never shows the unterminated handle run a stopped answer ends with (S9-4)', () => {
-    const stopped = cardRow('explanation', {
-      body: 'The grid predicts boxes [b1]. Each cell predicts from fragments [b42, b43, b44, b4',
-      source_message_id: 'msg_a1',
+    const body =
+      'The grid predicts boxes [b1]. Each cell predicts from fragments [b42, b43, b44, b4';
+    const stopped = cardRow('explanation', { body, final_text: body, source_message_id: 'msg_a1' });
+    const branch = branchActions([stopped], {
+      streams: new Map([
+        [
+          'cn_explanation',
+          {
+            text: body,
+            status: 'stopped',
+            citations: [],
+            runId: null,
+            thinking: false,
+            failure: null,
+          },
+        ],
+      ]),
     });
-    const source = explanationSource('thr_1', THREAD, 'msg_a1')!;
-    mount(ExplanationCard, stopped, actions({ sources: sources(new Map([['msg_a1', source]])) }));
-    const slip = screen.getByRole('note', { name: "AI answer, not the paper's words" });
-    expect(slip.textContent).toContain('Each cell predicts from fragments');
-    expect(slip.textContent).not.toMatch(/\[|\bb\d{1,2}\b/);
+    const { container } = mount(AnswerCard, stopped, actions(), branch);
+    expect(container.textContent).toContain('Each cell predicts from fragments');
+    expect(container.textContent).not.toMatch(/\[|\bb\d{1,2}\b/);
+    expect(screen.getByText('stopped')).not.toBeNull();
   });
 
-  it('unfolds when the keyboard reaches a marker below the fold', () => {
-    const height = (name: 'scrollHeight' | 'clientHeight', value: number) =>
-      vi.spyOn(HTMLElement.prototype, name, 'get').mockReturnValue(value);
-    const spies = [height('scrollHeight', 480), height('clientHeight', 120)];
-    const source = explanationSource('thr_1', THREAD, 'msg_a1')!;
-    const { container } = mount(
-      ExplanationCard,
-      row,
-      actions({ sources: sources(new Map([['msg_a1', source]])) }),
-    );
-    expect(container.querySelector('[data-expanded="false"]')).not.toBeNull();
-    fireEvent.focus(screen.getAllByRole('button', { name: /^Passage 4/ })[0]!);
-    expect(container.querySelector('[data-expanded="true"]')).not.toBeNull();
-    spies.forEach((spy) => spy.mockRestore());
+  it('streams with "writing…" and Stop, and Stop stops it', () => {
+    const live = cardRow('explanation', { body: '' });
+    const branch = branchActions([live], {
+      streams: new Map([
+        [
+          'cn_explanation',
+          {
+            text: 'The grid',
+            status: 'writing',
+            citations: [],
+            runId: 'run_1',
+            thinking: false,
+            failure: null,
+          },
+        ],
+      ]),
+    });
+    mount(AnswerCard, live, actions(), branch);
+    expect(screen.getByText('writing…')).not.toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Stop' }));
+    expect(branch.stop).toHaveBeenCalledWith('cn_explanation');
   });
 });
 
@@ -180,7 +214,7 @@ describe('notebook and diagram cards', () => {
     const { container } = mount(
       NotebookCard,
       cardRow('notebook', { source_page_id: 'nbp_1', counts: { ...zero, quotes: 4, stickies: 1 } }),
-      actions({ sources: sources(new Map(), new Map([['nbp_1', page]])) }),
+      actions({ sources: sources(new Map([['nbp_1', page]])) }),
     );
     expect(screen.getByText('Dive in: the central proposal')).not.toBeNull();
     expect(screen.getByText('4 quotes · 1 sticky')).not.toBeNull();
@@ -205,12 +239,12 @@ describe('notebook and diagram cards', () => {
     const { container } = mount(
       DiagramCard,
       cardRow('diagram', { title: 'Scaled dot-product attention', source_diagram_id: 'msg_a' }),
-      actions({ sources: sources(new Map(), new Map(), new Map([['msg_a', plate]])) }),
+      actions({ sources: sources(new Map(), new Map([['msg_a', plate]])) }),
     );
     expect(container.querySelector('[data-plate-mini="6"]')).not.toBeNull();
     expect(container.querySelectorAll('.pt-plate-mini .pt-plate__box')).toHaveLength(6);
-    expect(container.querySelector('[data-verdict="inferred"]')).not.toBeNull();
-    expect(screen.getByText('6 parts · 5 cited')).not.toBeNull();
+    expect(container.querySelector('[data-verdict]')).toBeNull();
+    expect(screen.getByText('6 parts')).not.toBeNull();
   });
 
   it('a plate that did not finish says so on its card (review N8)', () => {
@@ -219,9 +253,9 @@ describe('notebook and diagram cards', () => {
     mount(
       DiagramCard,
       cardRow('diagram', { title: 'Scaled dot-product attention', source_diagram_id: 'msg_a' }),
-      actions({ sources: sources(new Map(), new Map(), new Map([['msg_a', stopped]])) }),
+      actions({ sources: sources(new Map(), new Map([['msg_a', stopped]])) }),
     );
-    expect(screen.getByText('3 parts · 3 cited · stopped')).not.toBeNull();
+    expect(screen.getByText('3 parts · stopped')).not.toBeNull();
   });
 });
 
@@ -242,5 +276,41 @@ describe('a long body clips with a fade and "more"', () => {
   it('shows no control when the words fit', () => {
     mount(NoteCard, cardRow('note', { body: 'short' }));
     expect(screen.queryByRole('button', { name: 'more' })).toBeNull();
+  });
+});
+
+describe('the faint amber edge beside the paper (V3-26)', () => {
+  const onPage = (index: number) =>
+    ({ id: 'a', selectors: [{ type: 'PageSelector', index }] }) as unknown as Anchor;
+  const root = cardRow('excerpt', { node_id: 'cn_root', body: 'Words.', source_anchor: onPage(2) });
+  const answer = cardRow('explanation', {
+    node_id: 'cn_ans',
+    parent_id: 'cn_root',
+    branch: 'right',
+    body: 'Because.',
+    final_text: 'Because.',
+    question: 'why?',
+  });
+  const edge = (container: HTMLElement) =>
+    container.querySelector('.pt-tc')?.getAttribute('data-edge');
+
+  it('lights the passage and, inherited, its answer, while their page is on screen', () => {
+    const branch = branchActions([root, answer], { beside: true, visiblePages: new Set([2]) });
+    const passage = mount(PassageCard, root, actions(), branch);
+    expect(edge(passage.container)).toBe('amber');
+    expect(passage.container.querySelector('.pt-tc')?.getAttribute('aria-label')).toMatch(
+      /on the page you are reading/,
+    );
+    cleanup();
+    const inherited = mount(AnswerCard, answer, actions(), branch);
+    expect(edge(inherited.container)).toBe('amber');
+  });
+
+  it('goes out when the reader scrolls to another page, and is never drawn on the full-width board', () => {
+    const away = branchActions([root, answer], { beside: true, visiblePages: new Set([5]) });
+    expect(edge(mount(PassageCard, root, actions(), away).container)).toBeNull();
+    cleanup();
+    const full = branchActions([root, answer], { beside: false, visiblePages: new Set([2]) });
+    expect(edge(mount(PassageCard, root, actions(), full).container)).toBeNull();
   });
 });

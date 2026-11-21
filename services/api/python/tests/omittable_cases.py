@@ -62,8 +62,16 @@ CASES: Final[dict[str, tuple[dict[str, Any], tuple[str, ...]]]] = {
         },
         ("upgraded_anchor",),
     ),
-    "ThreadCreate": ({"kind": "ask"}, ("anchor",)),
-    "FollowUp": ({"question": "And that?"}, ("retry_of", "redraw_of")),
+    "ThreadCreate": ({"kind": "ask"}, ("anchor", "with_text_anchor")),
+    "FollowUp": (
+        {"question": "And that?"},
+        ("relevel_of", "retry_of", "redraw_of"),
+    ),
+    # v0.3 (#348): a picture of an image run, as the API sends it to the agent.
+    "AgentImage": (
+        {"media_type": "image/png", "data_base64": "iVBORw0KGgo="},
+        ("caption", "page"),
+    ),
     # v0.2 S7a (#216): a diagram part's quote, as the agent sends it.
     "AgentCite": ({"quote": "queries and keys of dimension dk"}, ("page",)),
     "SseStatus": ({"phase": "tool"}, ("label", "attempt", "delay_ms")),
@@ -76,11 +84,41 @@ CASES: Final[dict[str, tuple[dict[str, Any], tuple[str, ...]]]] = {
             "w": 240,
             "h": 120,
         },
-        ("source_anchor", "source_message_id", "source_page_id", "source_diagram_id"),
+        (
+            "source_anchor",
+            "source_message_id",
+            "source_page_id",
+            "source_diagram_id",
+            "parent_id",
+            "branch",
+            "parent_span",
+            "question",
+            "uses",
+            "offset_x",
+            "offset_y",
+            "folded",
+        ),
     ),
     "NodePatch": (
         {"version": 1},
-        ("x", "y", "w", "h", "z", "body", "source_page_id", "source_diagram_id"),
+        (
+            "x",
+            "y",
+            "w",
+            "h",
+            "z",
+            "body",
+            "source_page_id",
+            "source_diagram_id",
+            "offset_x",
+            "offset_y",
+            "folded",
+        ),
+    ),
+    "AskCreate": ({"question": "Why?"}, ("node_id", "span", "level", "redo_of")),
+    "NoteCreate": (
+        {"span": {"start": 0, "end": 3, "quote": "abc"}, "text": "a note"},
+        ("node_id",),
     ),
     "EdgePatch": ({}, ("kind",)),
     "BoardPatch": ({}, ("title",)),
@@ -91,7 +129,6 @@ CASES: Final[dict[str, tuple[dict[str, Any], tuple[str, ...]]]] = {
             "marker": "b1",
             "page_index": 0,
             "anchor": capture_anchor(),
-            "supported": True,
         },
         ("locator",),
     ),
@@ -107,10 +144,12 @@ CASES: Final[dict[str, tuple[dict[str, Any], tuple[str, ...]]]] = {
             "generation": 1,
             "run": None,
             "citations": [],
+            "level": None,
+            "sibling_group": None,
             "created_at": "2026-09-26T05:00:00.000Z",
             "completed_at": None,
         },
-        ("coverage", "diagram"),
+        ("diagram",),
     ),
     # v0.2 S5a (#206): the notebook.
     "NotebookPageCreate": (
@@ -131,6 +170,16 @@ CASES: Final[dict[str, tuple[dict[str, Any], tuple[str, ...]]]] = {
     ),
     "NotebookItemPatch": ({"version": 1}, ("x", "y", "w", "h", "z", "body")),
     "AgentStatus": ({"phase": "tool"}, ("tool", "label", "attempt", "delay_ms")),
+    # v0.3 (#348): the run request's pictures: absent on every kind but `image`.
+    "AgentRunRequest": (
+        json.loads(
+            (
+                Path(__file__).resolve().parents[4]
+                / "contracts/agent/examples/run-request-explain.json"
+            ).read_text(encoding="utf-8")
+        ),
+        ("images",),
+    ),
 }
 
 

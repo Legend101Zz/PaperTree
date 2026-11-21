@@ -29,6 +29,7 @@ import {
   validateRunRequest,
 } from './contract.ts';
 import {
+  acceptsImages,
   costBasis,
   FLASH_MODEL_ID,
   type ModelChoice,
@@ -41,6 +42,7 @@ import {
 } from './models.ts';
 import { createFauxModel, defaultBrain, type FauxBrain, type FauxModel } from './faux.ts';
 import type { Logger } from './log.ts';
+import type { ParseVerdict } from './mermaid-parse.ts';
 import { type ActiveRun, startRun } from './run.ts';
 import { createPaperSession } from './session.ts';
 import { SseWriter } from './sse.ts';
@@ -65,6 +67,8 @@ export interface AppOptions {
   readonly modelOverride?: (model: Model<any>) => Model<any>;
   /** TESTS ONLY, never from the environment: the provider's time-to-headers bound (§3.1: 30 s). */
   readonly providerTimeoutMs?: number;
+  /** TESTS ONLY: replaces the worker-thread `mermaid.parse` (mermaid-parse.ts) of the figure step. */
+  readonly parseMermaid?: (body: string) => Promise<ParseVerdict>;
 }
 
 export interface Health {
@@ -76,7 +80,7 @@ export interface Health {
   /** `run.model` per kind, and the Flash effort per kind (null for M3). */
   models: Record<RunKind, string>;
   effort: Record<RunKind, string | null>;
-  /** How a reported cost was priced, per model in use ("estimate on M3 rates" for Flash). */
+  /** How a reported cost was priced, per model in use ("published rates" for Flash and M3 alike). */
   cost_basis: Record<string, string>;
   key_present: boolean;
   wiring_ok: boolean;
@@ -294,7 +298,8 @@ export async function createAgentApp(options: AppOptions): Promise<AgentApp> {
   if (config.faux) {
     faux = createFauxModel();
     modelRuntime.registerNativeProvider(faux.provider);
-    for (const id of modelsUsed(policy)) resolved.set(id, faux.model);
+    for (const id of modelsUsed(policy))
+      resolved.set(id, options.modelOverride ? options.modelOverride(faux.model) : faux.model);
   } else {
     if (config.minimaxKey === undefined) throw new BootError(['no MiniMax key']);
     log.redact(config.minimaxKey);
@@ -314,6 +319,12 @@ export async function createAgentApp(options: AppOptions): Promise<AgentApp> {
     return { model, choice };
   };
   const model = modelFor('explain').model;
+  // The image ask is shown a picture, so ITS model must accept images (#348): refuse to boot with
+  // one that does not (an override such as PAPERTREE_MODEL_IMAGE naming a text-only model).
+  if (!acceptsImages(modelFor('image').model))
+    throw new BootError([
+      `${policy.image.label} does not accept images; the image ask needs one that does`,
+    ]);
 
   const flashModel = resolved.get(FLASH_MODEL_ID);
   const wiring = await wiringProblems(modelRuntime, model, config.faux ? undefined : flashModel);
@@ -473,6 +484,7 @@ export async function createAgentApp(options: AppOptions): Promise<AgentApp> {
         ...(options.providerTimeoutMs === undefined
           ? {}
           : { providerTimeoutMs: options.providerTimeoutMs }),
+        ...(options.parseMermaid === undefined ? {} : { parseMermaid: options.parseMermaid }),
       },
       gone.signal,
     );

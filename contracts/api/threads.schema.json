@@ -281,27 +281,17 @@
         "anchor": {
           "$ref": "#/$defs/AnchorV1"
         },
-        "supported": {
-          "anyOf": [
-            {
-              "type": "boolean"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
         "locator": {
           "$ref": "#/$defs/PassageLocator"
         }
       },
-      "required": ["citation_id", "ordinal", "marker", "page_index", "anchor", "supported"],
+      "required": ["citation_id", "ordinal", "marker", "page_index", "anchor"],
       "title": "Citation",
       "type": "object"
     },
     "DiagramCite": {
       "additionalProperties": false,
-      "description": "Where a part's quote was found. `supported` true: verbatim in the Anchor's block (\"cited\");\nfalse: there with differences, or nowhere at all (`anchor` null), \"not verified\".",
+      "description": "Where a part's quote was found: the Anchor of the block it came from (null when the quote\nwas found nowhere). The plate shows only its page; it carries no verdict (#340).",
       "properties": {
         "citation_id": {
           "anyOf": [
@@ -347,12 +337,9 @@
               "type": "null"
             }
           ]
-        },
-        "supported": {
-          "type": "boolean"
         }
       },
-      "required": ["citation_id", "quote", "anchor", "locator", "page_index", "supported"],
+      "required": ["citation_id", "quote", "anchor", "locator", "page_index"],
       "title": "DiagramCite",
       "type": "object"
     },
@@ -437,11 +424,20 @@
     },
     "FollowUp": {
       "additionalProperties": false,
-      "description": "`POST /papers/{id}/threads/{tid}/messages`.",
+      "description": "`POST /papers/{id}/threads/{tid}/messages`. `question` is required except on a relevel\n(`relevel_of`), which re-asks the stored question and ignores one if sent.",
       "properties": {
         "question": {
+          "default": "",
           "maxLength": 2000,
-          "minLength": 1,
+          "type": "string"
+        },
+        "level": {
+          "default": "familiar",
+          "enum": ["new", "familiar", "expert"],
+          "type": "string"
+        },
+        "relevel_of": {
+          "pattern": "^msg_[0-9A-HJKMNP-TV-Z]{26}$",
           "type": "string"
         },
         "retry_of": {
@@ -453,7 +449,6 @@
           "type": "string"
         }
       },
-      "required": ["question"],
       "title": "FollowUp",
       "type": "object"
     },
@@ -512,8 +507,26 @@
           },
           "type": "array"
         },
-        "coverage": {
-          "$ref": "#/$defs/MessageCoverage"
+        "level": {
+          "anyOf": [
+            {
+              "enum": ["new", "familiar", "expert"],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "sibling_group": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "diagram": {
           "$ref": "#/$defs/MessageDiagram"
@@ -545,53 +558,12 @@
         "generation",
         "run",
         "citations",
+        "level",
+        "sibling_group",
         "created_at",
         "completed_at"
       ],
       "title": "Message",
-      "type": "object"
-    },
-    "MessageCoverage": {
-      "additionalProperties": false,
-      "description": "How much of an assistant answer is cited (#201); counted by `exchanges.message_coverage`.",
-      "properties": {
-        "passages": {
-          "minimum": 0,
-          "type": "integer"
-        },
-        "citations": {
-          "minimum": 0,
-          "type": "integer"
-        },
-        "unresolved_markers": {
-          "minimum": 0,
-          "type": "integer"
-        },
-        "paragraphs": {
-          "minimum": 0,
-          "type": "integer"
-        },
-        "uncited_paragraphs": {
-          "items": {
-            "minimum": 0,
-            "type": "integer"
-          },
-          "type": "array"
-        },
-        "not_verified": {
-          "minimum": 0,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "passages",
-        "citations",
-        "unresolved_markers",
-        "paragraphs",
-        "uncited_paragraphs",
-        "not_verified"
-      ],
-      "title": "MessageCoverage",
       "type": "object"
     },
     "MessageDiagram": {
@@ -1111,7 +1083,7 @@
           "type": "string"
         },
         "kind": {
-          "enum": ["explain", "ask", "diagram"],
+          "enum": ["explain", "ask", "diagram", "image"],
           "type": "string"
         },
         "title": {
@@ -1170,10 +1142,10 @@
     },
     "ThreadCreate": {
       "additionalProperties": false,
-      "description": "`POST /papers/{id}/threads`. `anchor` is required for `explain` and `diagram`; a diagram's\ndefault question is `DIAGRAM_QUESTION`.",
+      "description": "`POST /papers/{id}/threads`. `anchor` is required for `explain`, `diagram` and `image`; a\ndiagram's default question is `DIAGRAM_QUESTION`, an image's `IMAGE_QUESTION`.\n\nAn `image` thread (v0.3 #348) is about a figure or a free region of a page: its `anchor` is an\nIMAGE anchor (`image_anchor`: targetKind `figure` or `figure_region`, a PageSelector and ONE\nShapeSelector quad, no text quote), the API renders the crop and sends it to the model with the\nfigure's caption and the paragraph that first mentions it. `with_text_anchor` (image only) is\nthe text anchor of a paragraph the reader selected together with the figure (\"figure +\nparagraph together\"): its words go beside the picture.",
       "properties": {
         "kind": {
-          "enum": ["explain", "ask", "diagram"],
+          "enum": ["explain", "ask", "diagram", "image"],
           "type": "string"
         },
         "anchor": {
@@ -1184,6 +1156,14 @@
           "maxLength": 2000,
           "minLength": 1,
           "type": "string"
+        },
+        "level": {
+          "default": "familiar",
+          "enum": ["new", "familiar", "expert"],
+          "type": "string"
+        },
+        "with_text_anchor": {
+          "$ref": "#/$defs/AnchorV1In"
         }
       },
       "required": ["kind"],

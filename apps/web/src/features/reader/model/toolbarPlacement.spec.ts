@@ -244,3 +244,72 @@ describe('a selection across a page break (review B2)', () => {
     expect(got?.levelWith).toBe(978);
   });
 });
+
+describe('beside the board (#344)', () => {
+  it('always docks, even where the desk beside the page would hold a margin bar', () => {
+    expect(placeToolbar(BASE).kind).toBe('margin');
+    const docked = placeToolbar({ ...BASE, dockOnly: true });
+    expect(docked.kind).toBe('docked');
+    expect(docked.rect.left).toBeGreaterThanOrEqual(BASE.viewport.left);
+    expect(docked.rect.right).toBeLessThanOrEqual(BASE.viewport.right);
+    // ... and still never over a selected line.
+    expect(BASE.selection.some((line) => overlaps(docked.rect, line))).toBe(false);
+  });
+});
+
+describe('the menu is as wide as its longest label (#346)', () => {
+  const WIDE = { width: 190, height: 230 };
+
+  it('goes in the right margin when 190 px and the gap fit, and never over the selection', () => {
+    const selection = lines(135, 630, 400, 3);
+    const placed = placeToolbar({
+      ...BASE,
+      selection,
+      toolbar: WIDE,
+      viewport: rect(-17, 0, 900, 844),
+    });
+    expect(placed.kind).toBe('margin');
+    if (placed.kind !== 'margin') return;
+    expect(placed.side).toBe('right');
+    expect(placed.rect.right - placed.rect.left).toBe(190);
+    for (const line of selection) expect(overlaps(placed.rect, line)).toBe(false);
+  });
+
+  it('goes beside a left-column selection on the LEFT, inside the desk', () => {
+    const selection = lines(250, 400, 400, 3);
+    const placed = placeToolbar({
+      ...BASE,
+      typeArea: rect(250, 90, 760, 900),
+      selection,
+      toolbar: WIDE,
+      viewport: rect(0, 0, 1000, 844),
+    });
+    expect(placed.kind).toBe('margin');
+    if (placed.kind !== 'margin') return;
+    expect(placed.side).toBe('left');
+    expect(placed.rect.right).toBeLessThanOrEqual(240);
+    for (const line of selection) expect(overlaps(placed.rect, line)).toBe(false);
+  });
+
+  it('a margin that held the old 130 px bar but not 190 px docks instead of squeezing the labels', () => {
+    // 142 px between the text and the column's edge: room for 130, not for 190.
+    const input = { ...BASE, viewport: rect(-17, 0, 790, 844) };
+    expect(placeToolbar({ ...input, toolbar: { width: 130, height: 230 } }).kind).toBe('margin');
+    expect(placeToolbar({ ...input, toolbar: WIDE }).kind).toBe('docked');
+  });
+
+  it('with no margin at all (a narrow window, the split view) it docks across the column', () => {
+    const narrow = rect(0, 0, 714, 844);
+    const placed = placeToolbar({
+      ...BASE,
+      typeArea: rect(30, 90, 684, 900),
+      selection: lines(30, 684, 400, 2),
+      toolbar: WIDE,
+      viewport: narrow,
+    });
+    expect(placed.kind).toBe('docked');
+    if (placed.kind !== 'docked') return;
+    expect(placed.rect.left).toBeGreaterThanOrEqual(narrow.left);
+    expect(placed.rect.right).toBeLessThanOrEqual(narrow.right);
+  });
+});

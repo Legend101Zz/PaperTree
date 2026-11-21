@@ -1,139 +1,226 @@
 /**
- * PulledBook: the opened book's modal, over the veiled shelf (#200, frames 02a and 02, DESIGN.md §1
- * and §6). Stage `pulled`: the book lifted out of the row and turned face-out, its cover a button
- * (Enter or a click opens it), and under it the slip "Enter open · Esc put it back". Stage `open`:
- * the two-page spread. Esc (or "Put it back") puts the book back from either stage; the shelf then
- * focuses its spine again. Focus is trapped in the dialog and the library behind it is inert.
- * Motion is CSS 3D driven by WAAPI (`model/motion.ts`); reduced motion swaps with a short fade.
+ * PulledBook: the book taken off the shelf and opened, as a modal over the veiled library (v0.3
+ * R4, DESIGN.md §1 and §6). One motion of 880 ms (`model/motion.ts`): the spine slides out, turns,
+ * flies to the middle growing into a cover, the cover swings open and you land on the two-page
+ * spread. A click or any key while it plays skips to the end; Esc, a click outside or "Put it
+ * back" run it backwards in 420 ms and the shelf focuses the spine again. Reduced motion is a
+ * cross-fade. Focus lands on Read (or Retry, for a failed paper) once the spread is open. Focus is
+ * trapped in the dialog and the library behind it is inert.
+ *
+ * Delete (the spread's ⋯ menu) plays the same 420 ms reverse and then hands the book to the
+ * library instead of putting it back: the spine does not return, the shelf shows the Undo toast.
+ * With reduced motion, or a spine that cannot be measured, nothing is played: the book just goes.
  */
 'use client';
 
-import { useCallback, useEffect, useId, useLayoutEffect, useRef, type ReactNode } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from 'react';
 import { createPortal } from 'react-dom';
 
-import { cardStateLine } from '@/features/library/model/catalogue';
-
 import { useFocusTrap } from '../hooks/useFocusTrap';
-import { cancelAll, play, useReducedMotion } from '../hooks/useBookMotion';
-import { openBook, pullOut, putBack as putBackMotion, TO_READER, type Box } from '../model/motion';
+import { cancelAll, finishAll, play, useReducedMotion } from '../hooks/useBookMotion';
+import { putBack as putBackMotion, takeOut, TO_READER, type Box } from '../model/motion';
 import './book.css';
+import './spread.css';
 import { BookCover } from './BookCover';
 import { BookSpread } from './BookSpread';
 
 import type { LibraryBook } from '@/features/library';
 
-/** Where the book is: out of the row, or open. */
-export type BookStage = 'pulled' | 'open';
+/** Where the book is: coming out, open, or going back. */
+type Phase = 'opening' | 'open' | 'closing';
 
 /** Props for `PulledBook`. */
 export interface PulledBookProps {
   readonly book: LibraryBook;
-  readonly stage: BookStage;
   readonly cloth: string;
   /** Ink on a paper label instead of gilt (the Language cloth). */
   readonly labelled: boolean;
-  /** The spine's box on the shelf when it was taken out (the pull-out starts there), or null. */
+  /** The spine's box on the shelf when it was taken out (the flight starts there), or null. */
   readonly from: Box | null;
   /** The library behind the veil: inert while the book is out. */
   readonly behind: HTMLElement | null;
-  readonly onOpen: () => void;
+  /** Where the spine is now, for the way back (a topic chosen here moves it); null: as it was. */
+  readonly where?: () => Box | null;
   /** After the put-back motion: the shelf unmounts this and focuses the spine. */
   readonly onPutBack: () => void;
+  /** After the reverse played for a Delete: the library stages the delete and unmounts this. */
+  readonly onDelete: () => void;
+  /** Retry on a failed paper. */
+  readonly onRetry: () => Promise<unknown>;
   readonly onRead: () => void;
   readonly onSummary: () => void;
 }
 
 /**
- * The pulled-out (and opened) book.
+ * The opened book.
  *
  * @example
- * <PulledBook book={book} stage="pulled" cloth="transformers" labelled={false} from={box}
- *   behind={library} onOpen={open} onPutBack={back} onRead={read} onSummary={summary} />
+ * <PulledBook book={book} cloth="transformers" labelled={false} from={box} behind={library}
+ *   onPutBack={back} onDelete={drop} onRetry={retry} onRead={read} onSummary={summary} />
  */
 export function PulledBook({
   book,
-  stage,
   cloth,
   labelled,
   from,
   behind,
-  onOpen,
+  where,
   onPutBack,
+  onDelete,
+  onRetry,
   onRead,
   onSummary,
 }: PulledBookProps): ReactNode {
   const titleId = useId();
-  const hintId = useId();
   const dialog = useRef<HTMLDivElement>(null);
-  const cover = useRef<HTMLButtonElement>(null);
+  const veil = useRef<HTMLDivElement>(null);
   const spread = useRef<HTMLDivElement>(null);
+  const flyer = useRef<HTMLDivElement>(null);
+  const slab = useRef<HTMLSpanElement>(null);
   const reduced = useReducedMotion();
-  // Where the book is going, kept in a ref because every animation-end handler must read the
-  // CURRENT moment, not the one it closed over (#200 review B1): an opening swing that Esc
-  // cancelled must not open the book it was putting back.
-  const moving = useRef<'idle' | 'opening' | 'leaving'>('idle');
+  const [phase, setPhase] = useState<Phase>('opening');
+  // Where the book is going, kept in a ref because every animation-end handler and key listener
+  // must read the CURRENT moment, not the one it closed over (#200 review B1): an opening that
+  // was skipped must not be finished twice, and a put-back must not open the book again.
+  const moment = useRef<Phase | 'reading' | 'gone'>('opening');
   const running = useRef(new Set<Animation>());
-  useFocusTrap(dialog, behind);
-  // Read once per stage: a later re-measure or a change of preference must not replay a motion.
+  // What happens when the reverse has played: the shelf's put-back, or a Delete's hand-over.
+  const afterBack = useRef<(() => void) | null>(null);
+  // The latest `where`: a new function each render must not replay the motion.
+  const whereRef = useRef(where);
+  whereRef.current = where;
+  // Read once: a later re-measure or a change of preference must not replay a motion. `page` is
+  // the cover's resting box, measured while nothing is transformed and kept for the way back.
   const start = useRef({ from, reduced });
-  start.current = { from, reduced };
+  const page = useRef<Box | null>(null);
+  // Nothing flies for a book without a measured spine or a reader who asked for less motion.
+  const flies = !reduced && from !== null;
+  useFocusTrap(dialog, behind);
 
-  // The pull-out plays once, from the spine; the spread arrives when the stage turns to open.
+  const go = useCallback((next: Phase) => {
+    moment.current = next;
+    setPhase(next);
+  }, []);
+
+  // Each time the book starts to move (out, then back), play its parts together. They all end
+  // together, so the first promise to settle for the CURRENT moment says it is over.
   useLayoutEffect(() => {
-    const node = stage === 'pulled' ? cover.current : spread.current;
-    if (node === null) return;
-    const { from: spine, reduced: less } = start.current;
-    if (moving.current === 'opening') moving.current = 'idle';
-    if (stage === 'pulled') {
-      void play(node, pullOut(spine, node.getBoundingClientRect(), less), running.current);
-      node.focus({ preventScroll: true });
-    } else {
-      void play(node, openBook(less).spread, running.current);
-      node.querySelector<HTMLElement>('[data-book-read]')?.focus({ preventScroll: true });
+    if (phase === 'open') {
+      // Read, or Retry for a failed paper; a disabled Read (still being read) leaves focus on the
+      // dialog, which is labelled by the title.
+      spread.current
+        ?.querySelector<HTMLElement>('[data-book-primary]:not([aria-disabled="true"])')
+        ?.focus({ preventScroll: true });
+      return;
     }
-  }, [stage]);
+    const { from: opened, reduced: less } = start.current;
+    // Going back, the spine may have moved since the book came out (a new topic regroups the
+    // shelf): the slab and the flight aim at where it is now.
+    const now = phase === 'closing' ? (whereRef.current?.() ?? null) : null;
+    const spine = now ?? opened;
+    if (now !== null && slab.current !== null) {
+      slab.current.style.left = `${String(now.left)}px`;
+      slab.current.style.top = `${String(now.top)}px`;
+    }
+    const box = flyer.current?.getBoundingClientRect();
+    if (page.current === null && box !== undefined) {
+      page.current = { left: box.left, top: box.top, width: box.width, height: box.height };
+    }
+    const resting = page.current ?? { left: 0, top: 0, width: 0, height: 0 };
+    const motion = (phase === 'opening' ? takeOut : putBackMotion)(spine, resting, less);
+    const parts = [
+      play(slab.current, motion.slab, running.current),
+      play(flyer.current, motion.cover, running.current),
+      play(spread.current, motion.spread, running.current),
+      play(veil.current, motion.veil, running.current),
+    ];
+    void Promise.all(parts).then(() => {
+      if (moment.current !== phase) return;
+      if (phase === 'opening') go('open');
+      else (afterBack.current ?? onPutBack)();
+    });
+  }, [phase, go, onPutBack]);
   // Unmounted (put back, read, or the book left the library): nothing may act any more.
   useEffect(() => {
     const animations = running.current;
-    moving.current = 'idle'; // a remount (StrictMode's double effect) starts afresh
+    moment.current = 'opening'; // a remount (StrictMode's double effect) starts afresh
     return () => {
-      moving.current = 'leaving';
+      moment.current = 'gone';
       cancelAll(animations);
     };
   }, []);
+  // The spine that had focus is inert behind the veil; the dialog holds it until Read takes over.
+  useEffect(() => {
+    dialog.current?.focus({ preventScroll: true });
+  }, []);
 
-  const leave = useCallback(
-    (then: () => void, motion = putBackMotion(reduced)) => {
-      if (moving.current === 'leaving') return;
-      moving.current = 'leaving';
-      cancelAll(running.current);
-      const node = stage === 'pulled' ? cover.current : spread.current;
-      void play(node, motion, running.current).then(then);
-    },
-    [reduced, stage],
-  );
-  const back = useCallback(() => leave(onPutBack), [leave, onPutBack]);
-  const read = useCallback(() => leave(onRead, TO_READER), [leave, onRead]);
-  const open = useCallback(() => {
-    if (moving.current !== 'idle') return; // a second Enter, or Esc already on its way
-    moving.current = 'opening';
-    void play(cover.current, openBook(reduced).cover, running.current).then(() => {
-      if (moving.current === 'opening') onOpen();
-    });
-  }, [onOpen, reduced]);
+  const back = useCallback(() => {
+    if (moment.current !== 'open') return;
+    cancelAll(running.current);
+    go('closing');
+  }, [go]);
+  const remove = useCallback(() => {
+    if (moment.current !== 'open') return;
+    if (!flies) {
+      // Reduced motion (or nothing to fly back to): no reverse, the book just goes.
+      moment.current = 'gone';
+      onDelete();
+      return;
+    }
+    cancelAll(running.current);
+    afterBack.current = onDelete;
+    go('closing');
+  }, [flies, go, onDelete]);
+  const read = useCallback(() => {
+    if (moment.current !== 'open') return;
+    moment.current = 'reading';
+    void play(spread.current, TO_READER, running.current).then(onRead);
+  }, [onRead]);
+  // To the end: the animations finish where they would have, and the promise above opens the book.
+  const skip = useCallback(() => finishAll(running.current), []);
 
-  // On the document, not the dialog: the dialog is modal, so every Esc is its own, even when the
+  // On the document, not the dialog: the dialog is modal, so every key is its own, even when the
   // control that had focus has just been replaced (the plate's choice) and focus fell to the body.
+  // While the book is coming out ANY key skips to the end, Esc included (it needs a second press
+  // to put the book back: one key never does both).
   useEffect(() => {
     const onKey = (event: KeyboardEvent): void => {
+      if (event.repeat) return;
+      if (moment.current === 'opening') {
+        skip();
+        return;
+      }
       if (event.key !== 'Escape' || event.defaultPrevented) return;
       event.preventDefault();
       back();
     };
+    const onPointer = (): void => {
+      if (moment.current === 'opening') skip();
+    };
     document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
-  }, [back]);
+    document.addEventListener('pointerdown', onPointer, true);
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.removeEventListener('pointerdown', onPointer, true);
+    };
+  }, [back, skip]);
+  // A click that skipped the motion is not also a click outside: it began while the book was
+  // still coming out.
+  const armed = useRef(false);
 
+  const flightStyle = (box: Box | null): CSSProperties | undefined =>
+    box === null
+      ? undefined
+      : { left: box.left, top: box.top, width: box.width, height: box.height };
   const body = (
     <div
       ref={dialog}
@@ -141,37 +228,24 @@ export function PulledBook({
       role="dialog"
       aria-modal="true"
       aria-labelledby={titleId}
-      data-book-stage={stage}
+      tabIndex={-1}
+      data-book-stage={phase === 'open' ? 'open' : 'moving'}
       data-motion={reduced ? 'reduced' : 'full'}
     >
       {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- Esc and "Put it back" are the keyboard path */}
-      <div className="pt-book__veil" aria-hidden="true" onClick={back} />
-      {stage === 'pulled' ? (
-        <div className="pt-book__pulled">
-          <button
-            ref={cover}
-            type="button"
-            className="pt-book__coverbutton"
-            aria-label={`Open ${book.title}`}
-            aria-describedby={hintId}
-            onClick={open}
-          >
-            <BookCover book={book} cloth={cloth} labelled={labelled} />
-          </button>
-          <div className="pt-book__slip" id={hintId}>
-            <p className="pt-book__sliptitle">
-              <b id={titleId}>{book.title}</b>
-              <span>{cardStateLine(book)}</span>
-            </p>
-            <button type="button" className="pt-book__key" onClick={open}>
-              <kbd className="pt-kbd">Enter</kbd> open
-            </button>
-            <button type="button" className="pt-book__key" onClick={back}>
-              <kbd className="pt-kbd">Esc</kbd> put it back
-            </button>
-          </div>
-        </div>
-      ) : (
+      <div
+        ref={veil}
+        className="pt-book__veil"
+        aria-hidden="true"
+        onPointerDown={() => {
+          armed.current = moment.current === 'open';
+        }}
+        onClick={() => {
+          if (armed.current) back();
+          armed.current = false;
+        }}
+      />
+      <div className="pt-book__stage">
         <BookSpread
           ref={spread}
           book={book}
@@ -180,8 +254,28 @@ export function PulledBook({
           onRead={read}
           onSummary={onSummary}
           onPutBack={back}
+          onDelete={remove}
+          onRetry={onRetry}
         />
-      )}
+        {flies && phase !== 'open' ? (
+          // The right page's size, hinged at the gutter: the cover that flies in and swings open.
+          // Decoration only: the title it repeats is the spread's heading.
+          <div ref={flyer} className="pt-book__flyer" aria-hidden="true">
+            <BookCover book={book} cloth={cloth} labelled={labelled} />
+          </div>
+        ) : null}
+      </div>
+      {flies && phase !== 'open' ? (
+        <span
+          ref={slab}
+          className="pt-book__slab"
+          aria-hidden="true"
+          style={{
+            ...flightStyle(from),
+            backgroundColor: `var(--pt-cloth-${cloth})`,
+          }}
+        />
+      ) : null}
     </div>
   );
   return typeof document === 'undefined' ? null : createPortal(body, document.body);

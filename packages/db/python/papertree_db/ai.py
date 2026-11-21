@@ -50,15 +50,19 @@ else:
     _Base = object
 
 THREAD_KINDS: Final = frozenset({"explain", "ask", "diagram"})
-#: Every kind 0011's CHECK allows. ``topic`` (the topic Flash run, #242) is not built yet, but a
-#: row of it is already recorded, reserved for (``RUN_RESERVE_USD``) and counted in ``GET /usage``,
-#: so the day one exists it cannot break the spend cap or the usage read.
-RUN_KINDS: Final = frozenset({"explain", "ask", "summary", "diagram", "topic"})
+#: Every kind 0017's CHECK allows. ``topic`` (the topic Flash run, #242), ``glance`` (the spread's
+#: "At a glance" sheet, v0.3 #337, 0013) and ``image`` (the image ask, v0.3 #348) are runs of their
+#: own: a row of each is recorded, reserved for (``RUN_RESERVE_USD``) and counted in ``GET /usage``
+#: like any other, so none can break the spend cap or the usage read. An image thread is an ``ask``
+#: thread (``THREAD_KINDS``) told apart by its run.
+RUN_KINDS: Final = frozenset({"explain", "ask", "summary", "diagram", "topic", "glance", "image"})
 #: ``ai_diagram_parts.part_kind`` (0011): how the plate draws a part (DESIGN.md §1 "Diagrams").
 DIAGRAM_PART_KINDS: Final = frozenset({"input", "step", "output", "concept"})
 #: A plate holds at most twelve parts, lettered A-L in arrival order.
 MAX_DIAGRAM_PARTS: Final = 12
 MESSAGE_ROLES: Final = frozenset({"user", "assistant"})
+#: The levels an answer is written at (0014, v0.3).
+ANSWER_LEVELS: Final = frozenset({"new", "familiar", "expert"})
 MESSAGE_STATUSES: Final = frozenset({"streaming", "complete", "partial", "error", "aborted"})
 #: ``finish_run`` moves a run OUT of ``running`` into one of these; the token dies with it.
 FINISHED_RUN_STATUSES: Final = frozenset({"done", "error", "aborted"})
@@ -203,18 +207,15 @@ class CitationIn:
     #: A HINT only, never a foreign key (AGENTS.md §4).
     block_id: str
     page_index: int
-    #: ``verify_grounding``'s verdict over the cited block; None when it could not run.
-    supported: bool | None
 
 
 @dataclass(frozen=True, slots=True)
 class DiagramPartIn:
     """One part of a diagram answer, as the API resolved it (``ai_diagram_parts``, 0011).
 
-    The three states a part can be in (DESIGN.md §4: cited, not verified or inferred, never
-    silently uncited): ``quote`` with an ``anchor`` and ``supported`` True (found verbatim) or
-    False (found with differences); ``quote`` with no anchor and ``supported`` False (found
-    nowhere); no ``quote`` at all and every cite field None (inferred).
+    The states a part can be in (never silently uncited): ``quote`` with an ``anchor`` (found in a
+    passage); ``quote`` with no anchor (found nowhere); no ``quote`` at all and every cite field
+    None (inferred). No grounding verdict is stored (0015, #351).
     """
 
     part_id: str
@@ -231,7 +232,6 @@ class DiagramPartIn:
     quote: str | None
     #: The server-minted Anchor v1 record of the block the quote was found in; None if none.
     anchor: Mapping[str, Any] | None
-    supported: bool | None
     generation: int
     #: A HINT only, never a foreign key (AGENTS.md §4).
     block_id: str | None
@@ -255,12 +255,8 @@ def _diagram_part_problem(part: DiagramPartIn) -> str | None:
         return f"after={list(part.after)!r} must name earlier letters only"
     if len(part.edge) != len(part.after):
         return "edge needs one label (or None) per after entry"
-    if (part.quote is None) != (part.supported is None):
-        return "a quote and its supported flag go together"
     if part.anchor is not None and part.quote is None:
         return "an anchor needs the quote it was resolved from"
-    if part.supported and part.anchor is None:
-        return "a supported part needs an anchor"
     if (part.anchor is None) != (part.block_id is None) or (part.anchor is None) != (
         part.page_index is None
     ):
@@ -285,8 +281,13 @@ class AiMixin(_Base):
         kind: str,
         title: str,
         origin_anchor: Mapping[str, Any] | None,
+        board_id: str | None = None,
     ) -> Row:
-        """A new thread on one of this owner's papers. ``PaperNotFound`` if it is not theirs."""
+        """A new thread on one of this owner's papers. ``PaperNotFound`` if it is not theirs.
+
+        ``board_id`` marks the thread of a board answer (0016): it is the board path's record, not
+        one of the reader's conversations, so ``list_threads`` leaves it out.
+        """
         owner_id = self._resolve(owner)
         if kind not in THREAD_KINDS:
             raise ValueError(f"kind={kind!r} is not one of {sorted(THREAD_KINDS)}")
@@ -299,9 +300,9 @@ class AiMixin(_Base):
         now = _now()
         self._conn.execute(
             "INSERT INTO ai_threads (thread_id, owner_id, paper_id, kind, title, "
-            "origin_anchor_json, agent_state_json, created_at, updated_at) "
-            "VALUES (?, ?, ?, ?, ?, ?, NULL, ?, ?)",
-            (thread_id, owner_id, paper_id, kind, title, anchor_json, now, now),
+            "origin_anchor_json, agent_state_json, created_at, updated_at, board_id) "
+            "VALUES (?, ?, ?, ?, ?, ?, NULL, ?, ?, ?)",
+            (thread_id, owner_id, paper_id, kind, title, anchor_json, now, now, board_id),
         )
         row = self.get_thread(owner, paper_id, thread_id)
         assert row is not None  # just written, same connection
@@ -318,13 +319,21 @@ class AiMixin(_Base):
         content: str,
         status: str,
         run_id: str | None = None,
+        level: str | None = None,
+        sibling_of: str | None = None,
     ) -> Row:
-        """The next message of a thread (ordinal = count so far), in one transaction."""
+        """The next message of a thread (ordinal = count so far), in one transaction.
+
+        ``level`` (``new``/``familiar``/``expert``) is the level an assistant answer is written at;
+        ``sibling_of`` is the first answer of the question it re-answers at another level (0014).
+        """
         owner_id = self._resolve(owner)
         if role not in MESSAGE_ROLES:
             raise ValueError(f"role={role!r} is not one of {sorted(MESSAGE_ROLES)}")
         if status not in MESSAGE_STATUSES:
             raise ValueError(f"status={status!r} is not one of {sorted(MESSAGE_STATUSES)}")
+        if level is not None and level not in ANSWER_LEVELS:
+            raise ValueError(f"level={level!r} is not one of {sorted(ANSWER_LEVELS)}")
         _int_or_none("generation", generation)
         now = _now()
         with self.transaction():
@@ -343,8 +352,8 @@ class AiMixin(_Base):
             completed_at = None if status == "streaming" else now
             self._conn.execute(
                 "INSERT INTO ai_messages (message_id, owner_id, thread_id, ordinal, role, "
-                "generation, content, status, error_code, run_id, created_at, completed_at) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?)",
+                "generation, content, status, error_code, run_id, created_at, completed_at, "
+                "level, sibling_of) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?)",
                 (
                     message_id,
                     owner_id,
@@ -357,6 +366,8 @@ class AiMixin(_Base):
                     run_id,
                     now,
                     completed_at,
+                    level,
+                    sibling_of,
                 ),
             )
             self._conn.execute(
@@ -408,13 +419,23 @@ class AiMixin(_Base):
                     (_now(), owner_id, owner_id, message_id),
                 )
 
-    def list_threads(self, owner: OwnerId, paper_id: PaperId) -> list[Row]:
+    def list_threads(
+        self, owner: OwnerId, paper_id: PaperId, *, board_threads: bool = False
+    ) -> list[Row]:
         """This owner's threads on a paper, most recently active first (the order canvas code relies
-        on; do not change it), with ``message_count``, ``first_ask`` and ``last_status``."""
+        on; do not change it), with ``message_count``, ``first_ask`` and ``last_status``.
+
+        A board answer's thread (``board_id`` set, 0016) is not the reader's conversation and is
+        left out unless ``board_threads`` (the board reading its own answers' sources);
+        ``get_thread`` finds it by id either way.
+        """
         owner_id = self._resolve(owner)
+        scope = "" if board_threads else "AND t.board_id IS NULL "
         return self._all(
-            _THREAD_SELECT + " WHERE t.owner_id = ? AND t.paper_id = ? "
-            "GROUP BY t.thread_id ORDER BY t.updated_at DESC, t.thread_id DESC",
+            _THREAD_SELECT
+            + " WHERE t.owner_id = ? AND t.paper_id = ? "
+            + scope
+            + "GROUP BY t.thread_id ORDER BY t.updated_at DESC, t.thread_id DESC",
             (owner_id, paper_id),
         )
 
@@ -502,7 +523,6 @@ class AiMixin(_Base):
                     item.generation,
                     item.block_id,
                     item.page_index,
-                    None if item.supported is None else int(item.supported),
                 )
             )
         with self.transaction():
@@ -518,8 +538,8 @@ class AiMixin(_Base):
             )
             self._conn.executemany(
                 "INSERT INTO ai_citations (citation_id, owner_id, message_id, ordinal, marker, "
-                "anchor_json, generation, block_id, page_index, supported) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "anchor_json, generation, block_id, page_index) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 rows,
             )
 
@@ -530,13 +550,11 @@ class AiMixin(_Base):
         for message_id in message_ids:
             for row in self._all(
                 "SELECT citation_id, message_id, ordinal, marker, anchor_json, generation, "
-                "block_id, page_index, supported FROM ai_citations "
+                "block_id, page_index FROM ai_citations "
                 "WHERE owner_id = ? AND message_id = ? ORDER BY ordinal",
                 (owner_id, message_id),
             ):
                 row["anchor"] = json.loads(row.pop("anchor_json"))
-                supported = row["supported"]
-                row["supported"] = None if supported is None else bool(supported)
                 out.append(row)
         return out
 
@@ -565,8 +583,8 @@ class AiMixin(_Base):
             self._conn.execute(
                 "INSERT INTO ai_diagram_parts (part_id, owner_id, message_id, letter, ordinal, "
                 "label, note, part_kind, after_json, edge_json, cite_quote, anchor_json, "
-                "supported, generation, block_id, page_index) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "generation, block_id, page_index) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     part.part_id,
                     owner_id,
@@ -580,7 +598,6 @@ class AiMixin(_Base):
                     to_json(list(part.edge)),
                     part.quote,
                     anchor,
-                    None if part.supported is None else int(part.supported),
                     part.generation,
                     part.block_id,
                     part.page_index,
@@ -589,13 +606,13 @@ class AiMixin(_Base):
 
     def list_diagram_parts(self, owner: OwnerId, message_ids: Sequence[str]) -> list[Row]:
         """Parts of the given messages, by message then letter, with ``after``, ``edge`` and
-        ``anchor`` parsed and ``supported`` a bool (or None for an inferred part)."""
+        and ``anchor`` parsed."""
         owner_id = self._resolve(owner)
         out: list[Row] = []
         for message_id in message_ids:
             for row in self._all(
                 "SELECT part_id, message_id, letter, ordinal, label, note, part_kind, after_json, "
-                "edge_json, cite_quote, anchor_json, supported, generation, block_id, page_index "
+                "edge_json, cite_quote, anchor_json, generation, block_id, page_index "
                 "FROM ai_diagram_parts WHERE owner_id = ? AND message_id = ? ORDER BY ordinal",
                 (owner_id, message_id),
             ):
@@ -603,8 +620,6 @@ class AiMixin(_Base):
                 row["edge"] = json.loads(row.pop("edge_json"))
                 anchor = row.pop("anchor_json")
                 row["anchor"] = None if anchor is None else json.loads(anchor)
-                supported = row["supported"]
-                row["supported"] = None if supported is None else bool(supported)
                 out.append(row)
         return out
 
@@ -1065,7 +1080,11 @@ class AiMixin(_Base):
 
 
 _THREAD_SELECT: Final = (
-    "SELECT t.thread_id, t.paper_id, t.kind, t.title, t.origin_anchor_json, t.agent_state_json, "
+    # An image thread (v0.3 #348) is stored as an `ask` thread (0017 does not rebuild the thread
+    # table) and read back as kind `image`: the kind of its run.
+    "SELECT t.thread_id, t.paper_id, CASE WHEN t.kind = 'ask' AND EXISTS (SELECT 1 FROM ai_runs r "
+    "WHERE r.owner_id = t.owner_id AND r.thread_id = t.thread_id AND r.kind = 'image') "
+    "THEN 'image' ELSE t.kind END AS kind, t.title, t.origin_anchor_json, t.agent_state_json, "
     "t.created_at, t.updated_at, COUNT(m.message_id) AS message_count, "
     # The thread list's `ask` and `last_status` (#201) ride on the same query as two scalar
     # subqueries, so a list of N threads is still one statement (no N+1). The ask is bounded here;
@@ -1081,7 +1100,7 @@ _THREAD_SELECT: Final = (
 #: Every ``ai_messages`` column; ``diagram_json`` comes back parsed, as ``diagram``.
 _MESSAGE_SELECT: Final = (
     "SELECT message_id, thread_id, ordinal, role, generation, content, status, error_code, run_id, "
-    "created_at, completed_at, diagram_json FROM ai_messages"
+    "created_at, completed_at, diagram_json, level, sibling_of FROM ai_messages"
 )
 
 

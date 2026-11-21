@@ -125,12 +125,6 @@ export function usePdfDocument(): PdfDocumentValue {
   return value;
 }
 
-/** The page's meta, or `null` while the document is still being described. */
-export function usePdfPageMeta(pageIndex: number): PdfPageMeta | null {
-  const { pageMeta } = usePdfDocument();
-  return pageMeta.get(pageIndex) ?? null;
-}
-
 /**
  * IR points → CSS pixels. `zoom × userUnit`, the same product `viewportScale()` computes, and the
  * same product pdf.js's `getViewport({ scale: zoom })` applies internally.

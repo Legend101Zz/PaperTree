@@ -175,6 +175,23 @@ def test_threads_list_most_recently_active_first(env: Env) -> None:
     assert [t["thread_id"] for t in env.db.list_threads(a.owner, a.paper_id)] == [older, newer]
 
 
+def test_a_board_threads_is_found_by_id_but_not_listed(env: Env) -> None:
+    a = env.alice
+    reader = _thread(env, a, "thr_01K63A9W4XJ7Q2N8R5T0V3Y6Z1")
+    env.db.create_thread(
+        a.owner,
+        a.paper_id,
+        thread_id="thr_01K63A9W4XJ7Q2N8R5T0V3Y6Z2",
+        kind="ask",
+        title="Board",
+        origin_anchor=None,
+        board_id="brd_1",
+    )
+    assert [t["thread_id"] for t in env.db.list_threads(a.owner, a.paper_id)] == [reader]
+    found = env.db.get_thread(a.owner, a.paper_id, "thr_01K63A9W4XJ7Q2N8R5T0V3Y6Z2")
+    assert found is not None and found["title"] == "Board"
+
+
 def test_a_thread_is_read_through_its_own_paper_only(env: Env) -> None:
     a = env.alice
     thread_id = _thread(env, a)
@@ -242,7 +259,7 @@ def test_agent_state_round_trips(env: Env) -> None:
 # ── citations ────────────────────────────────────────────────────────────────────────────────
 
 
-def _citation(t: Tenant, ordinal: int, *, supported: bool | None) -> CitationIn:
+def _citation(t: Tenant, ordinal: int) -> CitationIn:
     return CitationIn(
         citation_id=f"cit_01K63AE8M4Q2T7V9X3B5N6R0C{ordinal}",
         ordinal=ordinal,
@@ -256,7 +273,6 @@ def _citation(t: Tenant, ordinal: int, *, supported: bool | None) -> CitationIn:
         generation=GEN,
         block_id=block_id_for(ordinal),
         page_index=0,
-        supported=supported,
     )
 
 
@@ -277,15 +293,13 @@ def _assistant_message(env: Env, t: Tenant, thread_id: str) -> str:
 def test_citations_are_stored_per_message_and_replaced_whole(env: Env) -> None:
     a = env.alice
     message_id = _assistant_message(env, a, _thread(env, a))
-    env.db.put_citations(
-        a.owner, message_id, [_citation(a, 0, supported=True), _citation(a, 1, supported=None)]
-    )
+    env.db.put_citations(a.owner, message_id, [_citation(a, 0), _citation(a, 1)])
     rows = env.db.list_citations(a.owner, [message_id])
-    assert [(r["marker"], r["supported"]) for r in rows] == [("b1", True), ("b2", None)]
+    assert [r["marker"] for r in rows] == ["b1", "b2"]
     assert rows[0]["anchor"]["id"] == "cit_01K63AE8M4Q2T7V9X3B5N6R0C0"
-    env.db.put_citations(a.owner, message_id, [_citation(a, 0, supported=False)])
+    env.db.put_citations(a.owner, message_id, [_citation(a, 0)])
     rows = env.db.list_citations(a.owner, [message_id])
-    assert [(r["marker"], r["supported"]) for r in rows] == [("b1", False)]
+    assert [r["marker"] for r in rows] == ["b1"]
 
 
 # ── runs, grants, handles ────────────────────────────────────────────────────────────────────
@@ -519,7 +533,7 @@ def test_in_flight_runs_counts_only_running_unexpired_runs_of_this_owner(env: En
         expires_at="2026-01-01T00:00:00Z",
     )
     _run(env, b, "run_01K63AE8M4Q2T7V9X3B5N6RIF05", token_sha256="3" * 64)
-    zero = {"ask": 0, "diagram": 0, "explain": 0, "summary": 0, "topic": 0}
+    zero = {"ask": 0, "diagram": 0, "explain": 0, "glance": 0, "image": 0, "summary": 0, "topic": 0}
     assert env.db.in_flight_runs(a.owner) == {**zero, "explain": 1, "summary": 1}
     assert env.db.in_flight_runs(b.owner) == {**zero, "explain": 1}
 
@@ -548,6 +562,35 @@ def test_cost_and_usage_count_runs_started_since_the_cut(env: Env) -> None:
     assert usage.by_kind["summary"] == UsageBucket(1, 7, 3, 0.25)
     assert usage.by_kind["ask"] == UsageBucket(1, 0, 0, 0.0)
     assert usage.by_kind["explain"] == UsageBucket(0, 0, 0, 0.0)
+
+
+def test_an_image_run_is_recorded_reserved_and_counted_like_any_other(env: Env) -> None:
+    """The image ask (v0.3 #348): a run of kind ``image`` is in-flight while it streams, counts in
+    ``usage_since`` under its own kind and in ``cost_since``, and its thread reads back as ``image``
+    (stored as an ``ask`` thread: 0017 does not rebuild the thread table)."""
+    a = env.alice
+    thread = _thread(env, a, "thr_01K63A9W4XJ7Q2N8R5T0V3Y6ZI")
+    assert env.db.get_thread(a.owner, a.paper_id, thread)["kind"] == "explain"  # type: ignore[index]
+    asked = "thr_01K63A9W4XJ7Q2N8R5T0V3Y6ZJ"
+    env.db.create_thread(
+        a.owner, a.paper_id, thread_id=asked, kind="ask", title="Figure 2", origin_anchor=None
+    )
+    plain = env.db.get_thread(a.owner, a.paper_id, asked)
+    assert plain is not None and plain["kind"] == "ask"  # no image run yet
+    image = _run(env, a, "run_01K63AE8M4Q2T7V9X3B5N6RIM1", thread_id=asked, kind="image")
+    row = env.db.get_thread(a.owner, a.paper_id, asked)
+    assert row is not None and row["kind"] == "image"
+    assert [r["kind"] for r in env.db.list_threads(a.owner, a.paper_id)].count("image") == 1
+    assert env.db.in_flight_runs(a.owner)["image"] == 1
+    env.db.finish_run(
+        a.owner, image, status="done", input_tokens=900, output_tokens=200, cost_usd_est=0.004
+    )
+    assert env.db.in_flight_runs(a.owner)["image"] == 0
+    usage = env.db.usage_since(a.owner, "2000-01-01T00:00:00Z")
+    assert usage.by_kind["image"] == UsageBucket(1, 900, 200, 0.004)
+    assert env.db.cost_since(a.owner, "2000-01-01T00:00:00Z") == pytest.approx(0.004)
+    # Another owner does not see it as theirs.
+    assert env.db.usage_since(env.bob.owner, "2000-01-01T00:00:00Z").by_kind["image"].runs == 0
 
 
 def test_times_are_normalised_to_one_comparable_shape() -> None:
@@ -643,11 +686,11 @@ def test_bob_cannot_see_or_touch_alices_threads_and_messages(env: Env) -> None:
 def test_bob_cannot_see_or_write_alices_citations(env: Env) -> None:
     a, b = env.alice, env.bob
     message_id = _assistant_message(env, a, _thread(env, a))
-    env.db.put_citations(a.owner, message_id, [_citation(a, 0, supported=True)])
+    env.db.put_citations(a.owner, message_id, [_citation(a, 0)])
     assert len(env.db.list_citations(a.owner, [message_id])) == 1
     assert env.db.list_citations(b.owner, [message_id]) == []
     with pytest.raises(AiRecordNotFound):
-        env.db.put_citations(b.owner, message_id, [_citation(b, 1, supported=True)])
+        env.db.put_citations(b.owner, message_id, [_citation(b, 1)])
     assert len(env.db.list_citations(a.owner, [message_id])) == 1
 
 

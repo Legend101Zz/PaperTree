@@ -5,17 +5,44 @@ the paper, joined by typed threads. v0.2 slices: S6a (#211, backend), S6b (#212,
 threads), S6c (#213, Link as and keyboard linking), S6d (#214, frames, minimap, toolbar, empty
 board, the Board wording), S6e (#215, undo and redo; 500 cards).
 
+## v0.3: the branching board (#343, #342, #349)
+
+Trees of cards: a passage root, answers to its right (a branch) or below (a follow-up), notes kept
+from words. Positions are COMPUTED by Tidy (`model/layout.ts`) from the tree and the heights the
+cards report; a drag is an offset that carries the whole branch (`hooks/useBoardTree.ts`); Tidy,
+Fold, asks and Keep as note are in `hooks/useBoardAsk.ts`; what is open and Escape's order are
+`model/ui.ts` and `hooks/useBoardUi.ts`. `hooks/useBranchBoard.ts` composes them for `BoardView`,
+sizes the cards from the PANE (`--pt-card-cap`, so a split view can embed the same board) and
+reads `?card=<id>` to centre a card and its ask box. The cards are `components/cards/{Passage,
+Answer,BranchNote}Card.tsx` on the shared `components/tree/BranchCard.tsx`; the ask box with its
+Uses line and pickers, the span menu, the breadcrumb, the lines, the Outline and the export sheet
+are in `components/tree/`. Loose v0.2 notes, frames and threads between cards are untouched.
+
+**Beside the paper (#344).** `BoardHost` (`components/BoardHost.tsx`) is everything the board needs of
+where it is shown. On its own page the host is built in `BoardView` (`fullWidthHost`): a source "p. n"
+opens the reader with the board beside it and the clicked card kept on screen (`besideHref`), and B
+does the same without a card. In the split view `features/split` provides the host: the pages on
+screen (`model/edge.ts`: the faint amber edge on a card whose ROOT passage is visible, inherited by
+the tree), `showInPaper` (the paper flashes the passage, the board stays), a `dragIn` (a selection
+dragged across the divider: `hooks/useDropIn.ts` draws the cross and the dashed footprint, the card
+lands at the drop point and the layout keeps it as a root), an `arrival` (centre with the ask box, or,
+for a drop, keep the view and glow), `onBranched` (the first branch off an answer: the split widens the
+board by folding the paper to a strip, #349) and `onEscapeUnused` (Escape with nothing left to close
+closes the board on its own level). An answer's citations come with the board read (`CanvasNode.citations`):
+there is no thread scan (`useCardSources` reads only notebook pages and plates). Pickers shift inside the
+pane (`model/panes.shiftInto`), as the span menu does (`placeMenu`).
+
 ## The cards
 
-| Wire kind     | Card                                                       | Voices                         |
-| ------------- | ---------------------------------------------------------- | ------------------------------ |
-| `excerpt`     | passage: page tab from the anchor, hung quote, Open source | paper                          |
-| `explanation` | call slip with the question, AI slip with numbered markers | you (the ask), ai (the answer) |
-| `note`        | ruled index card in Courier, M stamp, edit in place        | you                            |
-| `question`    | call slip alone, "question" tag                            | you                            |
-| `notebook`    | miniature of the page's items, counts, Open page           | none (a pointer to a page)     |
-| `diagram`     | AI slip with an empty plate and the title until S7 lands   | ai                             |
-| `group`       | a frame: dashed outline, paper tag with its name (S6d)     | you (the name)                 |
+| Wire kind     | Card                                                          | Voices                         |
+| ------------- | ------------------------------------------------------------- | ------------------------------ |
+| `excerpt`     | passage root: strip with "p. n", the words, Ask edge          | paper                          |
+| `explanation` | answer: question strip, tutor-format body, foot (model, Fold) | you (the ask), ai (the answer) |
+| `note`        | ruled index card in Courier, M stamp, edit in place           | you                            |
+| `question`    | call slip alone, "question" tag                               | you                            |
+| `notebook`    | miniature of the page's items, counts, Open page              | none (a pointer to a page)     |
+| `diagram`     | AI slip with an empty plate and the title until S7 lands      | ai                             |
+| `group`       | a frame: dashed outline, paper tag with its name (S6d)        | you (the name)                 |
 
 Every number a card prints is read from the API: the page tab from `source_anchor`, the notebook
 counts from the board read's `counts`, the explanation footer from the message's `coverage` and
@@ -254,3 +281,12 @@ so v0.1 bookmarks keep working (#214). The reader-side helpers keep their v0.1 n
 the API, the tables and the wire types (`CanvasNode`); everything they show a person says "board"
 ("Send to board", "Passage added to your board.", "Open board"), and `test/board-wording.spec.tsx`
 and `chrome.spec.tsx` fail on a "canvas" in any text, name or tooltip they render.
+
+## Image cards (v0.3 #348)
+
+An excerpt whose `source_anchor` is an image anchor is drawn by `ImageCard` (`PassageCard` decides): the crop
+(`crop-url` per card, shared per rectangle), its caption in the paper's serif, and the quiet source "Fig. 4 · p. 6"
+that opens the paper on it. The card's body is the caption written when it was sent; its alt text is the caption
+plus the first answer's TL;DR (`model/imageCard`). It is a `BranchCard` like the passage, so every ask, follow-up
+and span branch goes through the same ask path, and the server sends the root's crop on each. A figure dragged
+across the divider (`DraggedPassage.image`) lands as an image card, with an image-sized footprint.

@@ -4,19 +4,23 @@
  * The reader's header (frame 04's top bar, #203): Library, Contents, the paper's title in Caslon with
  * "p. 2 of 15", the Source · Guided · Split switch, zoom, Board and the Explain toggle. Below 768 px
  * (frame 08b, #205) it is one row: back, the title, "p. 2", Explain and a menu holding the rest. It
- * holds no state: the workspace owns the mode, zoom, page and panels, and this bar reports presses.
+ * holds no state of the reading itself: the workspace owns the mode, zoom, page and panels, and this bar reports presses.
  */
 import { ToolbarButton } from '@papertree/ui';
-import { AlignLeft, ArrowLeft, Workflow } from 'lucide-react';
+import { AlignLeft, ArrowLeft, Crop, Workflow } from 'lucide-react';
 import { useRef, type ReactNode, type RefObject } from 'react';
 
 import { ModeSwitch, type ReadingMode } from '@/components/reader/ModeSwitch';
 import { ZoomControl, type ZoomMode } from '@/components/reader/ZoomControl';
+import { usePage, type PageState } from '@/features/settings';
 
 import { useMenuContentsFocus } from '../hooks/useMenuContentsFocus';
 import { usePhone } from '../hooks/usePhone';
 import { PageCounter } from './PageCounter';
 import { ReaderMenu } from './ReaderMenu';
+import { ReadingSettings } from './ReadingSettings';
+
+import type { ImageTool } from '../hooks/useImageTool';
 
 /** The Explain toggle's state; absent for a sample paper, which has no server to ask. */
 export interface ExplainToggle {
@@ -24,6 +28,12 @@ export interface ExplainToggle {
   readonly onToggle: (open: boolean) => void;
   /** The panel hands focus back here when it closes. */
   readonly ref: RefObject<HTMLButtonElement>;
+}
+
+/** The Board beside toggle's state. */
+export interface BoardBesideToggle {
+  readonly open: boolean;
+  readonly onToggle: () => void;
 }
 
 /** Props for `ReaderHeader`. */
@@ -46,7 +56,17 @@ export interface ReaderHeaderProps {
   readonly highlightCount: number;
   /** The paper's board, or null for a sample paper. */
   readonly boardHref: string | null;
+  /**
+   * Board beside (key B): the board in a pane next to the paper (#344). Absent where the window has
+   * no room for two panes or the paper has no board; the bar then keeps its plain Board link.
+   */
+  readonly boardBeside?: BoardBesideToggle | null;
   readonly explain: ExplainToggle | null;
+  /**
+   * The Select area tool (v0.3 #348): draw a rectangle over any part of a page to ask about it.
+   * Null where there is nothing to select on (a sample paper, a paper still being read).
+   */
+  readonly imageTool?: ImageTool | null;
 }
 
 const ICON = 18;
@@ -96,8 +116,38 @@ function ContentsButton({ props, onPress }: { props: ReaderHeaderProps; onPress?
   );
 }
 
+/**
+ * Select area: arms the rectangle tool. Alt+drag draws one without it. Pressed from the keyboard it
+ * also puts a rectangle on the page, which the arrow keys then move and resize.
+ */
+function AreaToolButton({ tool }: { tool: ImageTool }): ReactNode {
+  return (
+    <button
+      type="button"
+      className="pt-toolbtn pt-reader__area"
+      aria-pressed={tool.armed}
+      title="Select area: draw a rectangle over any part of a page to ask about it (or hold Alt and drag)"
+      onClick={(event) => tool.toggle(event.detail === 0)}
+    >
+      <span className="pt-toolbtn__icon" aria-hidden="true">
+        <Crop size={ICON} strokeWidth={1.5} />
+      </span>
+      <span className="pt-toolbtn__label">Select area</span>
+    </button>
+  );
+}
+
 /** The reading mode, zoom (not in Guided) and Board: the bar's right side, or the phone menu's. */
-function ReadingControls({ props, onLeave }: { props: ReaderHeaderProps; onLeave?: () => void }) {
+function ReadingControls({
+  props,
+  onLeave,
+  phone = false,
+}: {
+  props: ReaderHeaderProps;
+  onLeave?: () => void;
+  phone?: boolean;
+}) {
+  const beside = phone ? null : (props.boardBeside ?? null);
   return (
     <>
       <ModeSwitch
@@ -105,11 +155,32 @@ function ReadingControls({ props, onLeave }: { props: ReaderHeaderProps; onLeave
         onModeChange={props.onModeChange}
         guidedAvailable={props.guidedAvailable}
         unavailableReason="Guided and Split open when the paper has been read."
+        hideSplit={beside?.open === true}
       />
+      {props.mode === 'guided' || props.imageTool == null ? null : (
+        <AreaToolButton tool={props.imageTool} />
+      )}
       {props.mode === 'guided' ? null : (
         <ZoomControl mode={props.zoomMode} zoom={props.zoom} onModeChange={props.onZoomChange} />
       )}
-      {props.boardHref === null ? null : (
+      {beside !== null ? (
+        <button
+          type="button"
+          className="pt-toolbtn pt-reader__board"
+          aria-pressed={beside.open}
+          aria-keyshortcuts="B"
+          title="Board beside: the board next to the paper (B)"
+          onClick={beside.onToggle}
+        >
+          <span className="pt-toolbtn__icon" aria-hidden="true">
+            <Workflow size={ICON} strokeWidth={1.5} />
+          </span>
+          <span className="pt-toolbtn__label">Board beside</span>
+          <kbd className="pt-reader__key" aria-hidden="true">
+            B
+          </kbd>
+        </button>
+      ) : props.boardHref === null ? null : (
         <a className="pt-toolbtn pt-reader__board" href={props.boardHref} onClick={onLeave}>
           <span className="pt-toolbtn__icon" aria-hidden="true">
             <Workflow size={ICON} strokeWidth={1.5} />
@@ -143,7 +214,15 @@ function ExplainButton({
 }
 
 /** The phone row (frame 08b): back, the title, "p. 2", Explain and the menu with the rest. */
-function PhoneHeader({ props, title }: { props: ReaderHeaderProps; title: ReactNode }) {
+function PhoneHeader({
+  props,
+  title,
+  page,
+}: {
+  props: ReaderHeaderProps;
+  title: ReactNode;
+  page: PageState;
+}) {
   const menuButton = useRef<HTMLButtonElement>(null);
   const fromMenu = useMenuContentsFocus(props.navigatorOpen, menuButton);
   return (
@@ -163,7 +242,8 @@ function PhoneHeader({ props, title }: { props: ReaderHeaderProps; title: ReactN
                 close();
               }}
             />
-            <ReadingControls props={props} onLeave={close} />
+            <ReadingControls props={props} onLeave={close} phone />
+            <ReadingSettings page={page} inline />
           </>
         )}
       </ReaderMenu>
@@ -192,12 +272,15 @@ function BackLink(): ReactNode {
  */
 export function ReaderHeader(props: ReaderHeaderProps): ReactNode {
   const phone = usePhone();
+  // Mounted here, not in the menu: the phone's menu unmounts when closed, and the page colour must
+  // be kept applied (and follow the room) whether or not anyone has Aa open.
+  const page = usePage();
   const title = (
     <h1 className="pt-reader__title" title={props.title}>
       {props.title}
     </h1>
   );
-  if (phone) return <PhoneHeader props={props} title={title} />;
+  if (phone) return <PhoneHeader props={props} title={title} page={page} />;
   return (
     <header className="pt-reader__bar">
       <BackLink />
@@ -207,6 +290,7 @@ export function ReaderHeader(props: ReaderHeaderProps): ReactNode {
       <PageCounter mode={props.mode} page={props.page} pageCount={props.pageCount} />
       <div className="pt-reader__controls">
         <ReadingControls props={props} />
+        <ReadingSettings page={page} />
         <ExplainButton explain={props.explain} />
       </div>
     </header>

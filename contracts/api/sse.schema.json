@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "PaperTree API contract: sse",
-  "description": "GENERATED from services/api/python/papertree_api/schemas.py by `uv run python -m papertree_api.contracts export` (contracts.md §0). Do not edit: change the model and re-export. Models: SseRun, SseStatus, SseText, SseCitations, SsePlate, DiagramPart, DiagramLink, RunSummary, SseDone.",
+  "description": "GENERATED from services/api/python/papertree_api/schemas.py by `uv run python -m papertree_api.contracts export` (contracts.md §0). Do not edit: change the model and re-export. Models: SseRun, SseStatus, SseText, SseCitations, SsePlate, DiagramPart, DiagramLink, RunSummary, SseDone, CanvasNode.",
   "$defs": {
     "AnchorCreated": {
       "additionalProperties": false,
@@ -173,6 +173,279 @@
       "title": "BlockSelector",
       "type": "object"
     },
+    "CanvasNode": {
+      "additionalProperties": false,
+      "properties": {
+        "node_id": {
+          "type": "string"
+        },
+        "board_id": {
+          "type": "string"
+        },
+        "kind": {
+          "enum": ["excerpt", "explanation", "note", "group", "question", "notebook", "diagram"],
+          "type": "string"
+        },
+        "group_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "x": {
+          "type": "number"
+        },
+        "y": {
+          "type": "number"
+        },
+        "w": {
+          "exclusiveMinimum": 0,
+          "maximum": 100000.0,
+          "type": "number"
+        },
+        "h": {
+          "exclusiveMinimum": 0,
+          "maximum": 100000.0,
+          "type": "number"
+        },
+        "z": {
+          "maximum": 9223372036854775807,
+          "minimum": -9223372036854775807,
+          "type": "integer"
+        },
+        "title": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "body": {
+          "type": "string"
+        },
+        "source_anchor": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AnchorV1"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "source_message_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "source_page_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "source_diagram_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "counts": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/NotebookCardCounts"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "parent_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "branch": {
+          "anyOf": [
+            {
+              "enum": ["down", "right"],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "parent_span": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ParentSpan"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "question": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "uses": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/NodeUses"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "offset_x": {
+          "type": "number"
+        },
+        "offset_y": {
+          "type": "number"
+        },
+        "folded": {
+          "type": "boolean"
+        },
+        "final_text": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "level": {
+          "anyOf": [
+            {
+              "enum": ["new", "familiar", "expert"],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "model": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "answer_status": {
+          "anyOf": [
+            {
+              "enum": ["streaming", "complete", "partial", "error", "aborted"],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "citations": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/Citation"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "version": {
+          "maximum": 9223372036854775807,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "created_at": {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$",
+          "type": "string"
+        },
+        "updated_at": {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "node_id",
+        "board_id",
+        "kind",
+        "group_id",
+        "x",
+        "y",
+        "w",
+        "h",
+        "z",
+        "title",
+        "body",
+        "source_anchor",
+        "source_message_id",
+        "source_page_id",
+        "source_diagram_id",
+        "counts",
+        "parent_id",
+        "branch",
+        "parent_span",
+        "question",
+        "uses",
+        "offset_x",
+        "offset_y",
+        "folded",
+        "final_text",
+        "level",
+        "model",
+        "answer_status",
+        "citations",
+        "version",
+        "created_at",
+        "updated_at"
+      ],
+      "title": "CanvasNode",
+      "type": "object"
+    },
     "Citation": {
       "additionalProperties": false,
       "properties": {
@@ -195,27 +468,17 @@
         "anchor": {
           "$ref": "#/$defs/AnchorV1"
         },
-        "supported": {
-          "anyOf": [
-            {
-              "type": "boolean"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
         "locator": {
           "$ref": "#/$defs/PassageLocator"
         }
       },
-      "required": ["citation_id", "ordinal", "marker", "page_index", "anchor", "supported"],
+      "required": ["citation_id", "ordinal", "marker", "page_index", "anchor"],
       "title": "Citation",
       "type": "object"
     },
     "DiagramCite": {
       "additionalProperties": false,
-      "description": "Where a part's quote was found. `supported` true: verbatim in the Anchor's block (\"cited\");\nfalse: there with differences, or nowhere at all (`anchor` null), \"not verified\".",
+      "description": "Where a part's quote was found: the Anchor of the block it came from (null when the quote\nwas found nowhere). The plate shows only its page; it carries no verdict (#340).",
       "properties": {
         "citation_id": {
           "anyOf": [
@@ -261,12 +524,9 @@
               "type": "null"
             }
           ]
-        },
-        "supported": {
-          "type": "boolean"
         }
       },
-      "required": ["citation_id", "quote", "anchor", "locator", "page_index", "supported"],
+      "required": ["citation_id", "quote", "anchor", "locator", "page_index"],
       "title": "DiagramCite",
       "type": "object"
     },
@@ -410,6 +670,71 @@
       "title": "MessageError",
       "type": "object"
     },
+    "NodeUses": {
+      "additionalProperties": false,
+      "description": "What an ask reads (spec §2 `uses_json`), shown above the ask box and stored on the card.\n`path` is always the card's ancestors; `paper` is `page` (the root passage's page and the\npages on each side, tools off), `whole` (tools on) or `off` (the path only); `extra_node_ids`\nare cards the user explicitly attached.",
+      "properties": {
+        "path": {
+          "default": true,
+          "type": "boolean"
+        },
+        "paper": {
+          "default": "page",
+          "enum": ["page", "whole", "off"],
+          "type": "string"
+        },
+        "level": {
+          "default": "familiar",
+          "enum": ["new", "familiar", "expert"],
+          "type": "string"
+        },
+        "diagram": {
+          "default": "may",
+          "enum": ["may", "never", "always"],
+          "type": "string"
+        },
+        "extra_node_ids": {
+          "items": {
+            "pattern": "^[a-z]{2,4}_[0-9A-Za-z-]{8,64}$",
+            "type": "string"
+          },
+          "maxItems": 12,
+          "type": "array"
+        }
+      },
+      "required": ["path", "paper", "level", "diagram", "extra_node_ids"],
+      "title": "NodeUses",
+      "type": "object"
+    },
+    "NotebookCardCounts": {
+      "additionalProperties": false,
+      "description": "What a notebook card says about its page (\"4 quotes · 1 sticky\"), counted on read.",
+      "properties": {
+        "quotes": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "stickies": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "text": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "shapes": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "strokes": {
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": ["quotes", "stickies", "text", "shapes", "strokes"],
+      "title": "NotebookCardCounts",
+      "type": "object"
+    },
     "PageSelector": {
       "additionalProperties": false,
       "properties": {
@@ -428,6 +753,28 @@
       },
       "required": ["type", "index"],
       "title": "PageSelector",
+      "type": "object"
+    },
+    "ParentSpan": {
+      "additionalProperties": false,
+      "description": "The words of a parent answer a branch starts from (spec §1 rule 4): `start` and `end` are\nUTF-16 code units into the parent's stored final answer text (the Markdown the model wrote), and\n`quote` is exactly the words at those offsets, which the store checks.",
+      "properties": {
+        "start": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "end": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "quote": {
+          "maxLength": 2000,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": ["start", "end", "quote"],
+      "title": "ParentSpan",
       "type": "object"
     },
     "PassageLocator": {
@@ -732,6 +1079,7 @@
     },
     "SseDone": {
       "additionalProperties": false,
+      "description": "The end of a run. `final_text` is the text the server STORED when it differs from what the\n`text` events carried (the agent repairs or removes a ```mermaid fence after the stream ends),\nelse null: a reader replaces what it streamed with it (contracts.md §2.6, 2026-11-20 note).",
       "properties": {
         "status": {
           "enum": ["complete", "partial", "error", "aborted"],
@@ -749,9 +1097,20 @@
         },
         "message_id": {
           "type": "string"
+        },
+        "final_text": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         }
       },
-      "required": ["status", "error", "message_id"],
+      "required": ["status", "error", "message_id", "final_text"],
       "title": "SseDone",
       "type": "object"
     },

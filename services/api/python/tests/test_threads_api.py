@@ -3,7 +3,7 @@ replays ``contracts/agent/fixtures/*.sse`` and calls the API's real internal too
 
 Every positive test asserts something the REPLAY could not have produced by itself (AGENTS.md
 §2): the rows the API wrote, the handles it issued and the fake then cited, the Anchors it minted
-against the real stored parse, the verifier's verdict on text the fake quoted from that parse.
+against the real stored parse, what a citation maps to on that parse.
 """
 
 from __future__ import annotations
@@ -76,7 +76,12 @@ def test_explain_streams_the_contract_and_persists_the_whole_turn(tmp_path: Path
 
         run = events(frames, "run")[0]
         done = events(frames, "done")[0]
-        assert done == {"status": "complete", "error": None, "message_id": run["message_id"]}
+        assert done == {
+            "status": "complete",
+            "error": None,
+            "message_id": run["message_id"],
+            "final_text": None,
+        }
         streamed = "".join(t["delta"] for t in events(frames, "text"))
 
         # The REQUEST the API sent: the selected block is b1, datamarked, no block id leaks.
@@ -93,7 +98,12 @@ def test_explain_streams_the_contract_and_persists_the_whole_turn(tmp_path: Path
         assert seed["quote"] == next(
             s["exact"] for s in anchor["selectors"] if s["type"] == "TextQuoteSelector"
         )
-        assert all(request["datamark"] in p["text"] for p in seed["passages"])
+        assert all(
+            p["text"].startswith(request["datamark"] + "\n")
+            and p["text"].endswith("\n" + request["datamark"])
+            and p["text"].count(request["datamark"]) == 2
+            for p in seed["passages"]
+        ), "each seed passage sits between two marker lines, not marked word by word"
         assert "blk_" not in json.dumps(request), "the model is shown handles, never block ids"
         agent_headers = h.fake.headers[0]
         assert agent_headers["x-papertree-agent-secret"] == SECRET
@@ -139,7 +149,7 @@ def test_explain_streams_the_contract_and_persists_the_whole_turn(tmp_path: Path
         assert request["tool"]["base_url"].endswith(f"/internal/agent/runs/{run['run_id']}")
 
         # The CITATIONS: the three markers the answer carries, each a server-minted Anchor on the
-        # stored parse, each checked by the verifier (the YOLO prose does not match resnet).
+        # stored parse, each stored with its handle, block and page and no verdict.
         citations = events(frames, "citations")[0]["items"]
         assert [c["marker"] for c in citations] == ["b2", "b1", "b3"]
         stored = h.rows("SELECT * FROM ai_citations ORDER BY ordinal")
@@ -152,7 +162,8 @@ def test_explain_streams_the_contract_and_persists_the_whole_turn(tmp_path: Path
             assert wire["anchor"]["targetKind"] == "citation"
             assert wire["anchor"]["doc"]["pdfSha256"] == source_hash
             assert wire["anchor"]["doc"]["textStreamId"] == f"api/{paper_id}/g1/0.1.0"
-            assert wire["supported"] is False, "YOLO's text is not in resnet's blocks"
+            assert "supported" not in wire, "no grounding verdict reaches the reader (#340)"
+            assert "supported" not in row_, "no verdict is stored either (0015, #351)"
         usage = events(frames, "usage")[0]
         assert usage["run_id"] == run["run_id"] and usage["input_tokens"] == totals["input"]
 
@@ -176,7 +187,7 @@ def _first_sentence(context: RunContext) -> str:
     return text.split(". ")[0].rstrip(".")
 
 
-def test_grounding_flags_the_fabrication_and_not_the_quote(tmp_path: Path) -> None:
+def test_citations_are_stored_without_a_verdict_and_the_wire_shows_none(tmp_path: Path) -> None:
     def answer(context: RunContext) -> str:
         quote, other = context.seen[0], context.seen[1]
         return (
@@ -187,88 +198,16 @@ def test_grounding_flags_the_fabrication_and_not_the_quote(tmp_path: Path) -> No
     with ai_harness(tmp_path, Script("explain-ok", final_text=answer)) as h:
         token, paper_id = alice_with_paper(h)
         frames, _ = read_sse(explain(h, token, paper_id, paragraph_anchor()))
-        by_marker = {c["marker"]: c["supported"] for c in events(frames, "citations")[0]["items"]}
-        assert by_marker == {"b1": True, "b2": False}
-        assert [bool(r["supported"]) for r in h.rows("SELECT supported FROM ai_citations")] == [
-            True,
-            False,
-        ]
-        # The verifier's reasons (which list the missing words) never reach the reader: not in
-        # the stream's non-text events, not in the thread read back.
+        items = events(frames, "citations")[0]["items"]
+        assert [c["marker"] for c in items] == ["b1", "b2"]
+        assert all("supported" not in c for c in items)
+        stored = h.rows("SELECT * FROM ai_citations ORDER BY ordinal")
+        assert [r["marker"] for r in stored] == ["b1", "b2"]
+        assert all("supported" not in r for r in stored)
         thread_id = events(frames, "run")[0]["thread_id"]
         detail = h.client.get(f"/papers/{paper_id}/threads/{thread_id}", headers=auth(token))
         shown = json.dumps([f.data for f in frames if f.event != "text"]) + detail.text
-        for reason_text in ("threshold", "content words", "Lexical overlap", "cited blocks"):
-            assert reason_text not in shown
-
-
-def _farthest(context: RunContext, sentence: str) -> str:
-    """The handle (other than b1) whose shown text shares the fewest of ``sentence``'s words."""
-    words = set(sentence.lower().split())
-    others = [h for h in context.seen if h != context.seen[0]]
-    return min(others, key=lambda h: len(words & set(context.texts.get(h, "").lower().split())))
-
-
-def test_a_marker_after_the_full_stop_is_checked_against_the_sentence_before_it(
-    tmp_path: Path,
-) -> None:
-    """Review M1, over the whole path (fake agent → API `done` → stream → rows): `Claim. [b1]`
-    attributes b1 to the claim BEFORE the marker, exactly as `Claim [b1].` does."""
-    fabricated = "The method reaches 99.9 percent accuracy on the Mars benchmark"
-    shown: list[tuple[str, str]] = []  # per run: (the quote's handle, a block not holding it)
-
-    def true_first(context: RunContext) -> str:
-        sentence = _first_sentence(context)
-        quote, other = context.seen[0], _farthest(context, sentence)
-        shown.append((quote, other))
-        return f"{sentence}. [{quote}] {fabricated}. [{other}]"
-
-    def fabricated_first(context: RunContext) -> str:
-        sentence = _first_sentence(context)
-        quote, other = context.seen[0], _farthest(context, sentence)
-        shown.append((quote, other))
-        return f"{fabricated}. [{quote}] {sentence}. [{other}]"
-
-    scripts = [
-        Script("explain-ok", final_text=true_first),
-        Script("explain-ok", final_text=fabricated_first),
-    ]
-    with ai_harness(tmp_path, scripts) as h:
-        token, paper_id = alice_with_paper(h)
-        for run, quote_supported in enumerate((True, False)):
-            # Run 1: the quote's sentence cites its block. Run 2: the FABRICATION cites the
-            # quote's block, so that chip must NOT read supported.
-            frames, _ = read_sse(explain(h, token, paper_id, paragraph_anchor()))
-            quote, other = shown[run]
-            expected = {quote: quote_supported, other: False}
-            items = events(frames, "citations")[0]["items"]
-            assert {c["marker"]: c["supported"] for c in items} == expected
-            message_id = events(frames, "done")[0]["message_id"]
-            stored = h.rows(
-                "SELECT marker, supported FROM ai_citations WHERE message_id = ?", message_id
-            )
-            assert {r["marker"]: bool(r["supported"]) for r in stored} == expected
-
-
-def test_a_claim_is_checked_only_against_the_blocks_it_cites(tmp_path: Path) -> None:
-    """Review M2 (§3.4 "per claim over the CITED blocks"): the quote's own sentence citing
-    another block the run was shown is not supported; grounding over every block the run saw
-    would pass it."""
-    shown: dict[str, str] = {}
-
-    def answer(context: RunContext) -> str:
-        sentence = _first_sentence(context)
-        shown["quote"], shown["other"] = context.seen[0], _farthest(context, sentence)
-        return f"{sentence} [{shown['quote']}]. {sentence} [{shown['other']}]."
-
-    with ai_harness(tmp_path, Script("explain-ok", final_text=answer)) as h:
-        token, paper_id = alice_with_paper(h)
-        frames, _ = read_sse(explain(h, token, paper_id, paragraph_anchor()))
-        by_marker = {c["marker"]: c["supported"] for c in events(frames, "citations")[0]["items"]}
-        assert by_marker == {shown["quote"]: True, shown["other"]: False}
-        # Both were issued to this run: the other block was shown, it is just not what b1 says.
-        handles = {r["handle"] for r in h.rows("SELECT handle FROM ai_run_handles")}
-        assert {shown["quote"], shown["other"]} <= handles
+        assert '"supported"' not in shown and '"coverage"' not in shown
 
 
 def test_a_marker_the_run_never_issued_is_dropped_and_logged(
@@ -287,6 +226,58 @@ def test_a_marker_the_run_never_issued_is_dropped_and_logged(
     assert (
         dropped and dropped[0]["marker"] == "b999" and dropped[0]["error_code"] == "unknown_marker"
     )
+
+
+# ── live = stored: `done.final_text` (v0.3 W6) ────────────────────────────────────────────────
+
+_FENCE_BODY = 'flowchart TD\n  a["One"] --> b["Two"]\n  b --> c["Three"]'
+
+
+def _with_fence(sentence: str, body: str = _FENCE_BODY) -> str:
+    return f"{sentence}\n\n```mermaid\n{body}\n```\n\nSection 3."
+
+
+def _streamed(frames: list[Any]) -> str:
+    return "".join(f.data["delta"] for f in frames if f.event == "text")
+
+
+def test_done_carries_the_text_the_agent_repaired_and_the_message_stores_it(
+    tmp_path: Path,
+) -> None:
+    broken = _with_fence("It adds the input back.", "flowchart TD\n  a --> --> b\n  b --> c")
+    repaired = _with_fence("It adds the input back.")
+    script = Script("explain-ok", final_text=lambda _c: broken, done_patch={"final_text": repaired})
+    with ai_harness(tmp_path, script) as h:
+        token, paper_id = alice_with_paper(h)
+        frames, _ = read_sse(explain(h, token, paper_id, paragraph_anchor()))
+        done = events(frames, "done")[0]
+        assert _streamed(frames) == broken, "what streamed is what the model wrote"
+        assert done["final_text"] == repaired
+        assert not contract_errors(done, "api/sse.schema.json", "SseDone", BROWSER_EVENTS["done"])
+        thread_id = events(frames, "run")[0]["thread_id"]
+        detail = h.client.get(f"/papers/{paper_id}/threads/{thread_id}", headers=auth(token))
+        assert detail.json()["messages"][-1]["content"] == repaired, "live is what a reload shows"
+
+
+def test_done_carries_the_text_with_a_dropped_fence_removed(tmp_path: Path) -> None:
+    streamed = _with_fence("It adds the input back.")
+    kept = "It adds the input back.\n\nSection 3."
+    script = Script("explain-ok", final_text=lambda _c: streamed, done_patch={"final_text": kept})
+    with ai_harness(tmp_path, script) as h:
+        token, paper_id = alice_with_paper(h)
+        frames, _ = read_sse(explain(h, token, paper_id, paragraph_anchor()))
+        done = events(frames, "done")[0]
+        assert "```mermaid" in _streamed(frames)
+        assert done["final_text"] == kept and "mermaid" not in done["final_text"]
+
+
+def test_done_final_text_is_null_when_the_stored_text_is_what_streamed(tmp_path: Path) -> None:
+    with ai_harness(tmp_path, Script("explain-ok")) as h:
+        token, paper_id = alice_with_paper(h)
+        frames, _ = read_sse(explain(h, token, paper_id, paragraph_anchor()))
+        done = events(frames, "done")[0]
+        assert "final_text" in done and done["final_text"] is None
+        assert not contract_errors(done, "api/sse.schema.json", "SseDone", BROWSER_EVENTS["done"])
 
 
 # ── follow-up: history, handles, busy ────────────────────────────────────────────────────────

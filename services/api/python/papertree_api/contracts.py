@@ -54,6 +54,7 @@ GROUPS: Final[dict[str, tuple[tuple[type[BaseModel], Mode], ...]]] = {
         (s.PaperFigure, OUT),
         (s.PaperAbstract, OUT),
         (s.PlatePut, IN),
+        (s.PaperRename, IN),
     ),
     "highlights": (
         (s.Highlight, OUT),
@@ -83,8 +84,17 @@ GROUPS: Final[dict[str, tuple[tuple[type[BaseModel], Mode], ...]]] = {
         (s.DiagramLink, OUT),
         (s.RunSummary, OUT),
         (s.SseDone, OUT),
+        (s.CanvasNode, OUT),  # the board ask's first event, `node`
     ),
     "summary": ((s.Summary, OUT), (s.SummaryStatus, OUT), (s.SummaryRequest, IN)),
+    "glance": (
+        (s.Glance, OUT),
+        (s.GlanceStatus, OUT),
+        (s.GlanceBlock, OUT),
+        (s.GlanceResults, OUT),
+        (s.GlanceNumber, OUT),
+        (s.GlanceWord, OUT),
+    ),
     "usage": ((s.UsageTotals, OUT), (s.UsageBucket, OUT)),
     "boards": (
         (s.Board, OUT),
@@ -94,6 +104,10 @@ GROUPS: Final[dict[str, tuple[tuple[type[BaseModel], Mode], ...]]] = {
         (s.NodeCreated, OUT),
         (s.NodeCreate, IN),
         (s.NodePatch, IN),
+        (s.AskCreate, IN),
+        (s.NoteCreate, IN),
+        (s.TidyRequest, IN),
+        (s.Tidied, OUT),
         (s.EdgeCreate, IN),
         (s.EdgePatch, IN),
         (s.BoardPatch, IN),

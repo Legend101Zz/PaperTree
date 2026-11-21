@@ -3,10 +3,12 @@
  * oldest first by `created_at`: the API lists newest first and a follow-up must never renumber a
  * thread (GAP-A2 Risks 4). Pure; `useThreads` feeds it the list.
  */
+import { isImageAnchor } from '@/lib/imageAnchor';
+
 import { selectorOf } from './anchor';
 
-import type { Anchor } from '@papertree/anchoring';
 import type { Thread } from '@/lib/api/types';
+import type { ExplainRequest } from './state';
 
 /**
  * Threads in menu order: `created_at` ascending, `thread_id` breaking ties (ULIDs sort by time).
@@ -46,10 +48,14 @@ export function threadPosition(
  * @returns The origin, or null.
  */
 export function originOf(
-  thread: Pick<Thread, 'origin_anchor'>,
-): { readonly anchor: Anchor; readonly quote: string } | null {
+  thread: Pick<Thread, 'origin_anchor'> & { readonly kind?: Thread['kind'] },
+): ExplainRequest | null {
   const anchor = thread.origin_anchor;
   if (anchor === null) return null;
+  // A figure or a region has no quoted words: the panel shows its crop (#348).
+  if (thread.kind === 'image' && isImageAnchor(anchor)) {
+    return { anchor, quote: '', image: { label: 'Figure', caption: null } };
+  }
   const exact = selectorOf(anchor, 'TextQuoteSelector')?.exact;
   return exact === undefined ? null : { anchor, quote: exact };
 }

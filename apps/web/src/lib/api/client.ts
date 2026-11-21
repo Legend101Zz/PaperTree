@@ -310,6 +310,8 @@ const SSE_EVENTS: ReadonlySet<string> = new Set([
   'plate',
   'part',
   'link',
+  // A board ask's first frame: the answer card the server made up front (v0.3, boards.ts).
+  'node',
 ]);
 
 /**

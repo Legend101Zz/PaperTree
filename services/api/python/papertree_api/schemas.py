@@ -50,6 +50,7 @@ from pydantic.fields import FieldInfo
 from pydantic_core import InitErrorDetails, PydanticCustomError
 
 from .errors import ErrorCode, RunErrorCode
+from .image_anchor import image_box
 from .wiretime import wire_time
 
 # ── building blocks ──────────────────────────────────────────────────────────────────────────
@@ -597,6 +598,18 @@ class PaperFigure(Wire):
     anchor: AnchorV1 | None
 
 
+#: A paper's name as its owner gives it: 1 to 300 characters AFTER trimming (`papertree_db
+#: .PAPER_TITLE_MAX`). Enforced here and by the data layer, not by a CHECK (0012).
+PaperTitle = Annotated[str, BeforeValidator(_trimmed), Field(min_length=1, max_length=300)]
+
+
+class PaperRename(Wire):
+    """`PATCH /papers/{id}` (v0.3 #337): the name the library shows for this paper from now on.
+    The parsed title is kept; this one wins over it and over the filename."""
+
+    title: PaperTitle
+
+
 class PlatePut(Wire):
     """`PUT /papers/{id}/plate`: the Anchor of one of the paper's figures (from `…/figures`)."""
 
@@ -774,8 +787,12 @@ class ResolutionsPut(Wire):
 # ── §2.5 AI threads, messages, citations, runs ───────────────────────────────────────────────
 
 MessageStatus = Literal["streaming", "complete", "partial", "error", "aborted"]
-ThreadKind = Literal["explain", "ask", "diagram"]
-RunKind = Literal["explain", "ask", "summary", "diagram", "topic"]
+#: ``image`` (v0.3 #348): a question about a figure or region, answered from its crop. It is stored
+#: as an ``ask`` thread (0017 does not rebuild the thread table) and read back as ``image``.
+ThreadKind = Literal["explain", "ask", "diagram", "image"]
+#: The reader's level an explain/ask answer is written for (v0.3, #339; 0014).
+AnswerLevel = Literal["new", "familiar", "expert"]
+RunKind = Literal["explain", "ask", "summary", "diagram", "topic", "glance", "image"]
 DoneStatus = Literal["complete", "partial", "error", "aborted"]
 
 
@@ -809,29 +826,9 @@ class Citation(Wire):
     marker: Handle
     page_index: PageIndex
     anchor: AnchorV1
-    supported: bool | None
     #: Present on a stored answer read back (`GET /papers/{id}/threads/{tid}`), when its
     #: generation's parse can still be loaded; the live SSE `citations` event omits it.
     locator: PassageLocator | None = omittable()
-
-
-class MessageCoverage(Wire):
-    """How much of an assistant answer is cited (#201); counted by `exchanges.message_coverage`."""
-
-    #: Distinct cited passages among the message's citations.
-    passages: NonNegative
-    #: Marker handle occurrences in the text that have a stored citation (`[b1, b8]` counts 2).
-    citations: NonNegative
-    #: Occurrences whose handle has no stored citation (a handle the run dropped): never counted
-    #: in `citations`.
-    unresolved_markers: NonNegative
-    paragraphs: NonNegative
-    #: 0-based indexes, into exactly the list `exchanges.answer_paragraphs` returns (split on
-    #: blank lines, bare Markdown heading lines dropped), of the paragraphs with no marker.
-    uncited_paragraphs: list[NonNegative]
-    #: Stored citations whose `supported` is false ("not verified", never "wrong"); an
-    #: unchecked one (`supported: null`) is not counted.
-    not_verified: NonNegative
 
 
 # ── a diagram answer (v0.2 S7a, #216; DESIGN.md §1 "Diagrams", §4) ─────────────────────────────
@@ -847,8 +844,8 @@ Letter = Annotated[str, Field(pattern=r"^[A-L]$")]
 
 
 class DiagramCite(Wire):
-    """Where a part's quote was found. `supported` true: verbatim in the Anchor's block ("cited");
-    false: there with differences, or nowhere at all (`anchor` null), "not verified"."""
+    """Where a part's quote was found: the Anchor of the block it came from (null when the quote
+    was found nowhere). The plate shows only its page; it carries no verdict (#340)."""
 
     #: The Anchor's id (`cit_…`); null when the quote was found nowhere.
     citation_id: str | None
@@ -858,7 +855,6 @@ class DiagramCite(Wire):
     #: Derived from the parse on read (never stored); null when it cannot be had.
     locator: PassageLocator | None
     page_index: PageIndex | None
-    supported: bool
 
 
 class DiagramPart(Wire):
@@ -918,8 +914,13 @@ class Message(Wire):
     generation: Generation
     run: RunSummary | None
     citations: list[Citation]
-    #: Only on an assistant message that is `complete` or `partial` (and not a diagram).
-    coverage: MessageCoverage | None = omittable()
+    #: The level an assistant answer of an `explain` or `ask` thread was written at (an answer
+    #: stored before v0.3 reads `familiar`); null on a user message and on a diagram answer.
+    level: AnswerLevel | None
+    #: Assistant messages only (null on a user message): the `message_id` of the FIRST answer to
+    #: the question this one answers. Answers that share it are siblings, one per level
+    #: (`FollowUp.relevel_of`); an answer with no sibling carries its own `message_id`.
+    sibling_group: str | None
     #: Only on an assistant message of a `diagram` thread; `content` keeps the raw lines.
     diagram: MessageDiagram | None = omittable()
     created_at: WireTime
@@ -950,35 +951,74 @@ class ThreadDetail(Wire):
 DEFAULT_QUESTION: Final = "Explain this passage."
 #: A `diagram` thread's question when the client sends none.
 DIAGRAM_QUESTION: Final = "Explain with a diagram."
+#: An `image` thread's question when the client sends none: what "Explain" on a figure asks.
+IMAGE_QUESTION: Final = "Explain this figure."
 
 
 class ThreadCreate(Wire):
-    """`POST /papers/{id}/threads`. `anchor` is required for `explain` and `diagram`; a diagram's
-    default question is `DIAGRAM_QUESTION`."""
+    """`POST /papers/{id}/threads`. `anchor` is required for `explain`, `diagram` and `image`; a
+    diagram's default question is `DIAGRAM_QUESTION`, an image's `IMAGE_QUESTION`.
+
+    An `image` thread (v0.3 #348) is about a figure or a free region of a page: its `anchor` is an
+    IMAGE anchor (`image_anchor`: targetKind `figure` or `figure_region`, a PageSelector and ONE
+    ShapeSelector quad, no text quote), the API renders the crop and sends it to the model with the
+    figure's caption and the paragraph that first mentions it. `with_text_anchor` (image only) is
+    the text anchor of a paragraph the reader selected together with the figure ("figure +
+    paragraph together"): its words go beside the picture.
+    """
 
     kind: ThreadKind
     anchor: AnchorV1In | None = omittable(validate_default=True)
     question: str = Field(default=DEFAULT_QUESTION, min_length=1, max_length=2000)
+    #: The level the first answer is written for (stored on the answer). Ignored by a `diagram`.
+    level: AnswerLevel = "familiar"
+    #: `image` only: a text anchor selected together with the figure.
+    with_text_anchor: AnchorV1In | None = omittable()
 
     @field_validator("anchor", mode="after")
     @classmethod
     def _explain_needs_an_anchor(cls, value: AnchorV1In | None, info: ValidationInfo) -> Any:
         kind = info.data.get("kind")
-        if value is None and kind in ("explain", "diagram"):
-            article = "an" if kind == "explain" else "a"
+        if value is None and kind in ("explain", "diagram", "image"):
+            article = "an" if kind in ("explain", "image") else "a"
             raise PydanticCustomError("missing", f"Field required for {article} {kind} thread")
+        if value is not None and kind == "image":
+            try:
+                image_box(value.model_dump(mode="json"))
+            except ValueError as exc:
+                raise PydanticCustomError("image_anchor", str(exc)) from exc
         return value
+
+    @model_validator(mode="after")
+    def _with_text_is_for_an_image(self) -> Self:
+        if self.with_text_anchor is not None and self.kind != "image":
+            raise PydanticCustomError(
+                "extra_forbidden", "with_text_anchor: only an image thread takes one"
+            )
+        return self
 
 
 class FollowUp(Wire):
-    """`POST /papers/{id}/threads/{tid}/messages`."""
+    """`POST /papers/{id}/threads/{tid}/messages`. `question` is required except on a relevel
+    (`relevel_of`), which re-asks the stored question and ignores one if sent."""
 
-    question: str = Field(min_length=1, max_length=2000)
+    question: str = Field(default="", max_length=2000)
+    #: The level this answer is written for (stored on the answer). Ignored on a diagram thread.
+    level: AnswerLevel = "familiar"
+    #: Change level: an assistant answer of this thread (finished, any level) to answer AGAIN, to
+    #: the same question, at `level`. It appends a sibling answer and no user turn.
+    relevel_of: str | None = omittable(pattern=server_id("msg"))
     #: Re-run a failed assistant message instead of appending a new user turn.
     retry_of: str | None = omittable(pattern=server_id("msg"))
     #: Redraw: a diagram answer of this thread (finished, in any state) to draw again. Required on
     #: a `diagram` thread, refused on any other; it appends a new turn, never replaces one.
     redraw_of: str | None = omittable(pattern=server_id("msg"))
+
+    @model_validator(mode="after")
+    def _question_unless_relevel(self) -> Self:
+        if self.question == "" and self.relevel_of is None:
+            raise PydanticCustomError("string_too_short", "String should have at least 1 character")
+        return self
 
 
 # ── §2.6 browser-facing SSE events (the `data` of each `event:`) ─────────────────────────────
@@ -1015,9 +1055,14 @@ class SsePlate(Wire):
 
 
 class SseDone(Wire):
+    """The end of a run. `final_text` is the text the server STORED when it differs from what the
+    `text` events carried (the agent repairs or removes a ```mermaid fence after the stream ends),
+    else null: a reader replaces what it streamed with it (contracts.md §2.6, 2026-11-20 note)."""
+
     status: DoneStatus
     error: MessageError | None
     message_id: str
+    final_text: str | None = None
 
 
 #: event name -> the model of its `data`. `usage` is a `RunSummary`.
@@ -1039,7 +1084,6 @@ BROWSER_EVENTS: Final[dict[str, type[Wire]]] = {
 class SummaryBullet(Wire):
     text: str
     citations: list[Citation]
-    supported: bool
 
 
 class Summary(Wire):
@@ -1060,6 +1104,65 @@ class SummaryRequest(Wire):
     regenerate: bool = False
 
 
+# ── the spread's "At a glance" sheet (v0.3 #337) ────────────────────────────────────────────
+
+#: A page number (1-based, the number printed in the reader), or null when the block cites nothing.
+GlancePage = Annotated[int, Field(ge=1, le=100_000)]
+
+
+class GlanceBlock(Wire):
+    """Problem, Idea, How it works or Limits: the words, and the page they come from (the quiet
+    `p. 3 ›` link), or null when the model cited no passage."""
+
+    text: str = Field(min_length=1)
+    page: GlancePage | None
+
+
+class GlanceNumber(Wire):
+    """A large number under Results: its value and what it measures."""
+
+    value: str = Field(min_length=1)
+    measures: str = Field(min_length=1)
+
+
+class GlanceResults(Wire):
+    numbers: list[GlanceNumber] = Field(max_length=2)
+    note: str | None
+    page: GlancePage | None
+
+
+class GlanceWord(Wire):
+    term: str = Field(min_length=1)
+    gloss: str = Field(min_length=1)
+
+
+class Glance(Wire):
+    """The sheet. Maths in any text is `$…$`. Every cap of `glance.py` is already applied."""
+
+    gist: str = Field(min_length=1)
+    problem: GlanceBlock
+    idea: GlanceBlock
+    how: GlanceBlock
+    results: GlanceResults
+    limits: GlanceBlock
+    #: Names sections; it needs no page mark.
+    read_first: str = Field(min_length=1)
+    words: list[GlanceWord] = Field(min_length=5, max_length=5)
+    #: The model that wrote it, as the agent reported it (`MiniMax-M3.1-Flash`).
+    model: str = Field(min_length=1)
+    #: The parse it was written from (the pages are pages of that one).
+    generation: Generation
+
+
+class GlanceStatus(Wire):
+    """`GET /papers/{id}/glance`. `ready`: 200 with the sheet. `making`: 202, no sheet yet (a run is
+    writing it; ask again). `none`: 200, no sheet and none coming (the model is not configured, the
+    daily cap is reached, or the run failed): the spread shows the abstract alone."""
+
+    state: Literal["ready", "making", "none"]
+    glance: Glance | None
+
+
 # ── §2.5 usage ───────────────────────────────────────────────────────────────────────────────
 
 
@@ -1078,8 +1181,11 @@ class UsageByKind(Wire):
     ask: UsageBucket
     summary: UsageBucket
     diagram: UsageBucket
-    #: The topic run (#242) is not built yet; its bucket is 0 until it is.
     topic: UsageBucket
+    #: The spread's "At a glance" run (v0.3 #337).
+    glance: UsageBucket
+    #: The image ask (v0.3 #348): a run shown a crop of a figure.
+    image: UsageBucket
 
 
 class UsageTotals(Wire):
@@ -1147,6 +1253,44 @@ class NotebookCardCounts(Wire):
     strokes: NonNegative
 
 
+BoardBranch = Literal["down", "right"]
+UsesPaper = Literal["page", "whole", "off"]
+UsesDiagram = Literal["may", "never", "always"]
+QuickAsk = Literal["simpler", "example", "diagram"]
+AnswerStatus = Literal["streaming", "complete", "error", "partial", "aborted"]
+BOARD_QUESTION_MAX = 2000
+BOARD_EXTRA_NODES_MAX = 12
+
+
+class ParentSpan(Wire):
+    """The words of a parent answer a branch starts from (spec §1 rule 4): `start` and `end` are
+    UTF-16 code units into the parent's stored final answer text (the Markdown the model wrote), and
+    `quote` is exactly the words at those offsets, which the store checks."""
+
+    start: NonNegative
+    end: Positive
+    quote: str = Field(min_length=1, max_length=BOARD_QUESTION_MAX)
+
+    @model_validator(mode="after")
+    def _a_span_is_not_empty(self) -> Self:
+        if self.end <= self.start:
+            raise PydanticCustomError("value_error", "end must be after start")
+        return self
+
+
+class NodeUses(Wire):
+    """What an ask reads (spec §2 `uses_json`), shown above the ask box and stored on the card.
+    `path` is always the card's ancestors; `paper` is `page` (the root passage's page and the
+    pages on each side, tools off), `whole` (tools on) or `off` (the path only); `extra_node_ids`
+    are cards the user explicitly attached."""
+
+    path: bool = True
+    paper: UsesPaper = "page"
+    level: AnswerLevel = "familiar"
+    diagram: UsesDiagram = "may"
+    extra_node_ids: list[ClientId] = Field(default_factory=list, max_length=BOARD_EXTRA_NODES_MAX)
+
+
 class CanvasNode(Wire):
     node_id: str
     board_id: str
@@ -1165,6 +1309,27 @@ class CanvasNode(Wire):
     source_diagram_id: str | None
     #: A notebook card's page counts, computed on read; null on every other kind.
     counts: NotebookCardCounts | None
+    #: The branching board (0016, v0.3 #343). A root passage or a loose v0.2 card has no parent.
+    parent_id: str | None
+    branch: BoardBranch | None
+    parent_span: ParentSpan | None
+    #: An answer card's ask (as typed, or the quick-ask label), and what the ask read.
+    question: str | None
+    uses: NodeUses | None
+    #: The user's drag offset on top of the Tidy layout; `folded` collapses the subtree to a pill.
+    offset_x: float
+    offset_y: float
+    folded: bool
+    #: An answer card's answer, read with the board in one query (no thread fetch per card): the
+    #: stored final text, the level it was written at, the model that wrote it and its status
+    #: (`streaming` while the run is live). All null on every other kind.
+    final_text: str | None
+    level: AnswerLevel | None
+    model: str | None
+    answer_status: AnswerStatus | None
+    #: The answer's citations (each `[bN]` handle -> its page and Anchor), read in the same query
+    #: as `final_text`; the live `locator` is not derived here. Null on every non-answer kind.
+    citations: list[Citation] | None
     version: Version
     created_at: WireTime
     updated_at: WireTime
@@ -1190,6 +1355,9 @@ class BoardView(Wire):
     edges: list[CanvasEdge]
 
 
+BROWSER_EVENTS["node"] = CanvasNode  # the board ask's first event: the card its answer streams into
+
+
 class NodeCreate(Wire):
     """`POST /papers/{id}/board/nodes`. An excerpt needs `source_anchor` (on this paper, which the
     route checks), an explanation needs `source_message_id`."""
@@ -1207,6 +1375,16 @@ class NodeCreate(Wire):
     source_page_id: str | None = omittable(validate_default=True)
     source_diagram_id: str | None = omittable(validate_default=True)
     group_id: str | None = None
+    #: The tree (0016). Used by an undo that puts a deleted subtree back, parents first; the store
+    #: holds the rules (one `down` child, a span branch is `right` and its words are the parent's).
+    parent_id: str | None = omittable()
+    branch: BoardBranch | None = omittable()
+    parent_span: ParentSpan | None = omittable()
+    question: str | None = omittable(min_length=1, max_length=BOARD_QUESTION_MAX)
+    uses: NodeUses | None = omittable()
+    offset_x: Coord | None = omittable()
+    offset_y: Coord | None = omittable()
+    folded: bool | None = omittable()
 
     @field_validator("source_anchor", mode="after")
     @classmethod
@@ -1256,6 +1434,54 @@ class NodePatch(Wire):
     group_id: str | None = None
     source_page_id: str | None = omittable()
     source_diagram_id: str | None = omittable()
+    offset_x: Coord | None = omittable()
+    offset_y: Coord | None = omittable()
+    folded: bool | None = omittable()
+
+
+class AskCreate(Wire):
+    """`POST /boards/{bid}/nodes/{nid}/asks` (spec §3): ask about the card, as a branch of it.
+    `question` is required unless `quick` names one. The server decides `branch` (rule 3): `down`
+    for the first plain ask on a card, `right` for every other, including `ask_differently` and
+    every ask with a `span`. `level` (when sent) overrides `uses.level`. `redo_of` is a retry or a
+    re-level of an answer card of this board (rule 6): a failed answer with no branches is replaced
+    in place, any other answer gets a `right` sibling."""
+
+    node_id: ClientId | None = omittable()
+    question: str | None = Field(default=None, min_length=1, max_length=BOARD_QUESTION_MAX)
+    span: ParentSpan | None = omittable()
+    ask_differently: bool = False
+    quick: QuickAsk | None = None
+    uses: NodeUses = Field(default_factory=NodeUses)
+    level: AnswerLevel | None = omittable()
+    redo_of: str | None = omittable()
+
+    @model_validator(mode="after")
+    def _a_question_or_a_quick_ask(self) -> Self:
+        if self.question is None and self.quick is None and self.redo_of is None:
+            raise PydanticCustomError("missing", "question is required unless quick is given")
+        return self
+
+
+class NoteCreate(Wire):
+    """`POST /boards/{bid}/nodes/{nid}/notes` (Keep as note): the selected words become a note
+    card to the right of the answer. No AI call."""
+
+    node_id: ClientId | None = omittable()
+    span: ParentSpan
+    text: str = Field(min_length=1, max_length=CANVAS_BODY_MAX)
+
+
+class TidyRequest(Wire):
+    """`POST /boards/{bid}/tidy`: reset the drag offsets of the tree that holds `root_id`."""
+
+    root_id: str
+
+
+class Tidied(Wire):
+    """The cards Tidy changed, with their new versions (one tree, never the loose cards)."""
+
+    nodes: list[CanvasNode]
 
 
 class StaleVersion(Wire):
@@ -1540,6 +1766,16 @@ class AgentSeed(Wire):
     passages: list[AgentPassage]
 
 
+class AgentImage(Wire):
+    """A picture of an `image` run (v0.3 #348): a crop PNG, base64, at most 4 MiB of bytes."""
+
+    media_type: Literal["image/png", "image/jpeg"]
+    data_base64: str = Field(min_length=8, max_length=5_592_408)
+    #: The figure's caption as one short line, and its 0-based page.
+    caption: str | None = omittable(max_length=600)
+    page: NonNegative | None = omittable()
+
+
 class AgentHistory(Wire):
     session_id: str = Field(pattern=server_id("thr"))
     #: Pi's `exportEntries()` as of the thread's last completed turn. Opaque to the API.
@@ -1561,7 +1797,15 @@ class AgentRunRequest(Wire):
     run_id: str = Field(pattern=server_id("run"))
     request_id: str = Field(pattern=server_id("req"))
     kind: RunKind
-    prompt_version: Literal["explain-v1", "ask-v1", "summary-v1", "diagram-v1", "topic-v1"]
+    prompt_version: Literal[
+        "explain-v1",
+        "ask-v1",
+        "summary-v1",
+        "diagram-v1",
+        "topic-v1",
+        "glance-v1",
+        "image-v1",
+    ]
     tool: AgentToolAccess
     datamark: str = Field(pattern=r"^\^[0-9a-f]{8}$")
     paper: AgentPaper
@@ -1569,19 +1813,36 @@ class AgentRunRequest(Wire):
     question: str = Field(min_length=1, max_length=2000)
     history: AgentHistory | None
     limits: AgentLimits
+    #: v0.3 (#339): the level an explain/ask answer is written for, and whether it ends with a
+    #: ```check fence (the API decides: contracts.md §2.5). Both are optional on the agent's side.
+    level: AnswerLevel = "familiar"
+    check: bool = False
+    #: v0.3 (#343): whether the answer may / must / must not carry its figure fence (```mermaid).
+    #: `may` is the tutor shape's own rule; a board ask's `uses.diagram` sets the others.
+    diagram: Literal["may", "never", "always"] = "may"
+    #: v0.3 (#348): the crop(s) of an `image` run: required there, refused on every other kind.
+    images: list[AgentImage] | None = omittable(min_length=1, max_length=2)
+
+    @model_validator(mode="after")
+    def _images_exactly_on_an_image_run(self) -> Self:
+        if (self.kind == "image") != (self.images is not None):
+            raise PydanticCustomError(
+                "images_kind", "images: required on an image run and refused on any other kind"
+            )
+        return self
 
     @field_validator("seed", mode="after")
     @classmethod
     def _seed_matches_kind(cls, value: AgentSeed | None, info: ValidationInfo) -> Any:
         kind = info.data.get("kind")
-        if kind in ("summary", "explain", "diagram", "topic") and value is None:
+        if kind in ("summary", "explain", "diagram", "topic", "glance", "image") and value is None:
             raise PydanticCustomError("missing", f"Field required for a {kind} run")
         return value
 
 
 class AgentRun(Wire):
     run_id: str = Field(pattern=server_id("run"))
-    model: Literal["minimax/MiniMax-M3", "minimax/MiniMax-M3.1-Flash-Preview"]
+    model: Literal["minimax/MiniMax-M3", "minimax/MiniMax-M3.1-Flash"]
     sdk: str = Field(pattern=r"^pi-coding-agent@[0-9]+\.[0-9]+\.[0-9]+$")
 
 

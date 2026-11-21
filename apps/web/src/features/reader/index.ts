@@ -4,12 +4,12 @@
  */
 export {
   ReaderHeader,
+  type BoardBesideToggle,
   type ExplainToggle,
   type ReaderHeaderProps,
 } from './components/ReaderHeader';
 export { PageCounter, type PageCounterProps } from './components/PageCounter';
 export {
-  MARGIN_BAR_WIDTH,
   useSelectionToolbar,
   type SelectionToolbarMount,
   type ToolbarActions,
@@ -42,3 +42,29 @@ export {
   type SelectionGeometry,
   type SelectionLines,
 } from './model/toolbarPlacement';
+export {
+  useImageSelection,
+  type ImageSelection,
+  type UseImageSelectionArgs,
+} from './hooks/useImageSelection';
+export { ImageToolProvider, useImageTool, type ImageTool } from './hooks/useImageTool';
+export {
+  defaultZoomMode,
+  readSavedReaderState,
+  writeSavedReaderState,
+  type ReadingMode,
+  type SavedReaderState,
+} from './model/savedState';
+export { initialBlockFor, topBlockAt } from './model/topBlock';
+export { failureOf, type Failure } from './model/failure';
+export { useMediaQuery } from './hooks/useMediaQuery';
+export { usePaperSource, type PaperSource } from './hooks/usePaperSource';
+export { useReadingPosition, type UseReadingPositionArgs } from './hooks/useReadingPosition';
+export { useFocusAnchor } from './hooks/useFocusAnchor';
+export { useFocusFromUrl } from './hooks/useFocusFromUrl';
+export {
+  useHighlightActions,
+  type CardAt as HighlightCardAt,
+  type OpenCard,
+} from './hooks/useHighlightActions';
+export { useNavigatorHighlights } from './hooks/useNavigatorHighlights';

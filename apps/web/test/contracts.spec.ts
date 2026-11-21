@@ -37,10 +37,14 @@ import Ajv2020 from 'ajv/dist/2020';
 import { describe, expect, it } from 'vitest';
 
 import type {
+  AskBody,
   BoardView,
   CreateEdgeBody,
   CreateNodeBody,
+  KeepNoteBody,
   PatchBoardBody,
+  Tidied,
+  TidyBody,
   boardsApi,
 } from '@/lib/api/boards';
 import type { PatchEdgeBody, PatchNodeBody } from '@/lib/api/boards';
@@ -54,7 +58,17 @@ import type {
 } from '@/lib/api/highlights';
 import type { SummaryStatus, summaryApi } from '@/lib/api/summary';
 import type { CreateThreadBody, FollowUpBody, threadsApi } from '@/lib/api/threads';
-import type { PaperAbstract, PaperFigure, PlatePut } from '@/features/book/api/bookApi';
+import type {
+  Glance,
+  GlanceBlock,
+  GlanceNumber,
+  GlanceResults,
+  GlanceStatus,
+  GlanceWord,
+  PaperAbstract,
+  PaperFigure,
+  PlatePut,
+} from '@/features/book/api/bookApi';
 import type {
   AcceptTopicBody,
   CreateTopicBody,
@@ -66,6 +80,8 @@ import type {
 import type {
   Anchor,
   AnchorWire,
+  AskUses,
+  ParentSpan,
   Board,
   CanvasEdge,
   CanvasNode,
@@ -82,8 +98,8 @@ import type {
   LibraryReference,
   ReadingProgress,
   Message,
-  MessageCoverage,
   MessageDiagram,
+  PaperRename,
   PassageLocator,
   ResolutionWire,
   RunErrorCode,
@@ -95,6 +111,7 @@ import type {
 import type { UsageBucket, UsageTotals } from '@/lib/api/usage';
 
 import boardsSchema from '../../../contracts/api/boards.schema.json';
+import glanceSchema from '../../../contracts/api/glance.schema.json';
 import highlightsSchema from '../../../contracts/api/highlights.schema.json';
 import papersSchema from '../../../contracts/api/papers.schema.json';
 import sseSchema from '../../../contracts/api/sse.schema.json';
@@ -120,6 +137,7 @@ const API_GROUPS = [
   'sse',
   'summary',
   'usage',
+  'glance',
   'boards',
   'topics',
   'healthz',
@@ -267,22 +285,12 @@ const LOCATOR: PassageLocator = {
   section_heading: 'Introduction',
 };
 
-const COVERAGE: MessageCoverage = {
-  passages: 1,
-  citations: 1,
-  unresolved_markers: 0,
-  paragraphs: 1,
-  uncited_paragraphs: [],
-  not_verified: 0,
-};
-
 const CITATION: Citation = {
   citation_id: 'cit_01K63A9W4XJ7Q2N8R5T0V3Y6ZE',
   ordinal: 0,
   marker: 'b3',
   page_index: 1,
   anchor: CITATION_ANCHOR,
-  supported: true,
   locator: LOCATOR,
 };
 
@@ -297,7 +305,8 @@ const ANSWER: Message = {
   generation: 1,
   run: RUN,
   citations: [CITATION],
-  coverage: COVERAGE,
+  level: 'familiar',
+  sibling_group: 'msg_01K63A9W4XJ7Q2N8R5T0V3Y6ZF',
   created_at: T,
   completed_at: T,
 };
@@ -318,7 +327,6 @@ const DIAGRAM_CITE: DiagramCite = {
   anchor: CITATION_ANCHOR,
   locator: LOCATOR,
   page_index: 3,
-  supported: true,
 };
 const CITED_PART: DiagramPart = {
   letter: 'A',
@@ -347,7 +355,6 @@ const PLATE: MessageDiagram = {
         anchor: null,
         locator: null,
         page_index: null,
-        supported: false,
       },
     },
     {
@@ -361,8 +368,7 @@ const PLATE: MessageDiagram = {
   ],
   links: [LINK],
 };
-const { coverage: _prose, ...WITHOUT_COVERAGE } = ANSWER;
-const DIAGRAM_ANSWER: Message = { ...WITHOUT_COVERAGE, diagram: PLATE };
+const DIAGRAM_ANSWER: Message = { ...ANSWER, diagram: PLATE };
 
 const QUESTION: Message = {
   ...ANSWER,
@@ -419,17 +425,31 @@ const EVENTS: SseEvent[] = [
   { event: 'part', data: CITED_PART },
   { event: 'link', data: LINK },
   { event: 'usage', data: RUN },
-  { event: 'done', data: { status: 'complete', error: null, message_id: ANSWER.message_id } },
+  {
+    event: 'done',
+    data: { status: 'complete', error: null, message_id: ANSWER.message_id, final_text: null },
+  },
+  {
+    event: 'done',
+    data: {
+      status: 'complete',
+      error: null,
+      message_id: ANSWER.message_id,
+      final_text: '## TL;DR\nThe stored text.',
+    },
+  },
   {
     event: 'done',
     data: {
       status: 'error',
       error: { code: 'budget_exhausted', retryable: false, message: 'Daily budget used.' },
       message_id: ANSWER.message_id,
+      final_text: null,
     },
   },
 ];
 const SSE_MODEL: Record<SseEvent['event'], string> = {
+  node: 'CanvasNode',
   run: 'SseRun',
   status: 'SseStatus',
   text: 'SseText',
@@ -448,8 +468,8 @@ const SUMMARY: Summary = {
   created_at: T,
   status: 'partial',
   bullets: [
-    { text: 'YOLO frames detection as one regression.', citations: [CITATION], supported: true },
-    { text: 'It is fast.', citations: [], supported: false },
+    { text: 'YOLO frames detection as one regression.', citations: [CITATION] },
+    { text: 'It is fast.', citations: [] },
   ],
 };
 
@@ -478,6 +498,19 @@ const EXCERPT: CanvasNode = {
   source_page_id: null,
   source_diagram_id: null,
   counts: null,
+  parent_id: null,
+  branch: null,
+  parent_span: null,
+  question: null,
+  uses: null,
+  offset_x: 0,
+  offset_y: 0,
+  folded: false,
+  final_text: null,
+  level: null,
+  model: null,
+  answer_status: null,
+  citations: null,
   version: 1,
   created_at: T,
   updated_at: T,
@@ -491,6 +524,27 @@ const NOTE: CanvasNode = {
   body: 'Speed comes from one evaluation.',
   source_anchor: null,
   version: 4,
+};
+/** A branch the way a board ask streams it first (`node`), then the same card as the board reads it. */
+const BOARD_ANSWER: CanvasNode = {
+  ...EXCERPT,
+  node_id: 'cn_0f9e8d7c-aaaa-4bbb-8ccc-123456789ac0',
+  kind: 'explanation',
+  source_anchor: null,
+  source_message_id: 'msg_01K63A9W4XJ7Q2N8R5T0V3Y6ZE',
+  parent_id: EXCERPT.node_id,
+  branch: 'right',
+  parent_span: { start: 4, end: 11, quote: 'Residual' },
+  question: 'Explain this more simply.',
+  uses: { path: true, paper: 'page', level: 'new', diagram: 'may', extra_node_ids: [] },
+  offset_x: 12.5,
+  offset_y: -3,
+  folded: true,
+  final_text: 'One pass.',
+  level: 'new',
+  model: 'MiniMax-M3',
+  answer_status: 'complete',
+  citations: [],
 };
 const EDGE: CanvasEdge = {
   edge_id: 'ce_0f9e8d7c-aaaa-4bbb-8ccc-123456789abf',
@@ -553,6 +607,7 @@ const SCHEMAS = {
   sse: sseSchema,
   summary: summarySchema,
   usage: usageSchema,
+  glance: glanceSchema,
   boards: boardsSchema,
   topics: topicsSchema,
 };
@@ -597,7 +652,7 @@ const OPTIONAL = {
   'threads.Citation': ['locator'],
   'threads.RunSummary': [],
   'threads.MessageError': [],
-  'threads.Message': ['coverage', 'diagram'],
+  'threads.Message': ['diagram'],
   'threads.Thread': [],
   'threads.ThreadDetail': [],
   'threads.MessageDiagram': [],
@@ -613,15 +668,25 @@ const OPTIONAL = {
   'sse.DiagramLink': [],
   'sse.SseDone': [],
   'sse.MessageError': [],
+  'sse.CanvasNode': [],
   'summary.Summary': [],
   'summary.SummaryBullet': [],
   'summary.SummaryStatus': [],
+  'glance.Glance': [],
+  'glance.GlanceStatus': [],
+  'glance.GlanceBlock': [],
+  'glance.GlanceResults': [],
+  'glance.GlanceNumber': [],
+  'glance.GlanceWord': [],
   'boards.Board': [],
   'boards.Viewport': [],
   'boards.CanvasNode': [],
   'boards.CanvasEdge': [],
   'boards.BoardView': [],
   'boards.NodeCreated': [],
+  'boards.Tidied': [],
+  'boards.ParentSpan': [],
+  'boards.NodeUses-Output': [],
   'usage.UsageTotals': [],
   'usage.UsageBucket': [],
   'usage.UsageByKind': [],
@@ -636,8 +701,8 @@ const OPTIONAL = {
   'highlights.HighlightPatch': ['color', 'note'],
   'highlights.ResolutionsPut': [],
   'highlights.ResolutionPutItem': ['reason', 'upgraded_anchor'],
-  'threads.ThreadCreate': ['anchor', 'question'],
-  'threads.FollowUp': ['retry_of', 'redraw_of'],
+  'threads.ThreadCreate': ['anchor', 'question', 'level', 'with_text_anchor'],
+  'threads.FollowUp': ['question', 'level', 'relevel_of', 'retry_of', 'redraw_of'],
   'summary.SummaryRequest': ['regenerate'],
   'boards.NodeCreate': [
     'title',
@@ -647,6 +712,14 @@ const OPTIONAL = {
     'source_page_id',
     'source_diagram_id',
     'group_id',
+    'parent_id',
+    'branch',
+    'parent_span',
+    'question',
+    'uses',
+    'offset_x',
+    'offset_y',
+    'folded',
   ],
   'boards.NodePatch': [
     'x',
@@ -659,7 +732,14 @@ const OPTIONAL = {
     'group_id',
     'source_page_id',
     'source_diagram_id',
+    'offset_x',
+    'offset_y',
+    'folded',
   ],
+  'boards.AskCreate': ['node_id', 'span', 'ask_differently', 'quick', 'redo_of'],
+  'boards.NoteCreate': ['node_id'],
+  'boards.TidyRequest': [],
+  'boards.NodeUses-Input': [],
   'boards.EdgeCreate': ['label', 'from_port', 'to_port'],
   'boards.EdgePatch': ['kind', 'label', 'from_port', 'to_port'],
   'boards.BoardPatch': ['title', 'viewport'],
@@ -682,6 +762,10 @@ const REQUESTS = new Set<Shape>([
   'summary.SummaryRequest',
   'boards.NodeCreate',
   'boards.NodePatch',
+  'boards.AskCreate',
+  'boards.NoteCreate',
+  'boards.TidyRequest',
+  'boards.NodeUses-Input',
   'boards.EdgeCreate',
   'boards.EdgePatch',
   'boards.BoardPatch',
@@ -706,6 +790,7 @@ const KEYS_ARE_EXACT: true[] = [
   true satisfies Equal<keyof PaperAbstract, SchemaKeys<'papers', 'PaperAbstract'>>,
   true satisfies Equal<OptionalKeys<PaperAbstract>, Opt<'papers.PaperAbstract'>>,
   true satisfies Equal<keyof PlatePut, SchemaKeys<'papers', 'PlatePut'>>,
+  true satisfies Equal<keyof PaperRename, SchemaKeys<'papers', 'PaperRename'>>,
   true satisfies Equal<keyof LibraryLink, SchemaKeys<'papers', 'LibraryLink'>>,
   true satisfies Equal<OptionalKeys<LibraryLink>, Opt<'papers.LibraryLink'>>,
   true satisfies Equal<keyof LibraryReference, SchemaKeys<'papers', 'LibraryReference'>>,
@@ -769,6 +854,18 @@ const KEYS_ARE_EXACT: true[] = [
   true satisfies Equal<OptionalKeys<Summary['bullets'][number]>, Opt<'summary.SummaryBullet'>>,
   true satisfies Equal<keyof SummaryStatus, SchemaKeys<'summary', 'SummaryStatus'>>,
   true satisfies Equal<OptionalKeys<SummaryStatus>, Opt<'summary.SummaryStatus'>>,
+  true satisfies Equal<keyof Glance, SchemaKeys<'glance', 'Glance'>>,
+  true satisfies Equal<OptionalKeys<Glance>, Opt<'glance.Glance'>>,
+  true satisfies Equal<keyof GlanceStatus, SchemaKeys<'glance', 'GlanceStatus'>>,
+  true satisfies Equal<OptionalKeys<GlanceStatus>, Opt<'glance.GlanceStatus'>>,
+  true satisfies Equal<keyof GlanceBlock, SchemaKeys<'glance', 'GlanceBlock'>>,
+  true satisfies Equal<OptionalKeys<GlanceBlock>, Opt<'glance.GlanceBlock'>>,
+  true satisfies Equal<keyof GlanceResults, SchemaKeys<'glance', 'GlanceResults'>>,
+  true satisfies Equal<OptionalKeys<GlanceResults>, Opt<'glance.GlanceResults'>>,
+  true satisfies Equal<keyof GlanceNumber, SchemaKeys<'glance', 'GlanceNumber'>>,
+  true satisfies Equal<OptionalKeys<GlanceNumber>, Opt<'glance.GlanceNumber'>>,
+  true satisfies Equal<keyof GlanceWord, SchemaKeys<'glance', 'GlanceWord'>>,
+  true satisfies Equal<OptionalKeys<GlanceWord>, Opt<'glance.GlanceWord'>>,
   true satisfies Equal<keyof Board, SchemaKeys<'boards', 'Board'>>,
   true satisfies Equal<OptionalKeys<Board>, Opt<'boards.Board'>>,
   true satisfies Equal<keyof NonNullable<Board['viewport']>, SchemaKeys<'boards', 'Viewport'>>,
@@ -830,6 +927,22 @@ const KEYS_ARE_EXACT: true[] = [
   true satisfies Equal<OptionalKeys<CreateNodeBody>, Opt<'boards.NodeCreate'>>,
   true satisfies Equal<keyof PatchNodeBody, SchemaKeys<'boards', 'NodePatch'>>,
   true satisfies Equal<OptionalKeys<PatchNodeBody>, Opt<'boards.NodePatch'>>,
+  true satisfies Equal<keyof AskBody, SchemaKeys<'boards', 'AskCreate'>>,
+  true satisfies Equal<OptionalKeys<AskBody>, Opt<'boards.AskCreate'>>,
+  true satisfies Equal<keyof KeepNoteBody, SchemaKeys<'boards', 'NoteCreate'>>,
+  true satisfies Equal<OptionalKeys<KeepNoteBody>, Opt<'boards.NoteCreate'>>,
+  true satisfies Equal<keyof TidyBody, SchemaKeys<'boards', 'TidyRequest'>>,
+  true satisfies Equal<OptionalKeys<TidyBody>, Opt<'boards.TidyRequest'>>,
+  true satisfies Equal<keyof Tidied, SchemaKeys<'boards', 'Tidied'>>,
+  true satisfies Equal<OptionalKeys<Tidied>, Opt<'boards.Tidied'>>,
+  true satisfies Equal<keyof ParentSpan, SchemaKeys<'boards', 'ParentSpan'>>,
+  true satisfies Equal<OptionalKeys<ParentSpan>, Opt<'boards.ParentSpan'>>,
+  true satisfies Equal<keyof AskUses, SchemaKeys<'boards', 'NodeUses-Output'>>,
+  true satisfies Equal<OptionalKeys<AskUses>, Opt<'boards.NodeUses-Output'>>,
+  true satisfies Equal<keyof AskUses, SchemaKeys<'boards', 'NodeUses-Input'>>,
+  true satisfies Equal<OptionalKeys<AskUses>, Opt<'boards.NodeUses-Input'>>,
+  true satisfies Equal<keyof SseData<'node'>, SchemaKeys<'sse', 'CanvasNode'>>,
+  true satisfies Equal<OptionalKeys<SseData<'node'>>, Opt<'sse.CanvasNode'>>,
   true satisfies Equal<keyof CreateEdgeBody, SchemaKeys<'boards', 'EdgeCreate'>>,
   true satisfies Equal<OptionalKeys<CreateEdgeBody>, Opt<'boards.EdgeCreate'>>,
   true satisfies Equal<keyof PatchEdgeBody, SchemaKeys<'boards', 'EdgePatch'>>,
@@ -869,7 +982,10 @@ const ENUMS = {
   'Highlight.color': ['amber', 'green', 'blue', 'pink', 'purple'],
   'Message.role': ['user', 'assistant'],
   'Message.status': ['streaming', 'complete', 'partial', 'error', 'aborted'],
-  'Thread.kind': ['explain', 'ask', 'diagram'],
+  'Message.level': ['new', 'familiar', 'expert', null],
+  'ThreadCreate.level': ['new', 'familiar', 'expert'],
+  'FollowUp.level': ['new', 'familiar', 'expert'],
+  'Thread.kind': ['explain', 'ask', 'diagram', 'image'],
   'MessageDiagram.status': ['streaming', 'complete', 'partial', 'stopped', 'error'],
   'DiagramPart.kind': ['input', 'step', 'output', 'concept'],
   'Thread.last_status': ['streaming', 'complete', 'partial', 'error', 'aborted', null],
@@ -877,7 +993,17 @@ const ENUMS = {
   'SseDone.status': ['complete', 'partial', 'error', 'aborted'],
   'Summary.status': ['complete', 'partial'],
   'SummaryStatus.state': ['none', 'running', 'ready', 'partial', 'failed'],
+  'GlanceStatus.state': ['ready', 'making', 'none'],
   'CanvasNode.kind': ['excerpt', 'explanation', 'note', 'group', 'question', 'notebook', 'diagram'],
+  'CanvasNode.branch': ['down', 'right', null],
+  'CanvasNode.level': ['new', 'familiar', 'expert', null],
+  'CanvasNode.answer_status': ['streaming', 'complete', 'partial', 'error', 'aborted', null],
+  'NodeCreate.branch': ['down', 'right'],
+  'AskCreate.quick': ['simpler', 'example', 'diagram', null],
+  'AskCreate.level': ['new', 'familiar', 'expert'],
+  'NodeUses-Output.paper': ['page', 'whole', 'off'],
+  'NodeUses-Output.level': ['new', 'familiar', 'expert'],
+  'NodeUses-Output.diagram': ['may', 'never', 'always'],
   'CanvasEdge.from_port': ['claim_out', 'answer_out', null],
   'CanvasEdge.to_port': ['evidence_in', 'question_in', null],
   'CanvasEdge.kind': [
@@ -928,6 +1054,9 @@ const ENUMS_ELSEWHERE: Record<string, string> = {
   'ResolutionPutItem.reason': 'ResolutionWire.reason',
   'ThreadCreate.kind': 'Thread.kind',
   'NodeCreate.kind': 'CanvasNode.kind',
+  'NodeUses-Input.paper': 'NodeUses-Output.paper',
+  'NodeUses-Input.level': 'NodeUses-Output.level',
+  'NodeUses-Input.diagram': 'NodeUses-Output.diagram',
   'EdgeCreate.kind': 'CanvasEdge.kind',
   'EdgePatch.kind': 'CanvasEdge.kind',
   'EdgeCreate.from_port': 'CanvasEdge.from_port',
@@ -948,6 +1077,9 @@ const ENUM_TYPES_ARE_EXACT: true[] = [
   true satisfies Equal<Highlight['color'], Values<'Highlight.color'>>,
   true satisfies Equal<Message['role'], Values<'Message.role'>>,
   true satisfies Equal<Message['status'], Values<'Message.status'>>,
+  true satisfies Equal<Message['level'], Values<'Message.level'>>,
+  true satisfies Equal<Sent<CreateThreadBody['level']>, Values<'ThreadCreate.level'>>,
+  true satisfies Equal<Sent<FollowUpBody['level']>, Values<'FollowUp.level'>>,
   true satisfies Equal<MessageErrorT['code'], keyof typeof CODES | keyof typeof RUN_CODES>,
   true satisfies Equal<
     NonNullable<SseData<'done'>['error']>['code'],
@@ -961,7 +1093,18 @@ const ENUM_TYPES_ARE_EXACT: true[] = [
   true satisfies Equal<SseData<'done'>['status'], Values<'SseDone.status'>>,
   true satisfies Equal<Summary['status'], Values<'Summary.status'>>,
   true satisfies Equal<SummaryStatus['state'], Values<'SummaryStatus.state'>>,
+  true satisfies Equal<GlanceStatus['state'], Values<'GlanceStatus.state'>>,
   true satisfies Equal<CanvasNode['kind'], Values<'CanvasNode.kind'>>,
+  true satisfies Equal<CanvasNode['branch'], Values<'CanvasNode.branch'>>,
+  true satisfies Equal<CanvasNode['level'], Values<'CanvasNode.level'>>,
+  true satisfies Equal<CanvasNode['answer_status'], Values<'CanvasNode.answer_status'>>,
+  true satisfies Equal<Sent<CreateNodeBody['branch']>, Values<'NodeCreate.branch'>>,
+  true satisfies Equal<NonNullable<Sent<AskBody['quick']>> | null, Values<'AskCreate.quick'>>,
+  true satisfies Equal<AskBody['level'], Values<'AskCreate.level'>>,
+  true satisfies Equal<AskUses['paper'], Values<'NodeUses-Output.paper'>>,
+  true satisfies Equal<AskUses['level'], Values<'NodeUses-Output.level'>>,
+  true satisfies Equal<AskUses['diagram'], Values<'NodeUses-Output.diagram'>>,
+  true satisfies Equal<SseData<'node'>['branch'], CanvasNode['branch']>,
   true satisfies Equal<CanvasEdge['kind'], Values<'CanvasEdge.kind'>>,
   true satisfies Equal<CanvasEdge['from_port'], Values<'CanvasEdge.from_port'>>,
   true satisfies Equal<CanvasEdge['to_port'], Values<'CanvasEdge.to_port'>>,
@@ -1150,6 +1293,7 @@ describe('contracts.spec — lib/api/types.ts against contracts/api (exported fr
       anchor: null,
     } satisfies PaperAbstract);
     expectValid('papers', 'PlatePut', { anchor: CITATION_ANCHOR } satisfies PlatePut);
+    expectValid('papers', 'PaperRename', { title: 'My notes' } satisfies PaperRename);
     expectValid('highlights', 'Highlight', HIGHLIGHT);
     expectValid('threads', 'RunSummary', RUN);
     expectValid('threads', 'Citation', CITATION);
@@ -1176,6 +1320,7 @@ describe('contracts.spec — lib/api/types.ts against contracts/api (exported fr
     expectValid('boards', 'Board', { ...BOARD, viewport: null } satisfies Board);
     expectValid('boards', 'CanvasNode', EXCERPT);
     expectValid('boards', 'CanvasNode', NOTE);
+    expectValid('boards', 'CanvasNode', BOARD_ANSWER);
     expectValid('boards', 'CanvasEdge', EDGE);
     const view: BoardView = { board: BOARD, nodes: [EXCERPT, NOTE], edges: [EDGE] };
     expectValid('boards', 'BoardView', view);
@@ -1191,9 +1336,42 @@ describe('contracts.spec — lib/api/types.ts against contracts/api (exported fr
         summary: bucket,
         diagram: bucket,
         topic: bucket,
+        image: { ...bucket, runs: 1 },
+        glance: bucket,
       },
     };
     expectValid('usage', 'UsageTotals', usage);
+    // v0.3 #337: the spread's "At a glance" sheet, ready, being made, and none coming.
+    const sheet: Glance = {
+      gist: 'Treat layers as steps of a continuous process.',
+      problem: { text: 'A deep net is a fixed stack of layers.', page: 1 },
+      idea: { text: 'Let $dh/dt = f(h, t)$ define the hidden state.', page: 2 },
+      how: { text: 'A black-box ODE solver runs the forward pass.', page: null },
+      results: {
+        numbers: [{ value: '0.42%', measures: 'test error, MNIST' }],
+        note: null,
+        page: 6,
+      },
+      limits: { text: 'You must choose solver tolerances.', page: 8 },
+      read_first: '§1 and Figure 1, then §3.',
+      words: ['ODE', 'Euler method', 'adjoint method', 'normalizing flow', 'Lipschitz'].map(
+        (term): GlanceWord => ({ term, gloss: 'a short gloss' }),
+      ),
+      model: 'MiniMax-M3.1-Flash',
+      generation: 1,
+    };
+    expectValid('glance', 'GlanceStatus', { state: 'ready', glance: sheet } satisfies GlanceStatus);
+    expectValid('glance', 'GlanceStatus', { state: 'making', glance: null } satisfies GlanceStatus);
+    expectValid('glance', 'GlanceStatus', { state: 'none', glance: null } satisfies GlanceStatus);
+    // Three large numbers, four words to know, a page 0 and a stray key are not a sheet.
+    const number = { value: '1', measures: 'm' };
+    expectInvalid('glance', 'Glance', {
+      ...sheet,
+      results: { numbers: [number, number, number], note: null, page: null },
+    });
+    expectInvalid('glance', 'Glance', { ...sheet, words: sheet.words.slice(0, 4) });
+    expectInvalid('glance', 'Glance', { ...sheet, problem: { text: 'x', page: 0 } });
+    expectInvalid('glance', 'Glance', { ...sheet, stands_on: 6 });
     const topic: Topic = {
       topic_id: 'top_01J9Z3K8Q4R5S6T7V8W9X0Y1Z2',
       name: 'Transformers & attention',
@@ -1224,7 +1402,8 @@ describe('contracts.spec — lib/api/types.ts against contracts/api (exported fr
   });
 
   it('every browser SSE event’s data validates against its model', () => {
-    for (const { event, data } of EVENTS) expectValid('sse', SSE_MODEL[event], data);
+    const node: SseEvent = { event: 'node', data: BOARD_ANSWER };
+    for (const { event, data } of [...EVENTS, node]) expectValid('sse', SSE_MODEL[event], data);
   });
 
   it('the request bodies the feature modules send validate against the request models', () => {
@@ -1290,6 +1469,60 @@ describe('contracts.spec — lib/api/types.ts against contracts/api (exported fr
     expectValid('boards', 'NodeCreate', node);
     const patchNode: PatchNodeBody = { version: 3, x: 12.5, y: -4, group_id: null, title: null };
     expectValid('boards', 'NodePatch', patchNode);
+    expectValid('boards', 'NodePatch', {
+      version: 4,
+      offset_x: 40,
+      offset_y: -8,
+      folded: true,
+    } satisfies PatchNodeBody);
+    // An Undo puts a tree card back with its place in the tree.
+    const restored: CreateNodeBody = {
+      node_id: BOARD_ANSWER.node_id,
+      kind: 'explanation',
+      x: 0,
+      y: 0,
+      w: 320,
+      h: 200,
+      source_message_id: 'msg_01K63A9W4XJ7Q2N8R5T0V3Y6ZE',
+      parent_id: EXCERPT.node_id,
+      branch: 'right',
+      parent_span: { start: 4, end: 11, quote: 'Residual' },
+      question: 'Explain this more simply.',
+      uses: { path: true, paper: 'page', level: 'new', diagram: 'may', extra_node_ids: [] },
+      offset_x: 12.5,
+      offset_y: -3,
+      folded: true,
+    };
+    expectValid('boards', 'NodeCreate', restored);
+    // The asks, notes and tidy of the branching board.
+    const uses: AskUses = {
+      path: true,
+      paper: 'whole',
+      level: 'expert',
+      diagram: 'always',
+      extra_node_ids: ['cn_0f9e8d7c-aaaa-4bbb-8ccc-123456789ac2'],
+    };
+    for (const ask of [
+      { question: 'Why?', uses, level: 'familiar' },
+      {
+        node_id: 'cn_0f9e8d7c-aaaa-4bbb-8ccc-123456789ac1',
+        question: 'Explain this more simply.',
+        span: { start: 0, end: 4, quote: 'This' },
+        ask_differently: true,
+        quick: 'simpler',
+        uses,
+        level: 'new',
+      },
+      { question: 'Why?', uses, level: 'familiar', quick: null, redo_of: BOARD_ANSWER.node_id },
+    ] satisfies AskBody[]) {
+      expectValid('boards', 'AskCreate', ask);
+    }
+    expectValid('boards', 'NoteCreate', {
+      span: { start: 4, end: 11, quote: 'Residual' },
+      text: 'Residual',
+    } satisfies KeepNoteBody);
+    expectValid('boards', 'TidyRequest', { root_id: EXCERPT.node_id } satisfies TidyBody);
+    expectValid('boards', 'Tidied', { nodes: [EXCERPT, BOARD_ANSWER] } satisfies Tidied);
     const edge: CreateEdgeBody = {
       edge_id: EDGE.edge_id,
       from_node_id: NOTE.node_id,

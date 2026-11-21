@@ -23,7 +23,15 @@ export interface PtEdgeData extends Record<string, unknown> {
 }
 /** The card kinds as xyflow node types; `group` is xyflow's own built-in type, so a frame is `frame`. */
 export type PtNodeType =
-  'excerpt' | 'explanation' | 'note' | 'question' | 'notebook' | 'diagram' | 'frame';
+  | 'excerpt'
+  | 'explanation'
+  | 'note'
+  /** A note kept from words in an answer: a child in a tree, laid out with it (v0.3). */
+  | 'branchnote'
+  | 'question'
+  | 'notebook'
+  | 'diagram'
+  | 'frame';
 /** A card on the board, as xyflow holds it. */
 export type PtNode = Node<PtNodeData, PtNodeType>;
 /** A thread on the board, as xyflow holds it. */
@@ -86,13 +94,15 @@ export function nodeLabel(node: CanvasNode): string {
 }
 
 /**
- * The xyflow node type a card kind renders as.
+ * The xyflow node type a card renders as.
  *
- * @param kind The wire kind.
- * @returns The node type; a `group` is drawn as a `frame`.
+ * @param node The wire card: its kind, and whether it hangs from a parent.
+ * @returns The node type; a `group` is drawn as a `frame`, a note with a parent as a `branchnote`.
  */
-export function flowType(kind: CanvasNode['kind']): PtNodeType {
-  return kind === 'group' ? 'frame' : kind;
+export function flowType(node: Pick<CanvasNode, 'kind' | 'parent_id'>): PtNodeType {
+  if (node.kind === 'group') return 'frame';
+  if (node.kind === 'note' && (node.parent_id ?? null) !== null) return 'branchnote';
+  return node.kind;
 }
 
 /** What moves a frame: its paper tag and the band along its outline (`FrameNode`, #214). */
@@ -109,7 +119,7 @@ export const FRAME_HANDLES = '.pt-frame__tag, .pt-frame__edge';
 export function toFlowNode(node: CanvasNode, paperId: string, selected = false): PtNode {
   return {
     id: node.node_id,
-    type: flowType(node.kind),
+    type: flowType(node),
     position: { x: node.x, y: node.y },
     width: node.w,
     height: node.h,

@@ -23,8 +23,11 @@ from .errors import InternalErrorMiddleware, install_error_handlers
 from .middleware import REQUEST_ID_HEADER, CompressJson, RequestIdMiddleware, log_unhandled
 from .routers import (
     auth,
+    board_asks,
     boards,
     book,
+    crops,
+    glance,
     health,
     highlights,
     internal,
@@ -122,8 +125,11 @@ def create_app(
     app.include_router(summary.router)
     app.include_router(usage.router)
     app.include_router(boards.router)
+    app.include_router(board_asks.router)
     app.include_router(notebooks.router)
     app.include_router(topics.router)
+    app.include_router(glance.router)
     app.include_router(book.router)
+    app.include_router(crops.router)
     app.include_router(internal.router)
     return app

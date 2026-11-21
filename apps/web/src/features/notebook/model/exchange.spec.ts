@@ -43,7 +43,6 @@ function cite(
     marker,
     page_index: page,
     anchor: anchor(`a_${marker}`, block, page),
-    supported: true,
     locator: {
       passage_key: `g1:${block}`,
       page_index: page,
@@ -140,7 +139,7 @@ describe('the exchange labels', () => {
   });
 
   it('shortens the model id for the slip', () => {
-    expect(modelLabel('MiniMax-M3.1-Flash-Preview')).toBe('M3.1 Flash');
+    expect(modelLabel('MiniMax-M3.1-Flash')).toBe('M3.1 Flash');
     expect(modelLabel(null)).toBe('the AI');
   });
 });

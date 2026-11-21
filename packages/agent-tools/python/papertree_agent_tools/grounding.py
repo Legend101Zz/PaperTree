@@ -1,4 +1,7 @@
-"""F3.5's grounding verifier: deterministic, offline, and explicit about what it cannot do.
+"""The lexical claim-vs-passage matcher: deterministic, offline, honest about its limits.
+
+(The answer-level ``verify_grounding`` that wrapped it is gone, #351; what remains is
+``assess_claim`` and its vocabulary, used to map a diagram part's quote to a passage.)
 
 EPIC-03 §4, the rule this module implements: *"When grounding verification fails, the claim is
 **flagged**, not deleted and not silently emitted."*
@@ -153,8 +156,6 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Final, Literal
 
-from papertree_agent_tools.answer import GroundedAnswer, VerifiedClaim
-
 __all__ = [
     "CONTRADICTION_FLOOR",
     "DEFAULT_COVERAGE_THRESHOLD",
@@ -170,7 +171,6 @@ __all__ = [
     "named_entities",
     "paper_vocabulary",
     "structure_refs",
-    "verify_grounding",
 ]
 
 #: Fraction of a claim's content tokens that must appear in the cited blocks. See the module
@@ -728,152 +728,4 @@ def _entity_absent(entity: str, evidence: ClaimEvidence, paper: PaperVocabulary 
         not present(token)
         and not any(present(part) for part in _parts(token) if not _NUMERIC.fullmatch(part))
         for token in tokens
-    )
-
-
-def verify_grounding(
-    answer: GroundedAnswer,
-    resolved_text: Mapping[str, str],
-    *,
-    threshold: float = DEFAULT_COVERAGE_THRESHOLD,
-) -> GroundedAnswer:
-    """Returns the SAME answer with every claim's verdict filled in. Never drops a claim.
-
-    ``resolved_text`` maps ``block_id -> resolved text``. It MUST come from
-    ``papertree_document_ir.resolved_text`` — ``PaperView`` builds it that way, via
-    ``IndexedBlock.text`` — and never from hand concatenation of ``text`` and ``repairs``
-    (DESIGN.md D4). A block id absent from the mapping is treated as a block that does not exist,
-    which is the correct reading: a claim citing a block this paper generation does not contain
-    is ungrounded whether the id is a typo or a survivor from a stale generation.
-
-    A claim is ``supported`` here only on the ``supported`` verdict of :func:`assess_claim`; a
-    ``neutral`` one is not (this is the boolean the answer contract carries). The output
-    ``claims`` tuple has the same length and the same order as the input's. That is
-    asserted here rather than left to inspection, because "the verifier filtered my claims" is a
-    silent data loss and the assertion costs one comparison.
-    """
-    verified = tuple(
-        _verify_claim(claim, answer, resolved_text, threshold) for claim in answer.claims
-    )
-    if len(verified) != len(answer.claims):  # pragma: no cover - structurally impossible
-        raise AssertionError(
-            "the verifier changed the number of claims. Unsupported claims are FLAGGED, never "
-            "deleted — EPIC-03 §4."
-        )
-    return GroundedAnswer(
-        states=answer.states,
-        interpretation=answer.interpretation,
-        supporting_block_ids=answer.supporting_block_ids,
-        source_pages=answer.source_pages,
-        source_regions=answer.source_regions,
-        confidence=answer.confidence,
-        unresolved_ambiguities=answer.unresolved_ambiguities,
-        claims=verified,
-    )
-
-
-def _verify_claim(
-    claim: VerifiedClaim,
-    answer: GroundedAnswer,
-    resolved_text: Mapping[str, str],
-    threshold: float,
-) -> VerifiedClaim:
-    # A claim citing nothing falls back to the answer's own supporting blocks. Without this, a
-    # model that puts its citations only at the answer level gets every claim flagged, and a
-    # verifier that flags everything is a verifier the reader turns off.
-    cited = claim.supported_by or answer.supporting_block_ids
-    evidence = _gather(cited, resolved_text)
-
-    if not evidence.resolved_blocks:
-        return VerifiedClaim(
-            text=claim.text,
-            supported_by=(),
-            supported=False,
-            reason=(
-                f"cites {list(cited)}, none of which is a block in this paper generation"
-                if cited
-                else "cites no block, and the answer names no supporting blocks either"
-            ),
-        )
-
-    assessment = assess_claim(claim.text, evidence, threshold=threshold)
-    coverage, missing = assessment.coverage, assessment.missing
-    if assessment.missing_numbers:
-        return VerifiedClaim(
-            text=claim.text,
-            supported_by=(),
-            supported=False,
-            reason=(
-                f"the number(s) {list(assessment.missing_numbers)} appear in the claim and in none "
-                f"of the cited blocks {list(evidence.resolved_blocks)}. A number that is not in "
-                "the source is the failure mode this check exists for; verify it against the paper."
-            ),
-        )
-
-    if assessment.missing_refs or assessment.missing_entities:
-        return VerifiedClaim(
-            text=claim.text,
-            supported_by=(),
-            supported=False,
-            reason=(
-                f"the claim names {list(assessment.missing_refs + assessment.missing_entities)}, "
-                f"which appears in none of the cited blocks {list(evidence.resolved_blocks)}. A "
-                "table, page or name the source does not carry is where invented detail hides; "
-                "verify it against the paper."
-            ),
-        )
-
-    if assessment.verdict != "supported":
-        return VerifiedClaim(
-            text=claim.text,
-            supported_by=(),
-            supported=False,
-            reason=(
-                f"only {coverage:.0%} of this claim's content words appear in the cited blocks "
-                f"{list(evidence.resolved_blocks)} (threshold {threshold:.0%}); missing "
-                f"{list(missing[:8])}. Lexical overlap is not entailment — a correct paraphrase "
-                "can land here, so this is a flag for a human, not a verdict."
-            )
-            + _missing_note(evidence),
-        )
-
-    contributing = tuple(
-        block
-        for block in evidence.resolved_blocks
-        if any(token in _bag(resolved_text[block]) for token in content_tokens(claim.text))
-    )
-    reason = _missing_note(evidence).strip() or None
-    return VerifiedClaim(
-        text=claim.text,
-        supported_by=contributing or evidence.resolved_blocks,
-        supported=True,
-        reason=reason,
-    )
-
-
-def _gather(cited: tuple[str, ...], resolved_text: Mapping[str, str]) -> ClaimEvidence:
-    by_block: dict[str, frozenset[str]] = {}
-    missing: list[str] = []
-    refs: set[str] = set()
-    for block_id in cited:
-        text = resolved_text.get(block_id)
-        if text is None:
-            missing.append(block_id)
-            continue
-        by_block[block_id] = _bag(text)
-        refs.update(structure_refs(text))
-    return ClaimEvidence(by_block, tuple(missing), frozenset(refs))
-
-
-def _bag(text: str) -> frozenset[str]:
-    """A block's content tokens as a membership set. Never iterated — see the determinism note."""
-    return frozenset(content_tokens(text))
-
-
-def _missing_note(evidence: ClaimEvidence) -> str:
-    if not evidence.missing_blocks:
-        return ""
-    return (
-        f" Note: {list(evidence.missing_blocks)} were cited and do not exist in this paper "
-        "generation — a stale block id survives a re-parse and resolves to nothing."
     )

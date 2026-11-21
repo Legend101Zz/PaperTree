@@ -123,6 +123,9 @@ test.describe('S4c — the selection toolbar on screen', () => {
     await page.screenshot({ path: shot('s4c-01-docked-split-fit-1440.png') });
     expect(docked?.lines).toBeGreaterThan(0);
     expect(docked?.covered).toEqual([]);
+    // #346: the settled selection is painted by the overlay as bands (native paint made transparent).
+    await expect(page.locator(`${SCROLLER}[data-pt-selpaint]`)).toHaveCount(1);
+    expect(await page.locator('svg .pt-sel polygon.pt-sel-fill').count()).toBeGreaterThan(0);
     await page.keyboard.press('Escape');
 
     // ── 2. Split at 125 %: from page 1's last line (24 px under the top) to page 2 ──
@@ -146,6 +149,8 @@ test.describe('S4c — the selection toolbar on screen', () => {
     await page.screenshot({ path: shot('s4c-02-across-pages-1440.png') });
     expect(across?.lines).toBeGreaterThan(1);
     expect(across?.covered).toEqual([]);
+    // #349: a selection across a page break is painted on BOTH pages, one band per line.
+    expect(await page.locator('svg .pt-sel polygon.pt-sel-fill').count()).toBeGreaterThan(1);
     await page.keyboard.press('Escape');
 
     // ── 3. a highlight, then a click that moves 4 px opens its card (#176) ──

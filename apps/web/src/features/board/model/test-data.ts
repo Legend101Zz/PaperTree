@@ -1,7 +1,7 @@
 /**
  * board/model/test-data — wire rows for the board's tests, cut from the stored Attention thread
  * (`thr_01M508X9PC9K9HKHSVB2J9W1A1` on the demo account): its two asks, its two answers' handles,
- * locators, coverage and runs as the API returned them on 2026-10-16. Test-only.
+ * locators and runs as the API returned them on 2026-10-16. Test-only.
  */
 import type { CanvasNode, Citation, Message } from '@/lib/api/types';
 
@@ -33,7 +33,6 @@ export function citation(marker: string, page: number, para: number, ordinal = 0
     marker,
     page_index: page,
     anchor: anchor(page),
-    supported: true,
     locator: {
       passage_key: `g1:blk_${marker}`,
       page_index: page,
@@ -54,6 +53,8 @@ const message = (fields: Partial<Message> & Pick<Message, 'message_id' | 'role'>
   citations: [],
   created_at: '',
   completed_at: null,
+  level: null,
+  sibling_group: null,
   ...fields,
 });
 
@@ -72,17 +73,9 @@ export const THREAD: readonly Message[] = [
       citation('b7', 1, 3, 2),
       citation('b8', 1, 4, 3),
     ],
-    coverage: {
-      passages: 4,
-      citations: 11,
-      unresolved_markers: 0,
-      paragraphs: 5,
-      uncited_paragraphs: [4],
-      not_verified: 0,
-    },
     run: {
       run_id: 'run_1',
-      model: 'MiniMax-M3.1-Flash-Preview',
+      model: 'MiniMax-M3.1-Flash',
       provider: 'minimax',
       agent_sdk: 'pi',
       input_tokens: 6286,
@@ -108,14 +101,6 @@ export const THREAD: readonly Message[] = [
     ordinal: 3,
     content: "The paper's reason is about sequencing [b6]. It still cites the abstract [b1].",
     citations: [citation('b6', 1, 2, 0), citation('b1', 0, 1, 1)],
-    coverage: {
-      passages: 3,
-      citations: 9,
-      unresolved_markers: 0,
-      paragraphs: 5,
-      uncited_paragraphs: [],
-      not_verified: 0,
-    },
     run: null,
   }),
 ];
@@ -145,6 +130,19 @@ export function cardRow(kind: CanvasNode['kind'], fields: Partial<CanvasNode> = 
     source_page_id: null,
     source_diagram_id: null,
     counts: null,
+    parent_id: null,
+    branch: null,
+    parent_span: null,
+    question: null,
+    uses: null,
+    offset_x: 0,
+    offset_y: 0,
+    folded: false,
+    final_text: null,
+    level: null,
+    model: null,
+    answer_status: null,
+    citations: null,
     version: 1,
     created_at: '',
     updated_at: '',

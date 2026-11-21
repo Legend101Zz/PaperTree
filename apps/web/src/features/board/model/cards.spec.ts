@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
-import { anchorPageIndex, countsLine, coverageLine, explanationSource, miniature } from './cards';
+import { anchorPageIndex, countsLine, miniature } from './cards';
 import { cardName, nodeLabel, toFlowNode, withPageTitles } from './flow';
-import { THREAD, cardRow, citation } from './test-data';
+import { cardRow, citation } from './test-data';
 
 describe('the page tab comes from the stored anchor', () => {
   it('reads the PageSelector first, the ShapeSelector second, and nothing else', () => {
@@ -29,40 +29,6 @@ describe('a notebook card counts from `counts`', () => {
   it('says an empty page is empty, and invents nothing without counts', () => {
     expect(countsLine(zero)).toBe('Empty page');
     expect(countsLine(null)).toBeNull();
-  });
-});
-
-describe('the explanation footer is the stored message, never made up', () => {
-  it('prints the coverage the API computed', () => {
-    expect(coverageLine(THREAD[1]!.coverage ?? null)).toBe('4 passages · 11 citations');
-    expect(coverageLine(null)).toBeNull();
-  });
-});
-
-describe('explanationSource', () => {
-  it('numbers passages as the explain panel does: thread-wide, the follow-up’s b6 stays 2', () => {
-    const second = explanationSource('thr_1', THREAD, 'msg_a2')!;
-    expect(second.threadId).toBe('thr_1');
-    for (const [key, n] of [
-      ['g1:blk_b1', 1],
-      ['g1:blk_b6', 2],
-      ['g1:blk_b7', 3],
-      ['g1:blk_b8', 4],
-    ] as const)
-      expect(second.numbers.byKey.get(key)).toBe(n);
-    expect(second.answer.citations.map((c) => c.marker)).toEqual(['b6', 'b1']);
-  });
-  it('takes the ask just before the answer as the call slip', () => {
-    expect(explanationSource('thr_1', THREAD, 'msg_a1')!.question).toBe('Explain this passage.');
-    expect(explanationSource('thr_1', THREAD, 'msg_a2')!.question).toBe(
-      'Why does dropping recurrence make training faster?',
-    );
-  });
-  it('carries the coverage and run, and is null for a message the thread does not hold', () => {
-    const first = explanationSource('thr_1', THREAD, 'msg_a1')!;
-    expect(first.answer.coverage?.citations).toBe(11);
-    expect(first.run?.input_tokens).toBe(6286);
-    expect(explanationSource('thr_1', THREAD, 'msg_gone')).toBeNull();
   });
 });
 

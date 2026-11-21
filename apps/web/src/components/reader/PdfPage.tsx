@@ -33,12 +33,17 @@ import type { RenderTask } from 'pdfjs-dist';
 
 import type { BBox } from '@papertree/document-ir';
 
+import { useResolvedPage } from '@/features/settings';
 import { getPdfjs } from '@/lib/pdf/worker';
 
 import { alignedItems } from './stampTextLayer';
 import { attachSelectionEnd } from './textLayerSelection';
 
 import { irToCssScale, pageCssSize, usePdfDocument } from './PdfDocumentProvider';
+import type { MatRegion } from './figureRegions';
+import { PageMats } from './PageMats';
+
+import './pdfPage.css';
 
 /**
  * ~16 megapixels. Above this Safari on iOS silently hands back a blank canvas rather than throwing,
@@ -63,6 +68,12 @@ export interface PdfPageProps {
   readonly textLayer?: boolean;
   readonly className?: string;
   readonly onRenderError?: (error: Error) => void;
+  /**
+   * Boxes (IR points, y down) that keep their own colours on a dark or sepia page: the page's
+   * figures and images, from `figureMats`. The page is recoloured live by CSS; these are drawn
+   * back from the same canvas on a mat (`PageMats`). Unused on a light page.
+   */
+  readonly figureRegions?: readonly MatRegion[];
   /**
    * Called once per successful text-layer build, with the divs and the items they were built from.
    *
@@ -185,6 +196,7 @@ export function PdfPage({
   textLayer = true,
   className,
   onRenderError,
+  figureRegions,
   onTextLayer,
 }: PdfPageProps): JSX.Element {
   const { pdf, pageMeta } = usePdfDocument();
@@ -193,6 +205,9 @@ export function PdfPage({
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const textLayerRef = useRef<HTMLDivElement | null>(null);
+  const page = useResolvedPage();
+  // Counts finished paints, so the figure mats copy from the NEW pixels after a zoom re-render.
+  const [paints, setPaints] = useState(0);
 
   // Held in a ref rather than listed as a dependency: callers pass an inline lambda, and a lambda
   // in the dependency list would re-run — and therefore re-raster — the page on every render.
@@ -234,6 +249,7 @@ export function PdfPage({
         renderTask = page.render({ canvas, viewport: renderViewport });
         await renderTask.promise;
         if (cancelled) return;
+        setPaints((n) => n + 1);
 
         const container = textLayerRef.current;
         if (!textLayer || container === null) return;
@@ -347,12 +363,25 @@ export function PdfPage({
       data-page-index={pageIndex}
       style={pageStyle}
     >
-      <canvas
-        ref={canvasRef}
-        role="presentation"
-        className="absolute left-0 top-0 block"
-        style={{ width: `${css.width}px`, height: `${css.height}px` }}
-      />
+      {/* The wrapper is where a dark page is composed (pdfPage.css); on Light and Sepia it is no box. */}
+      <div className="papertree-page__ink">
+        <canvas
+          ref={canvasRef}
+          role="presentation"
+          className="papertree-page__canvas absolute left-0 top-0 block"
+          style={{ width: `${css.width}px`, height: `${css.height}px` }}
+        />
+      </div>
+      {page !== 'light' && figureRegions !== undefined && figureRegions.length > 0 ? (
+        <PageMats
+          source={canvasRef.current}
+          paints={paints}
+          regions={figureRegions}
+          irScale={irScale}
+          cssWidth={css.width}
+          cssHeight={css.height}
+        />
+      ) : null}
       {textLayer ? (
         <div
           ref={textLayerRef}

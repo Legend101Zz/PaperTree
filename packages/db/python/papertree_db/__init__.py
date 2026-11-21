@@ -26,6 +26,7 @@ from .canvas import (
     BoardSnapshot,
     CanvasRejected,
     EdgeRow,
+    NodeAnswer,
     NodeRow,
     NotebookCounts,
     Pins,
@@ -90,6 +91,7 @@ from .migrate import (
 from .notebook import NotebookRejected, NotebookStale
 from .plate import PLATE_MIN_IOU, PlateFigure, plate_block_sql
 from .reading import ProgressState, ReadingState, progress_state, reached_last_page
+from .title import PAPER_TITLE_MAX
 from .topics import (
     CLOTHS,
     TOPIC_NAME_MAX,
@@ -118,6 +120,7 @@ __all__ = [
     "clean_topic_name",
     "suggest_by_category",
     "DISPLAY_NAME_MAX",
+    "PAPER_TITLE_MAX",
     "MAX_DERIVATION_DEPTH",
     "SQLITE_INTEGER_MAX",
     "VECTOR_DIMENSIONS",
@@ -146,6 +149,7 @@ __all__ = [
     "Migration",
     "MigrationError",
     "MigrationResult",
+    "NodeAnswer",
     "NodeRow",
     "NotebookRejected",
     "NotebookStale",

@@ -1,13 +1,13 @@
 /* legend.css — the strip under the board (frame 06): THREADS and PINS, and the hint. It is a key,
-   not a control: clicks pass through it to the board (a click there deselects, as on the pane),
-   except on the phone's fold summary. */
+   not a control. It sits BELOW the stage, in the flow (the stage gives it its height), so it never
+   lies over a card, the minimap or an ask box (v0.3 check, 15-followup.png); the board only draws
+   it when it has v0.2 threads, since a branching tree has no pins. */
 
 .pt-legend {
-  pointer-events: none;
-  position: absolute;
+  position: relative;
   z-index: 5;
-  inset-block-end: 12px;
-  inset-inline: 24px 176px; /* the minimap's column (144 + 2 × 16) stays clear (#214) */
+  flex: none;
+  margin: 0 24px 12px;
   max-inline-size: 1216px;
   padding: 10px 20px;
   color: var(--pt-ink);
@@ -80,7 +80,7 @@
 
 @media (max-width: 639px) {
   .pt-legend {
-    inset-inline: 16px auto;
+    margin-inline: 16px;
     max-inline-size: calc(100% - 32px);
     padding: 8px 12px;
     font-size: 13px;
@@ -92,7 +92,6 @@
     line-height: var(--pt-target-touch);
     font-weight: 500;
     cursor: pointer;
-    pointer-events: auto;
   }
 
   .pt-legend__fold[open] .pt-legend__row,

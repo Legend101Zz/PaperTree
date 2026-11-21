@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   ZOOM_RANGE,
   boardCounts,
+  boardName,
   boardRedirectPath,
   countsLine,
   mapLabel,
@@ -89,5 +90,33 @@ describe('a v0.1 /canvas link goes to the board (#214)', () => {
     expect(boardRedirectPath('a%2Fb', { x: '1' })).toBe('/paper/a%2Fb/board?x=1');
     expect(boardRedirectPath('a/b', {})).toBe('/paper/a%2Fb/board');
     expect(boardRedirectPath('100%', {})).toBe('/paper/100%25/board'); // not a valid escape
+  });
+});
+
+describe('the links between the full-width board and the split view (#344, #349)', () => {
+  it('a source click opens the reader with the board beside it, on the clicked card', async () => {
+    const { besideHref, citationHref, paperBesideHref } = await import('./chrome');
+    expect(besideHref('ppr_1', 'cn_a', 'cit_1')).toBe(
+      '/paper/ppr_1/read?beside=1&card=cn_a&focus=cn_a&cite=cit_1',
+    );
+    expect(besideHref('ppr_1', 'cn_p')).toBe('/paper/ppr_1/read?beside=1&card=cn_p&focus=cn_p');
+    expect(paperBesideHref('ppr_1')).toBe('/paper/ppr_1/read?beside=1');
+    expect(citationHref('ppr_1', 'cn_a', 'cit_1')).toBe('/paper/ppr_1/read?focus=cn_a&cite=cit_1');
+  });
+});
+
+describe('the name a board goes by', () => {
+  it('is the name the reader gave it', () => {
+    expect(boardName('Residual nets', 'Deep Residual Learning')).toBe('Residual nets');
+  });
+
+  it('is the paper’s title when the board only has the default "Canvas"', () => {
+    expect(boardName('Canvas', 'Deep Residual Learning')).toBe('Deep Residual Learning');
+    expect(boardName('  ', 'Deep Residual Learning')).toBe('Deep Residual Learning');
+    expect(boardName(null, 'Deep Residual Learning')).toBe('Deep Residual Learning');
+  });
+
+  it('is null when neither is known', () => {
+    expect(boardName('Canvas', null)).toBeNull();
   });
 });

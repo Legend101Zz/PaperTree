@@ -21,8 +21,10 @@ import {
   pointsFor,
   register,
   reveal,
+  setMessageText,
   shotPath,
   upload,
+  userId,
   waitParsed,
   yoloPdf,
 } from '../s4/support';
@@ -60,7 +62,6 @@ function craftedStream(anchor: unknown): string {
     marker: `b${String(n)}`,
     page_index: page,
     anchor,
-    supported: true,
   });
   return [
     frame('run', {
@@ -74,7 +75,7 @@ function craftedStream(anchor: unknown): string {
     frame('citations', { items: [cite(1, 0), cite(2, 0)] }),
     frame('usage', {
       run_id: 'run_w3',
-      model: 'MiniMax-M3.1-Flash-Preview',
+      model: 'MiniMax-M3.1-Flash',
       provider: 'minimax',
       agent_sdk: 'pi-coding-agent@0.87.1',
       input_tokens: 2000,
@@ -108,7 +109,7 @@ async function selectAndAsk(page: Page, from: string, to: string): Promise<void>
   const toolbar = page.getByRole('toolbar', { name: 'Selection actions' });
   await expect(toolbar).toBeVisible();
   // #203: the toolbar's Explain runs the answer now (v0.1's Ask); its Ask waits for a question.
-  await toolbar.getByRole('button', { name: 'Explain this passage' }).click();
+  await toolbar.getByRole('button', { name: 'Explain', exact: true }).click();
 }
 
 async function noSideScroll(page: Page, width: number): Promise<void> {
@@ -222,21 +223,20 @@ test.describe('W3UI round 2 (YOLO)', () => {
         expect(await answer.locator('code').count()).toBe(1);
         expect(await answer.locator('ul > li').count()).toBe(2);
         expect(await answer.locator('ol > li').count()).toBe(2);
-        // #202: numbered passage markers, not chips: [b1] [b2] [b1] are markers 1, 2, 1.
-        expect(await answer.locator('li [data-citation-id]').count()).toBe(1);
-        expect(await answer.locator('[data-citation-id]').count()).toBe(3);
-        expect(await answer.locator('.pt-chip').count()).toBe(0);
-        // R4: the full stop travels with the marker: the run is one line, nothing left after it.
-        const runs = await answer.locator('.pt-cite-run').evaluateAll((nodes) =>
-          nodes.map((n) => ({
-            text: n.textContent,
-            lines: n.getClientRects().length,
-            tail: n.parentElement?.lastChild === n,
-          })),
-        );
-        expect(runs.length).toBe(3);
-        for (const run of runs) expect(run.lines).toBe(1);
-        expect(runs[2]).toMatchObject({ text: '1.', tail: true });
+        // #340: sources are ONE quiet line under a paragraph, never inline: no chip, no marker.
+        expect(await answer.locator('.pt-chip, .pt-marker, [data-citation-id]').count()).toBe(0);
+        const lines = await answer
+          .locator('.pt-source')
+          .evaluateAll((nodes) =>
+            nodes.map((n) => ({ text: n.textContent ?? '', rects: n.getClientRects().length })),
+          );
+        expect(lines.length).toBeGreaterThan(0);
+        for (const line of lines) {
+          expect(line.text).toMatch(/^(From the paper: p\. 1|General knowledge)/);
+          expect(line.rects).toBeGreaterThan(0);
+        }
+        // R4: a full stop that followed a handle stays on the sentence, with nothing in its place.
+        expect(text).not.toMatch(/\s\.(\s|$)/);
         await noSideScroll(page, screen.width);
         await page.screenshot({
           path: shotPath(`r2-panel-${label}.png`, testInfo.outputPath('shots')),
@@ -309,7 +309,13 @@ test.describe('W3UI round 2 (YOLO)', () => {
     const board = await getBoard(stack.apiUrl, token, paperId);
     const nodes = (
       board as unknown as {
-        nodes: { node_id: string; kind: string; version: number; body: string }[];
+        nodes: {
+          node_id: string;
+          kind: string;
+          version: number;
+          body: string;
+          source_message_id: string | null;
+        }[];
       }
     ).nodes;
     const cards = nodes.filter((n) => n.kind === 'explanation');
@@ -318,20 +324,17 @@ test.describe('W3UI round 2 (YOLO)', () => {
       cards.some((c) => /\[b\d+\]/.test(c.body)),
       'the stored body keeps its handles',
     ).toBe(true);
-    const boardId = (board as unknown as { board: { board_id: string } }).board.board_id;
-    // Give the first card the markdown the live model writes (the stored words, edited by the test).
-    const first = cards[0] as { node_id: string; version: number };
-    const patched = await api(
-      stack.apiUrl,
-      token,
-      'PATCH',
-      `/boards/${boardId}/nodes/${first.node_id}`,
-      {
-        version: first.version,
-        body: MARKDOWN_ANSWER,
-      },
+    // Give the first card the markdown the live model writes. Since v0.3 a board answer card
+    // shows its message's stored final text (which wins over the card's own `body`), so the
+    // markdown is written onto that message, the stored words edited by the test.
+    const first = cards[0] as { source_message_id: string | null };
+    expect(first.source_message_id).not.toBeNull();
+    setMessageText(
+      stack.dataRoot,
+      await userId(stack.apiUrl, token),
+      first.source_message_id as string,
+      MARKDOWN_ANSWER,
     );
-    expect(patched.status).toBe(200);
 
     for (const screen of SCREENS) {
       for (const theme of THEMES) {
@@ -350,10 +353,12 @@ test.describe('W3UI round 2 (YOLO)', () => {
         const canvas = await ctx.newPage();
         await canvas.goto(`/paper/${paperId}/board`);
         await expect(canvas.locator('.react-flow__node-explanation')).toHaveCount(2);
-        // #212: a board card cites with the passage's numbered marker, not a "p. 4" label.
+        // v0.3: a board card names the page it draws on in its foot ("p. 3", a button), no marker
+        // or chip, and no source line inside the answer.
         await expect(
-          canvas.locator('.react-flow__node-explanation .pt-marker').first(),
+          canvas.locator('.react-flow__node-explanation .pt-tc__src').first(),
         ).toBeVisible({ timeout: 30_000 });
+        expect(await canvas.locator('.react-flow__node-explanation .pt-marker').count()).toBe(0);
         const body = (await canvas.locator('.react-flow__node-explanation').allInnerTexts()).join(
           ' ',
         );

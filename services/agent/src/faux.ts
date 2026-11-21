@@ -123,10 +123,15 @@ export interface FauxModel {
   load(sessionId: string, steps: readonly FauxStep[]): void;
   /** Model requests seen per session (a test's "the model was called N times"). */
   requests(sessionId: string): number;
-  /** What the model was given on each request, per session (system prompt and message roles). */
-  seen(
-    sessionId: string,
-  ): ReadonlyArray<{ readonly systemPrompt: string; readonly roles: string[] }>;
+  /**
+   * What the model was given on each request, per session (system prompt, message roles and how
+   * many pictures the messages held: the image tests assert the crop really reached the model).
+   */
+  seen(sessionId: string): ReadonlyArray<{
+    readonly systemPrompt: string;
+    readonly roles: string[];
+    readonly images: number;
+  }>;
   /** Drop a session's leftover script (the observations are kept, for the last OBSERVED_KEPT sessions). */
   forget(sessionId: string): void;
 }
@@ -134,10 +139,24 @@ export interface FauxModel {
 /** How many sessions' request counts and observations are kept (bounded, for a long-lived faux server). */
 const OBSERVED_KEPT = 500;
 
+/** How many `image` parts the user messages of a request hold. */
+function countImages(messages: readonly unknown[]): number {
+  let count = 0;
+  for (const message of messages) {
+    const content = (message as { content?: unknown }).content;
+    if (!Array.isArray(content)) continue;
+    count += content.filter((part) => (part as { type?: unknown } | null)?.type === 'image').length;
+  }
+  return count;
+}
+
 export function createFauxModel(): FauxModel {
   const scripts = new Map<string, FauxStep[]>();
   const counts = new Map<string, number>();
-  const observed = new Map<string, Array<{ systemPrompt: string; roles: string[] }>>();
+  const observed = new Map<
+    string,
+    Array<{ systemPrompt: string; roles: string[]; images: number }>
+  >();
 
   const model: Model<any> = {
     id: 'MiniMax-M3',
@@ -146,7 +165,8 @@ export function createFauxModel(): FauxModel {
     provider: FAUX_PROVIDER,
     baseUrl: 'faux://in-process',
     reasoning: true,
-    input: ['text'],
+    // Like the live models, it takes images: an `image` run in faux mode goes through the same guard.
+    input: ['text', 'image'],
     cost: { input: 0.3, output: 1.2, cacheRead: 0.06, cacheWrite: 0 },
     contextWindow: 1_048_576,
     maxTokens: 512_000,
@@ -166,7 +186,7 @@ export function createFauxModel(): FauxModel {
     const roles = context.messages.map((m) => String((m as { role?: unknown }).role));
     const list = observed.get(key) ?? [];
     observed.delete(key);
-    observed.set(key, [...list, { systemPrompt, roles }]);
+    observed.set(key, [...list, { systemPrompt, roles, images: countImages(context.messages) }]);
     while (observed.size > OBSERVED_KEPT) {
       const oldest = observed.keys().next().value;
       if (oldest === undefined) break;
@@ -388,21 +408,128 @@ function seedPassages(systemPrompt: string): Array<{ handle: string; text: strin
   return out;
 }
 
+/** The faux explain figure: a flowchart with a subgraph and labelled edges (Mermaid). */
+export const FAUX_FLOWCHART = [
+  'flowchart TD',
+  '  subgraph block["Residual block"]',
+  '    layers["Layers learn F(x)"]',
+  '    add(("Add"))',
+  '  end',
+  '  input["Input x"] --> layers',
+  '  layers -->|"F(x)"| add',
+  '  input -->|"skip connection"| add',
+  '  add --> output["Output F(x) + x"]',
+].join('\n');
+
+/** The faux ask figure: a sequenceDiagram (Mermaid). */
+export const FAUX_SEQUENCE = [
+  'sequenceDiagram',
+  '  participant Reader',
+  '  participant Tutor',
+  '  participant Paper',
+  '  Reader->>Tutor: Asks about the passage',
+  '  Tutor->>Paper: Looks up the passage',
+  '  Paper-->>Tutor: The words it says',
+  '  Tutor-->>Reader: A plain answer',
+].join('\n');
+
+/**
+ * The faux model's explain / ask answer in the v0.3 shape (contracts.md §3.2.2): the four sections,
+ * one inline `$…$`, one handle (under "In the paper"), a ```mermaid fence in "How it works" (a
+ * flowchart with a subgraph for an explain, a sequenceDiagram for an ask, so a test can see both
+ * types draw) and, when the request says `check: true`, the ```check fence. Deterministic: the
+ * words come from the seed passage and nothing is random. It is already in the canonical form
+ * `tidyAnswer` writes, so the deltas still equal `done.final_text`.
+ */
+function tutorAnswer(request: RunRequest, inPaper: string): string {
+  const level = request.level ?? 'familiar';
+  // An ask (the board's and the reader's Ask box) says what it was asked and how much path it had,
+  // so a test can tell a branch's answer from its parent's, deterministically (#343).
+  const turns = (request.history?.entries ?? []).filter(
+    (entry) => (entry as { message?: { role?: string } }).message?.role === 'user',
+  ).length;
+  const echo =
+    request.kind === 'ask' || request.kind === 'image'
+      ? ` (Faux) Asked: "${words(request.question, request.datamark, 14)}", with ${String(turns)} earlier turn(s) on this path.`
+      : '';
+  const diagram = request.kind === 'ask' ? FAUX_SEQUENCE : FAUX_FLOWCHART;
+  const sections = [
+    `## TL;DR\n(Faux) The passage in one plain sentence: an idea the paper builds on.${echo}`,
+    level === 'expert'
+      ? '## The trade-off\n(Faux) It buys a simpler optimisation and costs one extra addition.'
+      : '## In plain words\n(Faux) Think of it as editing a draft instead of rewriting it.',
+    '## How it works\n(Faux) The block outputs $y = F(x) + x$.' +
+      (request.diagram === 'never' ? '' : `\n\`\`\`mermaid\n${diagram}\n\`\`\``),
+    `## In the paper\n${inPaper}`,
+  ];
+  if (request.check === true) {
+    sections.push(
+      '```check\nprompt: If $F(x) = 0$, the block outputs ___.\naccept: x | the input | input\n' +
+        'right: Right. $0 + x = x$: the block hands its input straight on.\n' +
+        'hint: Put 0 in place of $F(x)$ in $F(x) + x$ and see what is left.\n```',
+    );
+  }
+  return sections.join('\n\n');
+}
+
+/** The sentence of the faux answer that rests on the paper: the selection, quoted, one handle. */
+function seedSentence(request: RunRequest, context: FauxContext): string | null {
+  const first = seedPassages(context.systemPrompt)[0];
+  if (!first) return null;
+  return `The selected passage says: "${words(first.text, request.datamark, 30)}" [${first.handle}].`;
+}
+
 function answerFromSeed(request: RunRequest): FauxStep {
   return (context) => {
-    const passages = seedPassages(context.systemPrompt);
-    const first = passages[0];
-    if (!first) {
-      const text = 'The paper passages this answer was given do not say. (Faux answer.)';
-      return { text: chunks(text), usage: estimate(context, text) };
-    }
-    const second = passages[1];
-    let text = `The selected passage says: "${words(first.text, request.datamark, 30)}" [${first.handle}].`;
-    if (second)
-      text += ` The text around it adds: "${words(second.text, request.datamark, 24)}" [${second.handle}].`;
-    text += ' (Faux answer: it quotes the paper and adds no interpretation.)';
+    const sentence = seedSentence(request, context);
+    const text = tutorAnswer(
+      request,
+      sentence ?? 'The paper passages this answer was given do not say. (Faux answer.)',
+    );
     return {
       thinking: 'The seed passages hold the selection.',
+      text: chunks(text),
+      usage: estimate(context, text),
+    };
+  };
+}
+
+/**
+ * An `image` run (v0.3 #348): the tutor shape about the figure, deterministic. It says how many
+ * pictures the model was handed and on which page, and rests "In the paper" on the first passage
+ * the run was given (the caption, when it came with one) by its handle, so an e2e test can tell an
+ * image answer from a text one, and that the crop reached the model.
+ */
+function answerFromImage(request: RunRequest): FauxStep {
+  return (context) => {
+    const shown = countImages(context.messages);
+    const page = request.images?.[0]?.page;
+    const where = page === undefined ? '' : ` on page ${String(page + 1)}`;
+    const first = seedPassages(context.systemPrompt)[0];
+    const inPaper = first
+      ? `The figure's own words say: "${words(first.text, request.datamark, 24)}" [${first.handle}].`
+      : 'No caption came with this figure. (Faux answer.)';
+    const text = tutorAnswer(
+      request,
+      `${inPaper} (Faux) The model was shown ${String(shown)} picture(s) of the figure${where}.`,
+    );
+    return {
+      thinking: 'Look at the figure, then read its caption.',
+      text: chunks(text),
+      usage: estimate(context, text),
+    };
+  };
+}
+
+/** An ask with no tools (a board ask whose paper is `off`): answered from the path alone. */
+function answerFromPath(request: RunRequest): FauxStep {
+  return (context) => {
+    const text = tutorAnswer(
+      request,
+      'This answer used only the board path, not the paper. (Faux answer.)',
+    );
+    return {
+      thinking: 'No paper text beyond the path.',
       text: chunks(text),
       usage: estimate(context, text),
     };
@@ -416,7 +543,7 @@ function answerFromTools(request: RunRequest, summary: boolean): FauxStep {
     if (handles.length === 0) {
       const text = summary
         ? "- The paper's outline was empty, so there is nothing to summarise. (Faux.)"
-        : 'The paper does not say. (Faux answer.)';
+        : tutorAnswer(request, 'The paper does not say. (Faux answer.)');
       return { text: chunks(text), usage: estimate(context, text) };
     }
     if (summary) {
@@ -430,11 +557,10 @@ function answerFromTools(request: RunRequest, summary: boolean): FauxStep {
       const text = bullets.join('\n');
       return { text: chunks(text, 6), usage: estimate(context, text) };
     }
-    const cited = handles
-      .slice(0, 2)
-      .map((h) => `[${h}]`)
-      .join(' ');
-    const text = `The paper's passages that match the question are these ${cited}. (Faux answer about "${words(request.question, request.datamark, 12)}".)`;
+    const text = tutorAnswer(
+      request,
+      `The paper's passage that matches the question is this one [${handles[0]}]. (Faux answer about "${words(request.question, request.datamark, 12)}".)`,
+    );
     return { text: chunks(text), usage: estimate(context, text) };
   };
 }
@@ -631,6 +757,67 @@ function topicBad(): FauxStep {
     );
 }
 
+// ── glance runs (v0.3 #337): ONE JSON object, no tools ────────────────────────────────────────
+
+/** The one sheet the faux model writes for every paper (the e2e specs read these words). */
+export const FAUX_GLANCE = {
+  gist: 'A canned glance for the tests: one sentence, the same for every paper.',
+  problem: 'The faux problem: a deterministic sheet, so that a test can read it back.',
+  idea: 'The faux idea: let $f(x) = x^2$ stand for the maths, typeset once.',
+  how: 'The faux method: no model is called, and the sheet is fixed text.',
+  resultsNote: 'Also: nothing else is measured.',
+  limits: 'The faux limit: it says the same of every paper.',
+  readFirst: '§1 and Figure 1, then §3; skip the appendix on a first read.',
+  numbers: [
+    { value: '0.42%', measures: 'faux error, MNIST' },
+    { value: '0.22M', measures: 'faux parameters' },
+  ],
+  words: [
+    { term: 'ODE', gloss: 'an equation for how a quantity changes' },
+    { term: 'Euler method', gloss: 'the simplest way to step an ODE' },
+    { term: 'adjoint method', gloss: 'gradients by solving backwards' },
+    { term: 'normalizing flow', gloss: 'a model built from invertible steps' },
+    { term: 'Lipschitz', gloss: 'a bound on how fast a function can change' },
+  ],
+} as const;
+
+/** The faux sheet, citing the first digest passages (null when the digest is empty). */
+function glanceTurn(context: FauxContext, text: string): FauxTurn {
+  return {
+    thinking: 'Write the sheet from the digest.',
+    text: chunks(text, 24),
+    usage: estimate(context, text),
+  };
+}
+
+function glanceFromSeed(): FauxStep {
+  return (context) => {
+    const handles = seedPassages(context.systemPrompt).map((p) => p.handle);
+    const first = handles[0] ?? null;
+    const second = handles[1] ?? first;
+    const sheet = {
+      gist: FAUX_GLANCE.gist,
+      problem: { text: FAUX_GLANCE.problem, cite: first },
+      idea: { text: FAUX_GLANCE.idea, cite: first },
+      how: { text: FAUX_GLANCE.how, cite: second },
+      results: {
+        numbers: FAUX_GLANCE.numbers.map((n) => ({ ...n })),
+        note: FAUX_GLANCE.resultsNote,
+        cite: second,
+      },
+      limits: { text: FAUX_GLANCE.limits, cite: second },
+      read_first: FAUX_GLANCE.readFirst,
+      words: FAUX_GLANCE.words.map((w) => ({ ...w })),
+    };
+    return glanceTurn(context, JSON.stringify(sheet));
+  };
+}
+
+/** `[faux:glance-bad]`: prose, not the JSON object, so the run ends `error` and there is no glance. */
+function glanceBad(): FauxStep {
+  return (context) => glanceTurn(context, '(faux) No glance is written for this paper.');
+}
+
 const SCENARIO = /\[faux:([a-z0-9-]+)\]/;
 
 /** Named scenarios for e2e error paths, selected by `[faux:<name>]` in the question. */
@@ -671,16 +858,28 @@ function scenario(name: string, request: RunRequest): readonly FauxStep[] | null
       // side by side), and an uncited reading.
       return [
         (context) => {
-          const first = answerFromSeed(request);
-          const turn = typeof first === 'function' ? first(context) : first;
           const handles = seedPassages(context.systemPrompt)
             .slice(0, 2)
             .map((p) => p.handle);
           const run = handles.length === 0 ? 'b1' : handles.join(', ');
-          const text = `${(turn.text ?? []).join('')}\n\nIt comes back to the selection [${run}].\n\nThis is my reading, not the paper's claim. (Faux.)`;
-          return { ...turn, text: chunks(text), usage: estimate(context, text) };
+          const second = seedPassages(context.systemPrompt)[1];
+          const first = [
+            seedSentence(request, context) ?? 'The passage does not say. (Faux.)',
+            second &&
+              `The text around it adds: "${words(second.text, request.datamark, 24)}" [${second.handle}].`,
+          ]
+            .filter(Boolean)
+            .join(' ');
+          const text = `${first}\n\nIt comes back to the selection [${run}].\n\nThis is my reading, not the paper's claim. (Faux.)`;
+          return {
+            thinking: 'The seed passages hold the selection.',
+            text: chunks(text),
+            usage: estimate(context, text),
+          };
         },
       ];
+    case 'glance-bad':
+      return [glanceBad()];
     case 'topic-existing':
       return [topicExisting(request)];
     case 'topic-new':
@@ -704,9 +903,11 @@ export const defaultBrain: FauxBrain = (request) => {
     if (steps) return steps;
   }
   if (request.kind === 'diagram') return [diagramFromSeed(request)];
+  if (request.kind === 'image') return [answerFromImage(request)];
   // No marker: the faux model offers NOTHING. The e2e stack runs this agent, and an invented AI
   // offer would race the arXiv rule's own ("Suggested ... from arXiv") on the same Unshelved row.
   if (request.kind === 'topic') return [topicDeclines()];
+  if (request.kind === 'glance') return [glanceFromSeed()];
   if (request.kind === 'summary') {
     return [
       { thinking: 'Read the outline first.', toolCalls: [{ name: 'get_outline', arguments: {} }] },
@@ -714,6 +915,7 @@ export const defaultBrain: FauxBrain = (request) => {
     ];
   }
   if (request.seed !== null && request.seed.passages.length > 0) return [answerFromSeed(request)];
+  if (request.limits.max_tool_calls === 0) return [answerFromPath(request)];
   const query =
     words(request.question, request.datamark, 6)
       .replace(/[^\p{L}\p{N} -]/gu, ' ')

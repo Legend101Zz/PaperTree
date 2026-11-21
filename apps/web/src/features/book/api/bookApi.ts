@@ -31,6 +31,55 @@ export interface PaperAbstract {
   readonly anchor: Anchor | null;
 }
 
+/** A block of the sheet (Problem, Idea, How it works, Limits): words and the page they cite. */
+export interface GlanceBlock {
+  /** At most 30 words; maths as `$…$`. */
+  readonly text: string;
+  /** The 1-based page of the passage it comes from (`p. 3 ›`), or null when it cites none. */
+  readonly page: number | null;
+}
+
+/** A large number under Results. */
+export interface GlanceNumber {
+  readonly value: string;
+  readonly measures: string;
+}
+
+/** Results: at most two large numbers and a note. */
+export interface GlanceResults {
+  readonly numbers: readonly GlanceNumber[];
+  readonly note: string | null;
+  readonly page: number | null;
+}
+
+/** One of the five words to know. */
+export interface GlanceWord {
+  readonly term: string;
+  readonly gloss: string;
+}
+
+/** `GET /papers/{id}/glance`'s sheet: the AI's map of the paper, every cap already applied. */
+export interface Glance {
+  readonly gist: string;
+  readonly problem: GlanceBlock;
+  readonly idea: GlanceBlock;
+  readonly how: GlanceBlock;
+  readonly results: GlanceResults;
+  readonly limits: GlanceBlock;
+  /** Names sections; no page mark. */
+  readonly read_first: string;
+  readonly words: readonly GlanceWord[];
+  /** The model that wrote it (`MiniMax-M3.1-Flash`). */
+  readonly model: string;
+  readonly generation: number;
+}
+
+/** `GET /papers/{id}/glance`: `ready` (the sheet), `making` (202: a run is writing it), `none`. */
+export interface GlanceStatus {
+  readonly state: 'ready' | 'making' | 'none';
+  readonly glance: Glance | null;
+}
+
 /** `PUT /papers/{id}/plate`. */
 export interface PlatePut {
   readonly anchor: Anchor;
@@ -58,6 +107,7 @@ export const bookKeys = {
   figures: (paperId: string) => ['book', paperId, 'figures'] as const,
   abstract: (paperId: string) => ['book', paperId, 'abstract'] as const,
   summary: (paperId: string) => ['book', paperId, 'summary'] as const,
+  glance: (paperId: string) => ['book', paperId, 'glance'] as const,
 };
 
 /** The book's calls. */
@@ -78,6 +128,16 @@ export const bookApi = {
    */
   abstract: (paperId: string): Promise<PaperAbstract> =>
     request<PaperAbstract>(`/papers/${seg(paperId)}/abstract`),
+  /**
+   * The "At a glance" sheet, or the state it is in. 200 `ready` with the sheet, 202 `making` while
+   * a run writes it (ask again), 200 `none` when none is coming; the 202 is a success to the
+   * transport, so `state` is what says which.
+   *
+   * @param paperId - The paper.
+   * @returns The status.
+   */
+  glance: (paperId: string): Promise<GlanceStatus> =>
+    request<GlanceStatus>(`/papers/${seg(paperId)}/glance`),
   /**
    * Makes a figure the cover (204; 422 when the Anchor names no figure of this paper).
    *

@@ -8,6 +8,27 @@ import type { CanvasNode } from '@/lib/api/types';
 /** How far the board zooms: out to 20 % (a whole wide board), in to 200 %. */
 export const ZOOM_RANGE = { min: 0.2, max: 2 } as const;
 
+/** The name every new board is created with (the API's default); it is not a name the reader chose. */
+export const DEFAULT_BOARD_TITLE = 'Canvas';
+
+/**
+ * The name a board goes by: the one the reader gave it, else the paper's title, else null. The
+ * default "Canvas" is nobody's name for a board, so it never heads an export or a pane.
+ *
+ * @param own The board row's title.
+ * @param paperTitle The paper's title, once read.
+ * @returns The name, or null when neither is known.
+ */
+export function boardName(
+  own: string | null | undefined,
+  paperTitle: string | null,
+): string | null {
+  const given = own?.trim() ?? '';
+  if (given !== '' && given !== DEFAULT_BOARD_TITLE) return given;
+  const paper = paperTitle?.trim() ?? '';
+  return paper === '' ? null : paper;
+}
+
 /** What the header counts. */
 export interface BoardCounts {
   readonly cards: number;
@@ -74,6 +95,46 @@ export function mapLabel(zoom: number, empty: boolean): string {
  */
 export function readerHref(paperId: string): string {
   return `/paper/${encodeURIComponent(paperId)}/read`;
+}
+
+/**
+ * The reader URL that opens a card's cited passage and flashes it (`useFocusFromCanvas`).
+ *
+ * @param paperId The paper.
+ * @param nodeId The card the marker is on.
+ * @param citationId The citation behind the marker; absent for a passage card (the passage itself).
+ * @returns `/paper/<id>/read?focus=<card>[&cite=<citation>]`.
+ */
+export function citationHref(paperId: string, nodeId: string, citationId?: string): string {
+  const q = new URLSearchParams({ focus: nodeId });
+  if (citationId !== undefined) q.set('cite', citationId);
+  return `${readerHref(paperId)}?${q.toString()}`;
+}
+
+/**
+ * Where a card's source "p. n" goes from the FULL-WIDTH board (#349): the reader with the board
+ * beside it, the passage flashed and the clicked card kept on screen (`?card=` centres it in the
+ * board pane, `?beside=1` opens the split).
+ *
+ * @param paperId The paper.
+ * @param nodeId The card whose source was clicked.
+ * @param citationId The citation behind the link; absent for a passage card.
+ * @returns `/paper/<id>/read?beside=1&card=<card>&focus=<card>[&cite=<citation>]`.
+ */
+export function besideHref(paperId: string, nodeId: string, citationId?: string): string {
+  const q = new URLSearchParams({ beside: '1', card: nodeId, focus: nodeId });
+  if (citationId !== undefined) q.set('cite', citationId);
+  return `${readerHref(paperId)}?${q.toString()}`;
+}
+
+/**
+ * The reader with the board beside it and no card to keep on screen (B from the full-width board).
+ *
+ * @param paperId The paper.
+ * @returns `/paper/<id>/read?beside=1`.
+ */
+export function paperBesideHref(paperId: string): string {
+  return `${readerHref(paperId)}?beside=1`;
 }
 
 /** A route's query string as Next hands it to a page. */

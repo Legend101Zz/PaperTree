@@ -1,7 +1,7 @@
 # @papertree/agent
 
 The small Node service that runs PaperTree's AI through the **Pi SDK** (ADR-002 §3.4; contracts.md
-§3–§4): Node 22, Pi pinned exactly, MiniMax (M3 or M3.1-Flash-Preview, chosen per run kind; ADR-003), and four read-only paper tools served back by
+§3–§4): Node 22, Pi pinned exactly, MiniMax (M3 or M3.1-Flash, chosen per run kind; ADR-003), and four read-only paper tools served back by
 `services/api` under a per-run token. `services/api` is the only public edge; this service binds
 `127.0.0.1` and is called only by the API (`POST /v1/runs`, SSE).
 
@@ -13,17 +13,17 @@ pnpm --filter @papertree/agent test:mutants   # every mutant (M5, M6, G1–G13),
 
 ## Configuration (contracts.md §7, the agent's rows)
 
-| Variable                                                                | Default                 | Notes                                                                                  |
-| ----------------------------------------------------------------------- | ----------------------- | -------------------------------------------------------------------------------------- |
-| `PAPERTREE_AGENT_SECRET`                                                | **required**            | shared with the API (`X-PaperTree-Agent-Secret`); boot refuses without it              |
-| `PAPERTREE_MINIMAX_API_KEY`                                             | **required**            | unless faux mode; read once, then removed from `process.env`; never `MINIMAX_API_KEY`  |
-| `PAPERTREE_AGENT_PORT`                                                  | `8200`                  | binds `127.0.0.1` only                                                                 |
-| `PAPERTREE_API_INTERNAL_URL`                                            | `http://127.0.0.1:8000` | a run's `tool.base_url` must be on this origin, so a run token is never sent elsewhere |
-| `PAPERTREE_MODEL`                                                       | see Model policy        | the model for every kind: `MiniMax-M3` or `MiniMax-M3.1-Flash-Preview`                 |
-| `PAPERTREE_MODEL_EXPLAIN` / `_ASK` / `_SUMMARY` / `_DIAGRAM` / `_TOPIC` | `PAPERTREE_MODEL`       | the model for one kind                                                                 |
-| `PAPERTREE_MODEL_EFFORT` (+ `_EXPLAIN` / `_ASK` / `_SUMMARY`)           | `low`                   | Flash only: `low`, `medium` or `high`; ignored for M3                                  |
-| `PAPERTREE_AGENT_FAUX`                                                  | unset                   | `1` = the scripted test model (below); the key is not read                             |
-| `PAPERTREE_AGENT_LOG_LEVEL`                                             | `info`                  | `debug` adds raw provider error text (§3.3); keys and tokens are never logged          |
+| Variable                                                                                         | Default                                        | Notes                                                                                  |
+| ------------------------------------------------------------------------------------------------ | ---------------------------------------------- | -------------------------------------------------------------------------------------- |
+| `PAPERTREE_AGENT_SECRET`                                                                         | **required**                                   | shared with the API (`X-PaperTree-Agent-Secret`); boot refuses without it              |
+| `PAPERTREE_MINIMAX_API_KEY`                                                                      | **required**                                   | unless faux mode; read once, then removed from `process.env`; never `MINIMAX_API_KEY`  |
+| `PAPERTREE_AGENT_PORT`                                                                           | `8200`                                         | binds `127.0.0.1` only                                                                 |
+| `PAPERTREE_API_INTERNAL_URL`                                                                     | `http://127.0.0.1:8000`                        | a run's `tool.base_url` must be on this origin, so a run token is never sent elsewhere |
+| `PAPERTREE_MODEL`                                                                                | see Model policy                               | the model for every kind: `MiniMax-M3` or `MiniMax-M3.1-Flash`                         |
+| `PAPERTREE_MODEL_EXPLAIN` / `_ASK` / `_SUMMARY` / `_DIAGRAM` / `_TOPIC` / `_IMAGE`               | `PAPERTREE_MODEL`                              | the model for one kind (`_IMAGE` must accept images; boot refuses otherwise)           |
+| `PAPERTREE_MODEL_EFFORT` (+ `_EXPLAIN` / `_ASK` / `_SUMMARY` / `_DIAGRAM` / `_TOPIC` / `_IMAGE`) | per kind (low; medium for ask, summary, image) | Flash only: `low`, `medium` or `high`; ignored for M3                                  |
+| `PAPERTREE_AGENT_FAUX`                                                                           | unset                                          | `1` = the scripted test model (below); the key is not read                             |
+| `PAPERTREE_AGENT_LOG_LEVEL`                                                                      | `info`                                         | `debug` adds raw provider error text (§3.3); keys and tokens are never logged          |
 
 Set by the service itself before any Pi code runs: `PI_OFFLINE=1`, `PI_TELEMETRY=0`,
 `PI_CODING_AGENT_DIR` = a new empty directory it owns (mode 0700, removed at exit), and
@@ -40,24 +40,25 @@ compaction off, cache warming off, telemetry off and the §3.1 retry settings.
 ## Model policy (ADR-003)
 
 `src/models.ts` decides which model answers which kind of run. `PAPERTREE_MODEL` sets one model for
-all three kinds (`explain`, `ask`, `summary`); `PAPERTREE_MODEL_<KIND>` overrides one kind; an
-unknown model id or effort refuses to boot, naming the variable. **Shipped defaults:** `explain` on Flash at effort `low`; `ask` and `summary` on M3 (`ask` moved off Flash on 2026-10-15, ADR-003 "Revision 2026-10-15"). (A faux agent reports M3 until a `PAPERTREE_MODEL*` variable is set.) `MiniMax-M3` stays selectable as
+every kind (`explain`, `ask`, `summary`, `diagram`, `topic`, `glance`, `image`); `PAPERTREE_MODEL_<KIND>` overrides one kind; an
+unknown model id or effort refuses to boot, naming the variable. **Shipped defaults** (ADR-003 "Revision 2026-11-19"): Flash for every kind, at effort `low` for `explain`, `diagram`, `topic` and `glance` and `medium` for `ask`, `summary` and `image` (`DEFAULT_EFFORTS`; the image ask, v0.3 #348, is shown a crop of a figure and never sent to a model that lacks `image` input). (A faux agent reports M3 until a `PAPERTREE_MODEL*` variable is set.) `MiniMax-M3` stays selectable as
 the fallback: `PAPERTREE_MODEL=MiniMax-M3`.
 
-**MiniMax-M3.1-Flash-Preview** is not in Pi's catalog; the agent registers it as a custom model
+**MiniMax-M3.1-Flash** (GA; the old `-Preview` id is retired and not accepted) is not in Pi's catalog; the agent registers it as a custom model
 through the SDK's own `registerProvider` (no network, no `models.json`), with `forceAdaptiveThinking`.
 Its thinking cannot be switched off (the API answers 400 "requires adaptive thinking" to
 `thinking: {type: "disabled"}` and to effort `none`), so a Flash request is always
 `thinking: {type: "adaptive"}` + `output_config: {effort: low | medium | high}`, never `disabled`
-(`PAPERTREE_MODEL_EFFORT[_<KIND>]`, default `low`). M3 keeps its budget-based low thinking and is sent
+(`PAPERTREE_MODEL_EFFORT[_<KIND>]`; default per kind: explain, diagram, topic and glance `low`, ask and summary `medium`). M3 keeps its budget-based low thinking and is sent
 no effort. Flash narrates before a tool call; the agent already drops the text of a message that ends
 in tool use, and a Flash-shaped stream is tested (`test/models.test.ts`).
 
 The model id flows out in the run event (`run.model` = `minimax/<id>`), `GET /healthz`
 (`model`, `models` per kind, `effort` per kind, `cost_basis`), and so to whatever the API stores.
 
-**Cost.** MiniMax publishes no price for Flash. `cost_usd_est` for a Flash run uses M3's rates and is
-an _estimate on M3 rates_ (`/healthz` says so under `cost_basis`; the README of the release says so).
+**Cost.** Flash is priced at MiniMax's published rates ($0.15 input, $0.60 output, $0.015 cache read per
+million tokens; platform.minimax.io/docs/guides/pricing, read 2026-11-19; no cache-write price is listed). `/healthz` says
+so under `cost_basis`.
 
 The shipped default and the evidence for it are in
 `research/architecture-decisions/ADR-003-model-policy.md` and `docs/release/v0.1/MODEL-AB.md`.
@@ -179,7 +180,7 @@ scripts; nothing here needs them.
   follow-up (as the recordings have it). The seed passages and the datamark are in the SYSTEM prompt,
   rebuilt each run.
 - `kind` and `prompt_version` must pair (`explain`/`explain-v1`, `ask`/`ask-v1`,
-  `summary`/`summary-v1`, `diagram`/`diagram-v1`, `topic`/`topic-v1`), and `tool.base_url` must end
+  `summary`/`summary-v1`, `diagram`/`diagram-v1`, `topic`/`topic-v1`, `glance`/`glance-v1`), and `tool.base_url` must end
   with the run id; the schema allows both.
   `limits.deadline_ms` and `limits.idle_ms` must be at most 2,147,483,647 (Node's longest timer);
   the schema sets no maximum.
@@ -188,6 +189,15 @@ scripts; nothing here needs them.
 reason}` (`src/topic.ts`). An answer that does not fit ends the run `error` (`internal`) with the
   text kept: a bad answer is "no suggestion", never a retry. Faux: `[faux:topic-existing]`,
   `[faux:topic-new]`, `[faux:topic-bad]` on a line of the question.
+- A `glance` run (v0.3 #337, the spread's "At a glance" sheet) has no tools: the seed is the summary's
+  digest (the handles are the passages it cites), `question` starts with the fixed glance question, and
+  the answer is ONE JSON object (`src/glance.ts`): `gist` (at most 20 words), `problem` / `idea` / `how` /
+  `limits` (each `{text, cite}`, at most 30 words, `cite` a digest handle or null), `results` (at most two
+  `{value, measures}` numbers, a `note`, a `cite`), `read_first`, and five `words` `{term, gloss}`; maths
+  as `$…$`. A text over its cap is trimmed on a word boundary (a maths span is one word), a list over its
+  cap is cut, and anything that does not fit (a missing or extra key, fewer than five terms) ends the run
+  `error` (`internal`) with the text kept: no glance, never a retry. Faux: a canned sheet (`FAUX_GLANCE`),
+  or `[faux:glance-bad]`.
 - Paper-derived text the API has not datamarked — the title and the selection's section name — is
   flattened to one line (no controls, no datamark look-alikes, ≤ 300 characters) and datamarked
   word by word in the system prompt; passage and page labels are flattened. The quote in the user

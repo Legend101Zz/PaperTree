@@ -16,7 +16,7 @@ import { boardsApi } from '@/lib/api/boards';
 
 import { anchorFixture, citation } from './s6-support';
 
-import type { ViewMessage } from '@/components/explain/useExplainActions';
+import type { ViewMessage } from '@/features/explain/model/state';
 import type { Anchor, Citation } from '@/lib/api/types';
 
 vi.mock('@/lib/api/boards', () => ({ boardsApi: { get: vi.fn(), createNode: vi.fn() } }));
@@ -96,7 +96,6 @@ describe('“board”, never “canvas”, around the board (#214)', () => {
       <SelectionToolbar
         placement={{ kind: 'sheet' }}
         onHighlight={() => undefined}
-        onCopy={() => undefined}
         onExplain={() => undefined}
         onAsk={() => undefined}
         onSendToBoard={() => undefined}
@@ -118,7 +117,10 @@ describe('“board”, never “canvas”, around the board (#214)', () => {
     } as unknown as Anchor;
     await sendToCanvas('ppr_1', { kind: 'excerpt', anchor });
     await vi.waitFor(() => expect(toast()?.textContent).toContain('Passage added to your board.'));
-    expect(toast()!.querySelector('a')?.getAttribute('href')).toBe('/paper/ppr_1/board');
+    // The link opens the board on the card this send made (#342).
+    expect(toast()!.querySelector('a')?.getAttribute('href')).toMatch(
+      /^\/paper\/ppr_1\/board\?card=cn_/,
+    );
     expect(said(toast()!)).not.toMatch(/canvas/i);
 
     vi.mocked(boardsApi.get).mockResolvedValue({

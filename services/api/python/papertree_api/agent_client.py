@@ -97,20 +97,35 @@ PROVIDER: Final = "minimax"
 MODEL: Final = "MiniMax-M3"
 #: Every model the agent may report in its run event (`minimax/<id>`, ADR-003). `MODEL` is only the
 #: fallback for a stream that broke before the run event; the stored model is what the agent said.
-KNOWN_MODELS: Final = ("MiniMax-M3", "MiniMax-M3.1-Flash-Preview")
+#: `MiniMax-M3.1-Flash-Preview` is not a policy id any more (the agent reports the GA id), but it is
+#: listed here: summaries cached under it are old stored data, and `_cached` must still find them.
+KNOWN_MODELS: Final = ("MiniMax-M3", "MiniMax-M3.1-Flash", "MiniMax-M3.1-Flash-Preview")
 MODEL_PREFIX: Final = "minimax/"
 UNKNOWN_SDK: Final = "unknown"
 
-RunKind = Literal["explain", "ask", "summary", "diagram", "topic"]
+RunKind = Literal["explain", "ask", "summary", "diagram", "topic", "glance", "image"]
 
 PROMPT_VERSIONS: Final[
-    dict[RunKind, Literal["explain-v1", "ask-v1", "summary-v1", "diagram-v1", "topic-v1"]]
+    dict[
+        RunKind,
+        Literal[
+            "explain-v1",
+            "ask-v1",
+            "summary-v1",
+            "diagram-v1",
+            "topic-v1",
+            "glance-v1",
+            "image-v1",
+        ],
+    ]
 ] = {
     "explain": "explain-v1",
     "ask": "ask-v1",
     "summary": "summary-v1",
     "diagram": "diagram-v1",
     "topic": "topic-v1",
+    "image": "image-v1",
+    "glance": "glance-v1",
 }
 
 #: contracts.md §8 `ai_runs.code_path` literals.
@@ -120,6 +135,8 @@ CODE_PATHS: Final[dict[RunKind, str]] = {
     "summary": "api.summary>agent.v1.runs>pi.createAgentSession>minimax.anthropic-messages",
     "diagram": "api.threads.diagram>agent.v1.runs>pi.createAgentSession>minimax.anthropic-messages",
     "topic": "api.topics>agent.v1.runs>pi.createAgentSession>minimax.anthropic-messages",
+    "image": "api.threads.image>agent.v1.runs>pi.createAgentSession>minimax.anthropic-messages",
+    "glance": "api.glance>agent.v1.runs>pi.createAgentSession>minimax.anthropic-messages",
 }
 
 #: contracts.md §3.2 "Limits by kind".
@@ -173,6 +190,30 @@ LIMITS: Final[dict[RunKind, AgentLimits]] = {
         max_turns=2,
         max_output_tokens=1024,
         max_retries=0,
+    ),
+    # The spread's "At a glance" sheet (v0.3 #337): one JSON object of about 400 words, no tools,
+    # written from the summary's digest (about 6,000 tokens in). It runs in the BACKGROUND when a
+    # paper is added, so the deadline can be longer than the topic's, but the reader may open the
+    # book at any moment, so it is not a minute either. 3,072 output tokens leave Flash's adaptive
+    # thinking room above the sheet's ~700. One provider retry (a 5xx is common on a cold paper);
+    # a bad answer is "no glance", never a retry.
+    "glance": AgentLimits(
+        deadline_ms=60_000,
+        idle_ms=30_000,
+        max_tool_calls=0,
+        max_turns=2,
+        max_output_tokens=3072,
+        max_retries=1,
+    ),
+    # The image ask (v0.3 #348): a vision run, an ask's budget with a longer first-token wait (the
+    # model reads a crop before it writes; idle_ms 30 s) and a longer deadline (75 s).
+    "image": AgentLimits(
+        deadline_ms=75_000,
+        idle_ms=30_000,
+        max_tool_calls=4,
+        max_turns=5,
+        max_output_tokens=4096,
+        max_retries=1,
     ),
 }
 
@@ -446,6 +487,8 @@ class RunBroker:
     documents: evidence.DocumentCache
     registry: dict[str, RunBroker]
     queue: asyncio.Queue[bytes | None] = field(default_factory=asyncio.Queue)
+    #: An event the browser stream opens with, before `run` (a board ask's `node`, v0.3 #343).
+    preface: bytes | None = None
     stream: AgentStream | None = None
     buffer: str = ""
     text_sent: bool = False
@@ -473,6 +516,8 @@ class RunBroker:
 
     def start(self) -> None:
         self.registry[self.spec.run_id] = self
+        if self.preface is not None:
+            self.queue.put_nowait(self.preface)
         self.queue.put_nowait(
             sse(
                 "run",
@@ -785,25 +830,8 @@ class RunBroker:
 
         handles = db.run_handles(owner, spec.run_id)
         document = self.documents.get(db, owner, spec.user_id, spec.paper_id, spec.generation)
-        try:
-            index = evidence.load_index(
-                self.index_cache, db, owner, spec.user_id, spec.paper_id, spec.generation
-            )
-            texts = {
-                block_id: block.text
-                for block_id in handles.values()
-                if (block := index.block(block_id)) is not None
-            }
-            vocabulary = evidence.vocabulary_of(index)
-        except KeyError:
-            texts, vocabulary = {}, None
         minter = evidence.CitationMinter(
-            run_id=spec.run_id,
-            handles=handles,
-            document=document,
-            texts=texts,
-            new_id=new_id,
-            paper=vocabulary,
+            run_id=spec.run_id, handles=handles, document=document, new_id=new_id
         )
         summary: dict[str, Any] | None = None
         derived_from: list[str] = []
@@ -833,7 +861,6 @@ class RunBroker:
                     {
                         "text": b.text,
                         "citations": [c.wire() for c in b.citations],
-                        "supported": b.supported,
                     }
                     for b in bullets
                 ],
@@ -881,7 +908,6 @@ class RunBroker:
                             generation=spec.generation,
                             block_id=c.block_id,
                             page_index=c.page_index,
-                            supported=c.supported,
                         )
                         for c in citations
                     ],
@@ -939,11 +965,25 @@ class RunBroker:
         if run is not None:
             self.queue.put_nowait(sse("usage", run_summary(run)))
         self.finished = True
-        self._emit_done(status, error_wire(error_code) if status != "complete" else None)
+        # What the reader streamed is `self.buffer`; the stored text may differ (the agent repairs
+        # or drops a ```mermaid fence after the stream ends): then `done` carries it so the live
+        # answer is what a reload shows. A diagram run streams no text.
+        stored = final_text if spec.kind != "diagram" and final_text != self.buffer else None
+        self._emit_done(status, error_wire(error_code) if status != "complete" else None, stored)
 
-    def _emit_done(self, status: str, error: dict[str, Any] | None) -> None:
+    def _emit_done(
+        self, status: str, error: dict[str, Any] | None, final_text: str | None = None
+    ) -> None:
         self.queue.put_nowait(
-            sse("done", {"status": status, "error": error, "message_id": self.spec.message_id})
+            sse(
+                "done",
+                {
+                    "status": status,
+                    "error": error,
+                    "message_id": self.spec.message_id,
+                    "final_text": final_text,
+                },
+            )
         )
 
 
@@ -1020,6 +1060,14 @@ RUN_RESERVE_USD: Final[dict[str, float]] = {
     # The topic Flash run (#242, topic_run.py): a few hundred input tokens and at most 1,024
     # output, about $0.001 on M3 rates; the reserve is the explain's.
     "topic": 0.01,
+    # The image ask (#348): Flash at $0.15 / $0.60 per million with a crop (about 1-2k input tokens
+    # once the model has downsampled it) and the caption and a paragraph: about $0.003-0.006; the
+    # reserve is an ask's, so a few at once cannot overshoot the cap.
+    "image": 0.02,
+    # The glance Flash run (v0.3 #337): a digest of about 6,000 tokens in and about 3,000 out is
+    # about $0.003 on Flash rates ($0.01 on M3's, the override); the reserve is a summary's tenth
+    # twice over, so a cap near its edge waits instead of letting a library's worth start at once.
+    "glance": 0.02,
 }
 
 

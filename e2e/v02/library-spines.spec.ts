@@ -1,16 +1,16 @@
 /**
- * S2e (#196, review S2 and B2) on the real stack: a library of thirteen books stands as spines
- * (frame 01's layout, 13 to 40 books), the keyboard walks it (one tab stop, ← →, Home, End, Enter
- * takes a book down with focus on Read, Esc puts it back), and deleting one by keyboard drops the
- * shelf to twelve, which stands face-out: focus must land on the next book's cover, never on the
- * page. The e2e web runs with the sample papers on, so the spec uploads just enough corpus PDFs to
- * make thirteen books, whatever the samples number. It SKIPS, loudly, without the corpus.
+ * S2e (#196, review S2; v0.3 #337) on the real stack: a library of thirteen books stands as spines
+ * (frame 01's layout, 13 to 40 books), and the keyboard walks it (one tab stop, ← →, Home, End;
+ * Space takes a parsed book off the shelf and opens it, with focus on Read and no card in between;
+ * Esc puts it back with focus on its spine). The e2e web runs with the sample papers on, so the
+ * spec uploads just enough corpus PDFs to make thirteen books, whatever the samples number. It
+ * SKIPS, loudly, without the corpus.
  */
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { expect, test } from '../harness/test';
-import { register, REPO, shotPath, upload } from '../s4/support';
+import { register, REPO, shotPath, upload, waitParsed } from '../s4/support';
 import { tokenInit } from '../s7/support';
 
 const BENCH = join(REPO, 'research', 'benchmarks');
@@ -34,7 +34,7 @@ const BOOKS = 13;
 
 test.use({ actionTimeout: 20_000 });
 
-test('thirteen books stand as spines; the keyboard walks them; Delete to twelve keeps focus', async ({
+test('thirteen books stand as spines; the keyboard walks them; Space opens one, Esc puts it back', async ({
   page,
   stack,
 }, info) => {
@@ -67,8 +67,7 @@ test('thirteen books stand as spines; the keyboard walks them; Delete to twelve 
   await expect(books.and(page.locator('[tabindex="0"]'))).toHaveCount(1);
   await page.screenshot({ path: shot('s2e-spines-13-1440.png') });
 
-  // ── ← → Home End along the shelf; Space takes a book down into its card (Enter takes a parsed
-  // book OUT since #200, e2e/v02/book.spec.ts); Esc puts it back ──
+  // ── ← → Home End along the shelf ──
   await books.first().focus();
   await page.keyboard.press('ArrowRight');
   await expect(books.nth(1)).toBeFocused();
@@ -76,31 +75,29 @@ test('thirteen books stand as spines; the keyboard walks them; Delete to twelve 
   await expect(books.nth(BOOKS - 1)).toBeFocused();
   await page.keyboard.press('Home');
   await expect(books.first()).toBeFocused();
-  // Walk to one of ours (the samples cannot be deleted), in the middle of the shelf.
-  const order = await books.evaluateAll((all) => all.map((b) => b.getAttribute('data-paper-id')));
-  const target = order.findIndex((id, at) => id !== null && ids.includes(id) && at < BOOKS - 1);
-  expect(target).toBeGreaterThanOrEqual(0);
-  for (let step = 0; step < target; step += 1) await page.keyboard.press('ArrowRight');
-  const doomed = books.nth(target);
-  await expect(doomed).toBeFocused();
-  await page.keyboard.press('Space');
-  const card = page.locator('[data-card-paper-id]');
-  await expect(card.getByRole('button', { name: /^Read / })).toBeFocused();
-  await page.keyboard.press('Escape');
-  await expect(doomed).toBeFocused();
 
-  // ── Delete by keyboard: thirteen → twelve stands face-out, focus on the next book ──
-  const next = order[target + 1] ?? '';
+  // ── Space on one of ours, once it is parsed (a book still being read is read, not opened): the
+  // book comes off the shelf and opens, focus on Read; Esc puts it back, focus on its spine ──
+  const mine = ids[0] ?? '';
+  await waitParsed(stack.apiUrl, token, mine);
+  await page.reload();
+  await expect(books).toHaveCount(BOOKS, { timeout: 60_000 });
+  const order = await books.evaluateAll((all) => all.map((b) => b.getAttribute('data-paper-id')));
+  const target = order.indexOf(mine);
+  expect(target).toBeGreaterThanOrEqual(0);
+  await books.first().focus();
+  for (let step = 0; step < target; step += 1) await page.keyboard.press('ArrowRight');
+  const chosen = books.nth(target);
+  await expect(chosen).toBeFocused();
   await page.keyboard.press('Space');
-  await card.getByRole('button', { name: /^Delete / }).focus();
-  await page.keyboard.press('Enter');
-  const removed = page.waitForResponse((r) => r.request().method() === 'DELETE');
-  await card.getByRole('button', { name: 'Delete paper' }).press('Enter');
-  expect((await removed).status()).toBeLessThan(300);
-  await expect(books).toHaveCount(BOOKS - 1);
-  const nextBook = shelf.locator(`button[data-paper-id="${next}"]`);
-  await expect(nextBook).toHaveClass(/pt-cover/);
-  await expect(nextBook).toBeFocused();
-  expect(await page.evaluate(() => document.activeElement?.tagName)).not.toBe('BODY');
-  await page.screenshot({ path: shot('s2e-deleted-to-12-1440.png') });
+  const book = page.locator('[role="dialog"][data-book-stage]');
+  await expect(page.locator('[data-card-paper-id]')).toHaveCount(0);
+  await expect(book).toHaveAttribute('data-book-stage', 'open');
+  await expect(book.getByRole('button', { name: /^(Read|Continue at p\. \d+) / })).toBeFocused();
+  await expect(chosen).toHaveAttribute('data-pulled', 'true');
+  await page.screenshot({ path: shot('s2e-book-out-1440.png') });
+  await page.keyboard.press('Escape');
+  await expect(book).toHaveCount(0);
+  await expect(chosen).toBeFocused();
+  await expect(chosen).not.toHaveAttribute('data-pulled', 'true');
 });

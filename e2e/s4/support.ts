@@ -158,6 +158,31 @@ print(json.dumps({"highlights": h, "anchors": a, "resolutions": [{"generation": 
 }
 
 /**
+ * Replaces the stored text of one thread message straight in sqlite. A v0.3 board answer card reads
+ * the message's stored final text (`final_text`, which wins over the card's own `body`), so a test
+ * that needs a card to hold a specific stored answer, such as a cut-short one, writes it here, the
+ * way a cancelled run would have left it.
+ */
+export function setMessageText(
+  dataRoot: string,
+  owner: string,
+  messageId: string,
+  text: string,
+): void {
+  python(
+    `
+import sqlite3, sys
+root, owner, mid, text = sys.argv[1:5]
+conn = sqlite3.connect(root + "/papertree.sqlite")
+cur = conn.execute("UPDATE ai_messages SET content = ? WHERE owner_id = ? AND message_id = ?", (text, owner, mid))
+assert cur.rowcount == 1, cur.rowcount
+conn.commit()
+`,
+    [dataRoot, owner, messageId, text],
+  );
+}
+
+/**
  * The brief's orphan: a highlight whose one anchor was made on ANOTHER PDF (foreign `pdfSha256`)
  * and carries no quote, written straight into sqlite — the API would refuse it (§2.4
  * `anchor_mismatch`, `anchor_incomplete`), which is exactly why it can only come from a test DB.
@@ -523,7 +548,10 @@ export async function hitTest(
   page: Page,
   name: string,
 ): Promise<{ x: number; y: number; hit: string }> {
-  const button = page.getByRole('button', { name, exact: true });
+  // Scoped to the selection menu: the header has an "Explain" toggle of its own.
+  const button = page
+    .getByRole('toolbar', { name: 'Selection actions' })
+    .getByRole('button', { name, exact: true });
   const box = await button.boundingBox();
   if (box === null) throw new Error(`no ${name} button`);
   const x = box.x + box.width / 2;

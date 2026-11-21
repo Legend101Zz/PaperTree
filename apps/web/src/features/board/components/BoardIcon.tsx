@@ -19,9 +19,19 @@ export type BoardIconName =
   | 'pin'
   | 'map'
   | 'undo'
-  | 'redo';
+  | 'redo'
+  | 'tidy'
+  | 'fold'
+  | 'outline'
+  | 'beside';
 
 const SHAPES: Readonly<Record<BoardIconName, ReactNode>> = {
+  beside: (
+    <>
+      <rect x="3" y="4" width="14" height="12" rx=".5" />
+      <path d="M10 4v12" />
+    </>
+  ),
   back: <path d="M16 10H4M9 5l-5 5 5 5" />,
   select: <path d="M4.5 3l10.5 7.8-4.6.6 2.6 5.2-2 1-2.6-5.2-3.9 3z" />,
   note: (
@@ -56,6 +66,16 @@ const SHAPES: Readonly<Record<BoardIconName, ReactNode>> = {
   ),
   undo: <path d="M7 4.5L3.5 8 7 11.5M3.5 8h8a4.5 4.5 0 0 1 0 9H8.5" />,
   redo: <path d="M13 4.5L16.5 8 13 11.5M16.5 8h-8a4.5 4.5 0 0 0 0 9h3" />,
+  tidy: (
+    <>
+      <rect x="2.5" y="8" width="4.5" height="4" />
+      <rect x="13" y="3" width="4.5" height="4" />
+      <rect x="13" y="13" width="4.5" height="4" />
+      <path d="M7 10h3M10 5v10M10 5h3M10 15h3" />
+    </>
+  ),
+  fold: <path d="M5 12l5-5 5 5" />,
+  outline: <path d="M4 5h12M7 10h9M10 15h6" />,
 };
 
 /** Props for `BoardIcon`. */

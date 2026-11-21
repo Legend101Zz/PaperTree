@@ -28,13 +28,7 @@ import { cleanup, fireEvent, render } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DerivedBlock } from '@papertree/ui';
 
-import {
-  EmptyLibrary,
-  FailureState,
-  OfflineState,
-  PartialState,
-  UncertaintyState,
-} from '@/components/library/SystemStates';
+import { FailureState, OfflineState, UncertaintyState } from '@/components/library/SystemStates';
 import { Shelf } from '@/features/library';
 
 import { CASES, PAPERS } from './library-cases';
@@ -109,14 +103,7 @@ describe('axe: zero violations at WCAG 2.2 AA', () => {
     // them still exercise every rule named below.
     const { container } = render(
       <>
-        <Shelf
-          papers={PAPERS}
-          arrangement="topic"
-          matches={null}
-          openId={null}
-          cardId="card"
-          onActivate={() => {}}
-        />
+        <Shelf papers={PAPERS} arrangement="topic" matches={null} onActivate={() => {}} />
         <FailureState
           failedStep="equation crops"
           completedSteps={['page images']}
@@ -208,14 +195,7 @@ describe('keyboard operation', () => {
   it('a click (Space; Enter on an unparsed book) on a spine takes the book down (#195, #200)', () => {
     const onActivate = vi.fn();
     const { container } = render(
-      <Shelf
-        papers={PAPERS}
-        arrangement="topic"
-        matches={null}
-        openId={null}
-        cardId="card"
-        onActivate={onActivate}
-      />,
+      <Shelf papers={PAPERS} arrangement="topic" matches={null} onActivate={onActivate} />,
     );
     const spine = container.querySelector<HTMLButtonElement>('button[tabindex="0"]');
     expect(spine).not.toBeNull();
@@ -238,32 +218,6 @@ describe('keyboard operation', () => {
     expect(retry).toBeDefined();
     fireEvent.click(retry as HTMLButtonElement, { detail: 0 });
     expect(onRetryFrom).toHaveBeenCalledWith('equation crops');
-  });
-
-  it('Enter/Space on a hatched page opens that page', () => {
-    const onOpenPage = vi.fn();
-    const { container } = render(
-      <PartialState
-        partialReason="Pages 12-14 were skipped."
-        affectedPages={[11]}
-        onOpenPage={onOpenPage}
-      />,
-    );
-    const chip = container.querySelector<HTMLButtonElement>('[data-testid="partial-pages"] button');
-    expect(chip).not.toBeNull();
-    fireEvent.click(chip as HTMLButtonElement, { detail: 0 });
-    expect(onOpenPage).toHaveBeenCalledWith(11);
-  });
-
-  it('Enter/Space adds the first paper from the empty library', () => {
-    const onAddPaper = vi.fn();
-    const { container } = render(<EmptyLibrary onAddPaper={onAddPaper} />);
-    const add = Array.from(container.querySelectorAll('button')).find((button) =>
-      (button.textContent ?? '').includes('Upload a PDF'),
-    );
-    expect(add).toBeDefined();
-    fireEvent.click(add as HTMLButtonElement, { detail: 0 });
-    expect(onAddPaper).toHaveBeenCalledTimes(1);
   });
 
   it('Enter/Space toggles the uncertainty disclosure and exposes its Report button', () => {

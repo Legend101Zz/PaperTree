@@ -1,0 +1,54 @@
+.pt-explain__crop {
+  margin: 0 0 var(--pt-space-4);
+}
+
+.pt-explain__cropcap {
+  margin-block-start: var(--pt-space-2);
+  color: var(--pt-ink-2);
+  font: 0.8125rem/1.4 var(--pt-font-ai);
+  overflow-wrap: anywhere;
+}
+
+.pt-explain__croplabel {
+  font-family: var(--pt-font-label);
+  letter-spacing: 0.02em;
+  color: var(--pt-ink-muted);
+}
+
+/* The crop is a thumbnail: never more than --pt-explain-crop-max tall, its aspect kept, so the
+   answer under it stays in view. One click shows it at the panel's width. */
+.pt-explain__crop {
+  --pt-explain-crop-max: 240px;
+}
+
+.pt-explain__cropbtn {
+  display: block;
+  max-inline-size: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  cursor: zoom-in;
+}
+
+.pt-explain__cropbtn:focus-visible {
+  outline: var(--pt-focus-width, 2px) solid var(--pt-focus);
+  outline-offset: 2px;
+}
+
+.pt-explain__crop[data-large='false'] .pt-crop {
+  inline-size: auto;
+  max-block-size: var(--pt-explain-crop-max);
+  object-fit: contain;
+}
+
+.pt-explain__crop[data-large='true'] .pt-explain__cropbtn {
+  inline-size: 100%;
+  cursor: zoom-out;
+}
+
+.pt-explain__crop[data-large='true'] .pt-crop {
+  inline-size: 100%;
+  max-block-size: none;
+}

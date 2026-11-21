@@ -14,6 +14,9 @@ import './globals.css';
 // asserts class names and DOM order and applies no stylesheet — every assertion was true and the
 // product was still wrong. Found by opening the reader in a real browser (issue #42).
 import '@papertree/ui/styles.css';
+// KaTeX's stylesheet and its woff2 fonts, once for the whole app (#338): the `url()`s in it resolve
+// to files webpack emits from the `katex` package, so no font is fetched from a CDN.
+import 'katex/dist/katex.min.css';
 import { NO_FLASH_SCRIPT } from '@/features/settings';
 
 import { FONT_VARIABLES } from './fonts';

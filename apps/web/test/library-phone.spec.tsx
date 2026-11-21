@@ -1,10 +1,10 @@
 /**
  * The phone library at 390 px (#199, frame 08a): the stacked order (search, title and stats, the
  * view tabs, Reading now, the flat stacks), Reading now on a short library too, the flat books with
- * their names, one tab stop and ↑/↓, the card as a modal bottom sheet with Put it back, the tabs,
- * the Map's list first, no key hint on touch, and axe; then crossing 900 px with a card open or with
- * focus in the Map's list (review SF1, SF4); and S3's book on a phone: Enter, Space and a tap open
- * the sheet (no pull-out), whose "Open the book" opens the spread. The width comes from a `matchMedia` stub that answers
+ * their names, one tab stop and ↑/↓, the tabs, the Map's list first, no key hint on touch, and
+ * axe; then crossing 900 px with a book open or with focus in the Map's list (review SF1, SF4);
+ * and v0.3's book on a phone: a tap, Enter or Space takes the flat book out and opens the spread
+ * (one column there), which Put it back, Esc or a tap outside closes. The width comes from a `matchMedia` stub that answers
  * the 900 px phone query and can change; pixel sizes are read from the stylesheets, which jsdom does
  * not lay out. Titles are the corpus papers' own (`library-corpus.ts`).
  */
@@ -46,6 +46,7 @@ vi.mock('@/lib/api/papers', async (importOriginal) => {
 const bookApi = vi.hoisted(() => ({
   figures: vi.fn(),
   abstract: vi.fn(),
+  glance: vi.fn(),
   setPlate: vi.fn(),
   clearPlate: vi.fn(),
 }));
@@ -148,11 +149,13 @@ beforeEach(() => {
   });
   bookApi.figures.mockResolvedValue([]);
   bookApi.abstract.mockResolvedValue({ text: null, page_index: null, anchor: null });
+  bookApi.glance.mockResolvedValue({ state: 'none', glance: null });
   summaryApi.get.mockResolvedValue({ state: 'none', summary: null });
   // The book's motion is WAAPI; here every animation has already finished.
   (Element.prototype as unknown as { animate: unknown }).animate = () => ({
     finished: Promise.resolve(),
     cancel: () => undefined,
+    finish: () => undefined,
   });
   window.localStorage.clear();
   // A 390 px phone: the 900 px phone query (and the touch query, which includes it) match.
@@ -193,7 +196,7 @@ describe('the phone library at 390', () => {
     ];
     for (let i = 1; i < order.length; i += 1) expect(before(order[i - 1]!, order[i]!)).toBe(true);
     expect(shelf().getAttribute('aria-orientation')).toBe('vertical');
-    expect(document.querySelectorAll('.pt-spine, .pt-cover')).toHaveLength(0);
+    expect(document.querySelectorAll('.pt-spine')).toHaveLength(0);
     // The four views across the screen, each a 44 px touch target.
     const tabs = within(screen.getByRole('group', { name: 'View' })).getAllByRole('button');
     expect(tabs.map((t) => t.textContent)).toEqual(['Shelf', 'Topics', 'Map', 'Table']);
@@ -204,7 +207,7 @@ describe('the phone library at 390', () => {
     await renderPhone();
     const strip = screen.getByRole('region', { name: 'Reading now' });
     const rows = within(strip).getAllByRole('listitem');
-    // Six papers would stand face-out on a desktop, with no strip; flat books carry no Continue.
+    // Flat books carry no Continue, so the strip is where it is.
     expect(rows.map((r) => r.dataset['readingPaperId'])).toEqual(['ppr_c2', 'ppr_c0']);
     expect(rows[1]?.textContent).toContain('p. 4 of 15');
     const go = within(strip).getByRole('button', {
@@ -266,20 +269,20 @@ describe('the phone library at 390', () => {
     expect(books().filter((b) => b.tabIndex === 0)).toEqual([all[all.length - 1]]);
   });
 
-  it('opens a book as a modal bottom sheet: Read focused, the rest inert, Tab kept inside', async () => {
+  it('opens a tapped book as the spread: modal, Read focused, the rest inert, Tab kept inside', async () => {
     await renderPhone();
     const resnet = within(shelf()).getByRole('button', { name: /^Deep Residual/ });
     fireEvent.click(resnet);
-    const sheet = screen.getByRole('dialog', { name: /^Deep Residual/ });
-    expect(sheet.getAttribute('aria-modal')).toBe('true');
-    expect(sheet.classList).toContain('pt-catalogue--sheet');
-    expect(sheet.style.marginInlineStart).toBe('');
-    expect(sheet.querySelector('.pt-catalogue__pointer')).toBeNull();
-    expect(resnet.getAttribute('aria-expanded')).toBe('true');
-    const read = within(sheet).getByRole('button', { name: /^Read/ });
+    const spread = await screen.findByRole('dialog', { name: /^Deep Residual/ });
+    await waitFor(() => expect(spread.getAttribute('data-book-stage')).toBe('open'));
+    expect(spread.getAttribute('aria-modal')).toBe('true');
+    expect(resnet.getAttribute('data-pulled')).toBe('true');
+    // No catalogue card, and so no bottom sheet.
+    expect(document.querySelector('.pt-catalogue, [data-card-paper-id]')).toBeNull();
+    const read = within(spread).getByRole('button', { name: /^Read/ });
     expect(document.activeElement).toBe(read);
-    // No book can take focus behind the sheet (review SF2): the stacks, the header and the rest
-    // of the page are inert; the sheet and its scrim are not.
+    // No book can take focus behind the spread (review SF2): the stacks, the header and the rest
+    // of the page are inert; the spread is not.
     for (const behind of [
       shelf(),
       screen.getByRole('searchbox'),
@@ -287,51 +290,43 @@ describe('the phone library at 390', () => {
     ]) {
       expect(behind.closest('[inert]')).not.toBeNull();
     }
-    expect(sheet.closest('[inert]')).toBeNull();
-    expect(document.querySelector('.pt-catalogue__scrim')?.closest('[inert]')).toBeNull();
+    expect(spread.closest('[inert]')).toBeNull();
     // The arrows are not the shelf's in here, and Tab wraps at both ends.
     fireEvent.keyDown(read, { key: 'ArrowDown' });
     expect(document.activeElement).toBe(read);
-    const back = within(sheet).getByRole('button', { name: 'Put it back' });
+    const back = within(spread).getByRole('button', { name: /^Put it back/ });
     expect(back.style.minHeight).toBe('44px');
     back.focus();
     fireEvent.keyDown(back, { key: 'Tab' });
-    expect(document.activeElement).toBe(read);
-    fireEvent.keyDown(read, { key: 'Tab', shiftKey: true });
-    expect(document.activeElement).toBe(back);
+    expect(document.activeElement).not.toBe(back);
+    expect(spread.contains(document.activeElement)).toBe(true);
   });
 
-  it('puts the book back by Put it back, Esc or the scrim, lifting the inert first', async () => {
+  it('puts the book back by Put it back, Esc or a tap outside, lifting the inert first', async () => {
     await renderPhone();
     const resnet = within(shelf()).getByRole('button', { name: /^Deep Residual/ });
-    const closers: ((sheet: HTMLElement) => void)[] = [
-      (sheet) => fireEvent.click(within(sheet).getByRole('button', { name: 'Put it back' })),
-      (sheet) =>
-        fireEvent.keyDown(within(sheet).getByRole('button', { name: /^Read/ }), { key: 'Escape' }),
-      () => fireEvent.pointerUp(document.querySelector('.pt-catalogue__scrim')!),
+    const closers: ((spread: HTMLElement) => void)[] = [
+      (spread) => fireEvent.click(within(spread).getByRole('button', { name: /^Put it back/ })),
+      (spread) =>
+        fireEvent.keyDown(within(spread).getByRole('button', { name: /^Read/ }), {
+          key: 'Escape',
+        }),
+      (spread) => {
+        const veil = spread.querySelector('.pt-book__veil')!;
+        fireEvent.pointerDown(veil);
+        fireEvent.click(veil);
+      },
     ];
     for (const close of closers) {
       fireEvent.click(resnet);
-      close(screen.getByRole('dialog'));
-      expect(screen.queryByRole('dialog')).toBeNull();
+      const spread = await screen.findByRole('dialog');
+      await waitFor(() => expect(spread.getAttribute('data-book-stage')).toBe('open'));
+      close(spread);
+      await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
       expect(document.querySelector('[inert]')).toBeNull();
       expect(document.activeElement).toBe(resnet);
+      expect(resnet.hasAttribute('data-pulled')).toBe(false);
     }
-  });
-
-  it('after a Delete from the sheet, focus goes to the next book, out of the inert', async () => {
-    papersApi.remove.mockResolvedValue(undefined);
-    await renderPhone();
-    fireEvent.click(within(shelf()).getByRole('button', { name: /^Deep Residual/ }));
-    const sheet = screen.getByRole('dialog');
-    fireEvent.click(within(sheet).getByRole('button', { name: /^Delete/ }));
-    papersApi.list.mockResolvedValue(phoneLibrary().filter((row) => row.paper_id !== 'ppr_c3'));
-    fireEvent.click(within(sheet).getByRole('button', { name: 'Delete paper' }));
-    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
-    await waitFor(() =>
-      expect(document.activeElement?.getAttribute('aria-label')).toMatch(/^You Only Look Once/),
-    );
-    expect(document.querySelector('[inert]')).toBeNull();
   });
 
   it('lets "/" type into the search on a phone, and still focuses it from the page', async () => {
@@ -355,25 +350,19 @@ describe('the phone library at 390', () => {
     expect((await screen.findByRole('table', { name: 'Papers' })).tagName).toBe('TABLE');
   });
 
-  it('opens the sheet on Enter, Space or a tap, never the pull-out; "Open the book" opens the spread', async () => {
+  it('opens the spread on a tap, and on the Enter and Space a button turns into the same click', async () => {
     await renderPhone();
     const resnet = within(shelf()).getByRole('button', { name: /^Deep Residual/ });
     resnet.focus();
-    // Not cancelled, so the browser turns each into the click that takes the book down (#199).
+    // Not cancelled, so the browser turns each into the click that takes the book out.
     expect(fireEvent.keyDown(resnet, { key: 'Enter' })).toBe(true);
     expect(fireEvent.keyDown(resnet, { key: ' ' })).toBe(true);
-    expect(resnet.getAttribute('data-pulled')).toBeNull();
     expect(screen.queryByRole('dialog')).toBeNull();
     fireEvent.click(resnet);
-    const sheet = screen.getByRole('dialog', { name: /^Deep Residual/ });
-    const open = within(sheet).getByRole('button', { name: /^Open the book/ });
-    expect(open.style.minHeight).toBe('44px');
-    fireEvent.click(open);
-    // The sheet goes first: one modal at a time, and the spread is the one now.
-    expect(sheet.isConnected).toBe(false);
     const spread = await screen.findByRole('dialog', { name: /^Deep Residual/ });
     expect(spread.closest('[inert]')).toBeNull();
     expect(shelf().closest('[inert]')).not.toBeNull();
+    await waitFor(() => expect(spread.getAttribute('data-book-stage')).toBe('open'));
     fireEvent.keyDown(document.activeElement ?? spread, { key: 'Escape' });
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     await waitFor(() => expect(document.activeElement).toBe(resnet));
@@ -392,9 +381,6 @@ describe('the phone library at 390', () => {
     );
     await renderPhone(rows);
     fireEvent.click(within(shelf()).getByRole('button', { name: /^Deep Residual/ }));
-    fireEvent.click(
-      within(screen.getByRole('dialog')).getByRole('button', { name: /^Open the book/ }),
-    );
     const spread = await screen.findByRole('dialog', { name: /^Deep Residual/ });
     const tab = await within(spread).findByRole('link', { name: /^p\. 1, Abstract/ });
     // The link is not the clipped tab: it holds the tab's face, so its hit area is not clipped.
@@ -414,13 +400,13 @@ describe('the phone library at 390', () => {
     expect(back.style.minHeight).toBe('44px');
   });
 
-  it('says Enter takes a book down on the stacks, with no Space line (no pull-out there)', async () => {
+  it('says Enter takes a book out on the stacks, with no card line', async () => {
     await renderPhone();
     const hints = document.querySelector<HTMLElement>('.pt-hints')!;
     expect(hints.textContent).toContain('↑↓ along the shelf');
-    expect(hints.textContent).toContain('Enter take it down');
+    expect(hints.textContent).toContain('Enter take it out');
     expect(hints.textContent).not.toContain('Space');
-    expect(hints.textContent).not.toContain('take it out');
+    expect(hints.textContent).not.toContain('card');
   });
 
   it('draws × to clear the search on a phone, never the "Esc" key (review SF5)', async () => {
@@ -446,44 +432,28 @@ describe('the phone library at 390', () => {
     );
   });
 
-  it('re-points an open card at its book after crossing 900 px both ways (review SF1)', async () => {
-    // jsdom lays nothing out: covers stand 100 px apart from x = 200, a flat book starts at 16.
-    vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (
-      this: Element,
-    ) {
-      const id = this.getAttribute('data-paper-id');
-      const left = this.classList.contains('pt-cover')
-        ? 200 + 100 * Number(id?.replace('ppr_c', ''))
-        : this.classList.contains('pt-flatbook')
-          ? 16
-          : 0;
-      const width = this.classList.contains('pt-shelfband__band') ? 1000 : 60;
-      return {
-        left,
-        width,
-        top: 0,
-        height: 44,
-        right: left + width,
-        bottom: 44,
-        x: left,
-        y: 0,
-      } as DOMRect;
-    });
+  it('keeps an open book open across 900 px both ways, its slot the gap in whichever shelf draws it (review SF1)', async () => {
     wide = true;
     await renderPhone();
-    fireEvent.click(document.querySelector<HTMLElement>('button[data-paper-id="ppr_c3"]')!);
-    const card = () => document.querySelector<HTMLElement>('[data-card-paper-id="ppr_c3"]')!;
-    // The cover's centre is 530: the card stands 42 px left of it (placeCard).
-    expect(card().style.marginInlineStart).toBe('488px');
+    const spineOf = () => document.querySelector<HTMLElement>('button[data-paper-id="ppr_c3"]')!;
+    fireEvent.click(spineOf());
+    const spread = await screen.findByRole('dialog', { name: /^Deep Residual/ });
+    expect(spineOf().classList).toContain('pt-spine');
     resizeTo('phone');
-    expect(card().classList).toContain('pt-catalogue--sheet');
     // The window's resize arrives while the flat books are drawn, as a real resize does.
     act(() => {
       window.dispatchEvent(new Event('resize'));
     });
+    expect(screen.getByRole('dialog', { name: /^Deep Residual/ })).toBe(spread);
+    expect(spineOf().classList).toContain('pt-flatbook');
+    expect(spineOf().getAttribute('data-pulled')).toBe('true');
     resizeTo('desktop');
-    expect(card().classList).not.toContain('pt-catalogue--sheet');
-    expect(card().style.marginInlineStart).toBe('488px');
+    expect(spineOf().classList).toContain('pt-spine');
+    expect(spineOf().getAttribute('data-pulled')).toBe('true');
+    fireEvent.keyDown(document, { key: 'Escape' });
+    fireEvent.keyDown(document, { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    await waitFor(() => expect(document.activeElement).toBe(spineOf()));
   });
 
   it('keeps focus and the open list in the Map when crossing 900 px (review SF4)', async () => {
@@ -505,10 +475,11 @@ describe('the phone library at 390', () => {
     expect(details.open).toBe(true);
   });
 
-  it('has no axe violations with a book taken down', async () => {
-    const { container } = await renderPhone();
+  it('has no axe violations with a book taken out', async () => {
+    await renderPhone();
     fireEvent.click(within(shelf()).getByRole('button', { name: /^Deep Residual/ }));
-    const results = await axe.run(container, {
+    await screen.findByRole('dialog');
+    const results = await axe.run(document.body, {
       runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'] },
       rules: { 'color-contrast': { enabled: false }, 'target-size': { enabled: false } },
     });

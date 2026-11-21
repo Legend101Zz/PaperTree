@@ -89,6 +89,10 @@ ADDED: frozenset[tuple[str, str]] = frozenset(
         ("PUT", "/papers/{paper_id}/plate"),
         ("DELETE", "/papers/{paper_id}/plate"),
         ("GET", "/papers/{paper_id}/abstract"),
+        # v0.3 #337: rename on the opened book
+        ("PATCH", "/papers/{paper_id}"),
+        # v0.3 #337: the spread's At a glance
+        ("GET", "/papers/{paper_id}/glance"),
         # §2.7 (S7)
         ("GET", "/papers/{paper_id}/board"),
         ("POST", "/papers/{paper_id}/board/nodes"),
@@ -98,6 +102,13 @@ ADDED: frozenset[tuple[str, str]] = frozenset(
         ("PATCH", "/boards/{board_id}/edges/{edge_id}"),
         ("DELETE", "/boards/{board_id}/edges/{edge_id}"),
         ("PATCH", "/boards/{board_id}"),
+        # v0.3 (#343): the branching board
+        ("POST", "/boards/{board_id}/nodes/{node_id}/asks"),
+        ("POST", "/boards/{board_id}/nodes/{node_id}/notes"),
+        ("POST", "/boards/{board_id}/tidy"),
+        # v0.3 (#348): a region of a page as an image (the image ask)
+        ("GET", "/papers/{paper_id}/crop"),
+        ("GET", "/papers/{paper_id}/crop-url"),
         # v0.2 S5a (#206): the notebook
         ("POST", "/papers/{paper_id}/notebook/pages"),
         ("GET", "/papers/{paper_id}/notebook/pages"),

@@ -12,17 +12,9 @@
 import { fireEvent } from '@testing-library/react';
 import type { ReactElement } from 'react';
 
-import {
-  EmptyLibrary,
-  FailureState,
-  OfflineState,
-  ParsingState,
-  PartialState,
-  UncertaintyState,
-} from '@/components/library/SystemStates';
+import { FailureState, OfflineState, UncertaintyState } from '@/components/library/SystemStates';
 import type { LibraryPaper } from '@/components/library/types';
 import { AddPapers } from '@/features/library/components/AddPapers';
-import { CatalogueCard } from '@/features/library/components/CatalogueCard';
 import { LibraryHeader } from '@/features/library/components/LibraryHeader';
 import { LibraryTitle } from '@/features/library/components/LibraryTitle';
 import { ShelfHints } from '@/features/library/components/ShelfHints';
@@ -222,49 +214,6 @@ export function openDisclosure(
 }
 
 export const CASES: readonly LibraryCase[] = [
-  {
-    // #195: the failed paper's catalogue card, so Read, Retry and Delete are all audited.
-    name: 'CatalogueCard',
-    element: (
-      <CatalogueCard
-        id="card"
-        book={{ ...(PAPERS[4] as LibraryPaper), year: 2019, reading: null, arxivCategory: null }}
-        onRead={noop}
-        onRetry={noopAsync}
-        onDelete={noopAsync}
-      />
-    ),
-  },
-  {
-    name: 'CatalogueCard (a ready paper)',
-    element: (
-      <CatalogueCard
-        id="card"
-        book={{ ...(PAPERS[3] as LibraryPaper), year: 2017, reading: null, arxivCategory: null }}
-        onRead={noop}
-        onRetry={noopAsync}
-        onDelete={noopAsync}
-      />
-    ),
-  },
-  {
-    // The failed paper's card with its Delete confirmation open, so "Delete paper" and "Keep it" are audited.
-    name: 'CatalogueCard (confirming Delete)',
-    element: (
-      <CatalogueCard
-        id="card"
-        book={{ ...(PAPERS[4] as LibraryPaper), year: null, reading: null, arxivCategory: null }}
-        onRead={noop}
-        onRetry={noopAsync}
-        onDelete={noopAsync}
-      />
-    ),
-    afterRender: (container) => {
-      const remove = container.querySelector<HTMLButtonElement>('button[aria-label^="Delete "]');
-      if (remove === null) throw new Error('Delete not found');
-      fireEvent.click(remove, { detail: 0 });
-    },
-  },
   { name: 'UploadRow', element: <UploadRow queue={QUEUE} /> },
   {
     name: 'LibraryHeader (searching)',
@@ -296,32 +245,6 @@ export const CASES: readonly LibraryCase[] = [
   { name: 'ShelfHints', element: <ShelfHints query="" matched={0} total={4} /> },
   { name: 'TableView', element: TABLE_VIEW },
   {
-    name: 'ParsingState',
-    element: <ParsingState totalPages={6} parsedPages={[0, 1, 2]} onOpenPage={noop} />,
-  },
-  {
-    name: 'PartialState',
-    element: (
-      <PartialState
-        partialReason="Golden fixture: only pages 0-2 of the 18-page source PDF are parsed."
-        affectedPages={[11, 12, 13]}
-        onOpenPage={noop}
-      />
-    ),
-  },
-  {
-    // The non-contiguous branch of the banner heading. Both branches are rendered so neither can
-    // rot unaudited — `[2, 9, 30]` must not be described as a range.
-    name: 'PartialState (scattered pages)',
-    element: (
-      <PartialState
-        partialReason="Pages 3, 10 and 31 produced no text layer."
-        affectedPages={[30, 2, 9]}
-        onOpenPage={noop}
-      />
-    ),
-  },
-  {
     name: 'UncertaintyState',
     element: (
       <UncertaintyState
@@ -350,5 +273,4 @@ export const CASES: readonly LibraryCase[] = [
     ),
   },
   { name: 'OfflineState', element: <OfflineState onRetryConnection={noop} /> },
-  { name: 'EmptyLibrary', element: <EmptyLibrary onAddPaper={noop} /> },
 ];

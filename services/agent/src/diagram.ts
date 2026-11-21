@@ -111,10 +111,22 @@ export const SKIPPED = {
   title: 'Kept the first title of the plate',
   full: `The plate holds ${String(MAX_PARTS)} parts; the rest were left out`,
   link: 'Skipped an arrow between parts that are not on the plate',
+  letter: 'Skipped a part whose label was a single letter',
+  relabelled: "Used a part's text as its label, because its label was a single letter",
   missing: 'dropped an arrow from a part that was not drawn',
   ahead: 'dropped an arrow from a part that does not come before it',
   after: 'Skipped what came after the end of the plate',
 } as const;
+
+/**
+ * A label that is one letter or digit ("A", "x", "3") names nothing: the reader sees a figure of
+ * lettered boxes. Flash did exactly that when the prompt's example label was "x" (audit P5, #339),
+ * putting the real name in `text`. The plate letters are the host's (A, B, ...), so a model-written
+ * one adds nothing.
+ */
+export function isSingleLetterLabel(label: string): boolean {
+  return codePoints(label) === 1 && /^[\p{L}\p{N}]$/u.test(label);
+}
 
 /** True when `line` is one valid diagram line (it proves a held message is the answer, run.ts). */
 export function isDiagramLine(line: string): boolean {
@@ -240,6 +252,16 @@ export class PlateReader {
   private part(line: z.infer<typeof PartLine>): void {
     const index = this.written++; // this line's place in the model's count
     if (this.placed >= MAX_PARTS) return this.status(SKIPPED.full, true);
+    // A single-letter label is repaired from the part's own text when it has one (the label the
+    // model meant went there), and otherwise the part is skipped like any line that does not fit:
+    // it still took its letter in the model's count (`index` above), so arrows stay on their parts.
+    let { label, text } = line;
+    if (isSingleLetterLabel(label)) {
+      if (text === '') return this.status(SKIPPED.letter);
+      label = clip(text, DIAGRAM_LIMITS.label.max, true);
+      text = '';
+      this.status(SKIPPED.relabelled, true);
+    }
     const letter = LETTERS.charAt(this.placed);
     const after: string[] = [];
     const edge: Array<string | null> = [];
@@ -261,8 +283,8 @@ export class PlateReader {
       name: 'part',
       data: {
         letter,
-        label: line.label,
-        text: line.text,
+        label,
+        text,
         kind: line.kind,
         after,
         edge,
@@ -285,4 +307,94 @@ export class PlateReader {
     this.links++;
     this.emit({ name: 'link', data: { source, target, label: line.label ?? null } });
   }
+}
+
+/** A figure of one box shows nothing, so an inline fence with fewer parts than this is removed. */
+export const MIN_INLINE_PARTS = 2;
+
+const KINDS = ['input', 'step', 'output', 'concept'] as const;
+
+/**
+ * Forgive the small slips of an inline fence's part line before the strict reader sees it (#339
+ * follow-up): an inline figure is a tutor's aside, so a part is kept with a repaired field rather
+ * than dropped whole. A missing or malformed `cite` is "no passage" (null); a `kind` outside the
+ * four is a `step`; `after` keeps only valid letters (lowercase is upcased), at most three; a bad
+ * `edge` list is dropped. A diagram RUN stays strict (its quotes are grounded by the API). A line
+ * that is not a JSON part is returned as written.
+ */
+function repairInlineLine(line: string): string {
+  const text = line.trim();
+  if (!text.startsWith('{')) return line;
+  let json: unknown;
+  try {
+    json = JSON.parse(text);
+  } catch {
+    return line;
+  }
+  if (typeof json !== 'object' || json === null) return line;
+  const part = json as Record<string, unknown>;
+  if (part['t'] !== 'part') return line;
+  const cite = part['cite'];
+  const quote =
+    typeof cite === 'object' && cite !== null ? (cite as { quote?: unknown }).quote : null;
+  if (typeof quote !== 'string') part['cite'] = null;
+  if (!(KINDS as readonly unknown[]).includes(part['kind'])) part['kind'] = 'step';
+  const after = Array.isArray(part['after']) ? (part['after'] as unknown[]) : [];
+  part['after'] = after
+    .map((from) => (typeof from === 'string' ? from.trim().toUpperCase() : ''))
+    .filter((from) => Letter.safeParse(from).success)
+    .slice(0, 3);
+  if (!Array.isArray(part['edge'])) delete part['edge'];
+  else
+    part['edge'] = (part['edge'] as unknown[])
+      .slice(0, 3)
+      .map((e) => (typeof e === 'string' && e.trim() !== '' ? e : null));
+  return JSON.stringify(part);
+}
+
+/**
+ * An answer's inline ```diagram fence, validated with the same reader a diagram run uses
+ * (v0.3, #339): every line that does not read is dropped, the rest is written back in one
+ * canonical shape. The letters are RE-COUNTED over what was kept (the reader's placed letters), so a
+ * dropped part line never shifts the arrows of the lines after it. A `link` line is kept when both
+ * of its parts were. At most 12 parts. The `end` line is not kept (the closing fence ends the
+ * figure).
+ *
+ * @param body - The lines between the fences.
+ * @returns The cleaned lines, or null when fewer than {@link MIN_INLINE_PARTS} parts are left (the
+ *   fence is then removed: a one-box figure explains nothing).
+ */
+export function cleanDiagramFence(body: string): string | null {
+  const out: string[] = [];
+  let parts = 0;
+  const reader = new PlateReader((event) => {
+    if (event.name === 'plate') out.push(JSON.stringify({ t: 'plate', title: event.data.title }));
+    else if (event.name === 'part') {
+      const part = event.data;
+      parts++;
+      out.push(
+        JSON.stringify({
+          t: 'part',
+          label: part.label,
+          text: part.text,
+          kind: part.kind,
+          after: part.after,
+          ...(part.edge.some((e) => e !== null) ? { edge: part.edge } : {}),
+          cite: part.cite,
+        }),
+      );
+    } else if (event.name === 'link') {
+      out.push(
+        JSON.stringify({
+          t: 'link',
+          from: event.data.source,
+          to: event.data.target,
+          ...(event.data.label === null ? {} : { label: event.data.label }),
+        }),
+      );
+    }
+  });
+  reader.push(body.split('\n').map(repairInlineLine).join('\n'));
+  reader.flush();
+  return parts < MIN_INLINE_PARTS ? null : out.join('\n');
 }

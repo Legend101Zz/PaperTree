@@ -1,0 +1,110 @@
+-- 0017 (v0.3, #348): the image ask. The run kinds gain 'image' (a Flash run that is shown a crop of
+-- the paper's figure; prompt `image-v1`), so `ai_runs.kind` must allow it,
+-- and so must the usage read (`GET /usage` by_kind) and the daily cap's per-kind reserve.
+--
+-- The thread kind does NOT change: an image thread is an `ask` thread (ai_threads.kind), told apart
+-- by its run (`ai_runs.kind = 'image'`), so ai_threads and its children are not rebuilt here.
+--
+-- 'glance' (0013, the spread's "At a glance" run, built on another v0.3 branch) is allowed too, so
+-- this rebuild is correct whichever of the two branches lands first: a CHECK that allows a kind
+-- nothing writes yet is harmless, one that forgets a kind 0013 added would refuse its rows.
+--
+-- A CHECK cannot be altered in SQLite, so ai_runs is REBUILT (the 0005/0008/0011/0013 pattern):
+-- this version is in BACKUP_BEFORE_VERSIONS. Its only child, ai_run_handles, is rebuilt with it,
+-- because DROP TABLE under foreign_keys=ON is an implicit DELETE that would cascade into it.
+-- Nothing is dropped until a guard has compared every row count; RENAME then rewrites the
+-- references. One transaction, so a failure leaves the old schema untouched. Old columns keep their
+-- order.
+CREATE TABLE ai_runs_new (
+  run_id             TEXT    PRIMARY KEY,
+  owner_id           TEXT    NOT NULL,
+  paper_id           TEXT    NOT NULL,
+  generation         INTEGER NOT NULL CHECK (generation >= 1),
+  kind               TEXT    NOT NULL CHECK (kind IN ('explain', 'ask', 'summary', 'diagram',
+                                                      'topic', 'glance', 'image')),
+  thread_id          TEXT,
+  message_id         TEXT,
+  token_sha256       TEXT    NOT NULL,             -- sha256 of the run token; the token is never stored
+  datamark           TEXT    NOT NULL,             -- papertree_prompts.mint_datamark(), per run
+  expires_at         TEXT    NOT NULL,
+  status             TEXT    NOT NULL CHECK (status IN ('running', 'done', 'error', 'aborted')),
+  code_path          TEXT    NOT NULL,
+  provider           TEXT,
+  model              TEXT,
+  agent_sdk          TEXT,
+  prompt_version     TEXT,
+  request_id         TEXT,
+  stop_reason        TEXT,
+  error_code         TEXT,
+  retries            INTEGER NOT NULL DEFAULT 0 CHECK (retries >= 0),
+  tool_calls         INTEGER NOT NULL DEFAULT 0 CHECK (tool_calls >= 0),
+  tool_calls_json    TEXT    CHECK (tool_calls_json IS NULL OR json_valid(tool_calls_json)),
+  input_tokens       INTEGER,
+  output_tokens      INTEGER,
+  cache_read_tokens  INTEGER,
+  cache_write_tokens INTEGER,
+  reasoning_tokens   INTEGER,
+  cost_usd_est       REAL,
+  first_text_ms      INTEGER,
+  latency_ms         INTEGER,
+  started_at         TEXT    NOT NULL,
+  finished_at        TEXT,
+  UNIQUE (owner_id, run_id),
+  FOREIGN KEY (owner_id, paper_id) REFERENCES paper_owners (owner_id, paper_id) ON DELETE CASCADE
+) STRICT;
+--;;
+INSERT INTO ai_runs_new
+  (run_id, owner_id, paper_id, generation, kind, thread_id, message_id, token_sha256, datamark,
+   expires_at, status, code_path, provider, model, agent_sdk, prompt_version, request_id,
+   stop_reason, error_code, retries, tool_calls, tool_calls_json, input_tokens, output_tokens,
+   cache_read_tokens, cache_write_tokens, reasoning_tokens, cost_usd_est, first_text_ms,
+   latency_ms, started_at, finished_at)
+  SELECT run_id, owner_id, paper_id, generation, kind, thread_id, message_id, token_sha256,
+         datamark, expires_at, status, code_path, provider, model, agent_sdk, prompt_version,
+         request_id, stop_reason, error_code, retries, tool_calls, tool_calls_json, input_tokens,
+         output_tokens, cache_read_tokens, cache_write_tokens, reasoning_tokens, cost_usd_est,
+         first_text_ms, latency_ms, started_at, finished_at
+    FROM ai_runs;
+--;;
+CREATE TABLE ai_run_handles_new (
+  owner_id   TEXT    NOT NULL,
+  run_id     TEXT    NOT NULL,
+  handle     TEXT    NOT NULL CHECK (handle GLOB 'b[0-9]*'),
+  block_id   TEXT    NOT NULL,
+  generation INTEGER NOT NULL,
+  PRIMARY KEY (run_id, handle),
+  UNIQUE (run_id, block_id),
+  FOREIGN KEY (owner_id, run_id) REFERENCES ai_runs_new (owner_id, run_id) ON DELETE CASCADE
+) STRICT;
+--;;
+INSERT INTO ai_run_handles_new (owner_id, run_id, handle, block_id, generation)
+  SELECT owner_id, run_id, handle, block_id, generation FROM ai_run_handles;
+--;;
+-- Abort the whole migration if any row failed to carry (the CHECK fails on 0).
+CREATE TEMP TABLE _0017_guard (ok INTEGER NOT NULL CHECK (ok = 1));
+--;;
+INSERT INTO _0017_guard VALUES
+  ((SELECT COUNT(*) FROM ai_runs) = (SELECT COUNT(*) FROM ai_runs_new)),
+  ((SELECT COUNT(*) FROM ai_run_handles) = (SELECT COUNT(*) FROM ai_run_handles_new));
+--;;
+DROP TABLE _0017_guard;
+--;;
+-- The child before the parent: the DROP then cascades into nothing that is kept.
+DROP TABLE ai_run_handles;
+--;;
+DROP TABLE ai_runs;
+--;;
+ALTER TABLE ai_runs_new RENAME TO ai_runs;
+--;;
+ALTER TABLE ai_run_handles_new RENAME TO ai_run_handles;
+--;;
+CREATE INDEX ai_runs_by_owner ON ai_runs (owner_id, started_at);
+--;;
+-- The thread read (`ai.py` `_THREAD_SELECT`) turns an `ask` thread into an `image` one with
+-- `EXISTS (SELECT 1 FROM ai_runs r WHERE r.owner_id = t.owner_id AND r.thread_id = t.thread_id AND
+-- r.kind = 'image')` once per thread row. With only `ai_runs_by_owner` that probe walks every run
+-- of the owner for every thread listed; this index answers it from the index alone (COVERING: the
+-- three columns it filters on). Created here, in the rebuild, because 0017 is the migration that
+-- makes the kind readable from the runs.
+CREATE INDEX ai_runs_by_thread ON ai_runs (owner_id, thread_id, kind);
+--;;

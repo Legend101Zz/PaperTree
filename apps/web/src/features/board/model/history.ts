@@ -21,6 +21,10 @@ export interface CardFields {
   readonly title?: string | null;
   readonly body?: string;
   readonly group_id?: string | null;
+  /** v0.3: a branch dragged by its top strip (the offset carries the subtree), and Fold. */
+  readonly offset_x?: number;
+  readonly offset_y?: number;
+  readonly folded?: boolean;
 }
 
 /** One card's fields before and after a step. */
@@ -279,6 +283,15 @@ export function restoreBody(snap: CanvasNode, groupId: string | null): CreateNod
     ...(snap.source_page_id === null ? {} : { source_page_id: snap.source_page_id }),
     ...(snap.source_diagram_id === null ? {} : { source_diagram_id: snap.source_diagram_id }),
     group_id: groupId,
+    // A card of a tree comes back with its place in it (the id of a restored parent is unchanged).
+    ...(snap.parent_id == null ? {} : { parent_id: snap.parent_id }),
+    ...(snap.branch == null ? {} : { branch: snap.branch }),
+    ...(snap.parent_span == null ? {} : { parent_span: snap.parent_span }),
+    ...(snap.question == null ? {} : { question: snap.question }),
+    ...(snap.uses == null ? {} : { uses: snap.uses }),
+    ...(snap.offset_x === undefined || snap.offset_x === 0 ? {} : { offset_x: snap.offset_x }),
+    ...(snap.offset_y === undefined || snap.offset_y === 0 ? {} : { offset_y: snap.offset_y }),
+    ...(snap.folded === true ? { folded: true } : {}),
   };
 }
 

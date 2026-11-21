@@ -1,8 +1,9 @@
 /**
  * v0.2 frame 08b (#205) on the FAUX agent, at 390 × 844: open "Attention Is All You Need" → select
  * a sentence of the abstract → Explain → the bottom sheet (its header with the thread menu, the call
- * slip's quote on two lines, 44 px markers and trace rows, the pinned footer that never covers the
- * answer) → tap marker 2 → the sheet lowers to peek and passage 2 flashes above it → a follow-up
+ * slip's quote on two lines, the tutor answer opening on its TL;DR, "Read the whole answer", the
+ * source line's 44 px page links, the pinned footer that never covers the answer) → tap a page of
+ * the source line → the sheet lowers to peek and its passage flashes above it → a follow-up
  * answered in three paragraphs (`[faux:paragraphs]`) opens on its first, and "Read the whole
  * answer" shows the rest. Then the zoom a reader picks at 390 survives a reload (#175, the v0.1
  * defect the audit could not confirm), Contents from the menu keeps focus, Guided's tables take focus
@@ -73,36 +74,6 @@ async function explainPassage(page: Page, start: string, end: string): Promise<v
     .getByRole('button', { name: 'Explain' })
     .first()
     .click();
-}
-
-/**
- * Who answers taps on the squares of the first run of two markers in exchange `index`, sampled on
- * an 11 × 11 grid per square: the passage number of the marker under each point.
- */
-async function squareOwners(page: Page, index: number): Promise<string[][]> {
-  return page.evaluate((at) => {
-    const exchange = document.querySelectorAll('.pt-explain-sheet [data-exchange]')[at];
-    const run = Array.from(exchange?.querySelectorAll('.pt-cite-run') ?? []).find(
-      (r) => r.querySelectorAll('.pt-exchange__inline-marker').length === 2,
-    );
-    run?.scrollIntoView({ block: 'center' });
-    const wraps = Array.from(run?.querySelectorAll('.pt-exchange__inline-marker') ?? []);
-    return wraps.map((wrap) => {
-      const r = (wrap.querySelector('button') as HTMLElement).getBoundingClientRect();
-      const owners: string[] = [];
-      for (let gx = 0; gx <= 10; gx += 1)
-        for (let gy = 0; gy <= 10; gy += 1) {
-          const hit = document.elementFromPoint(
-            r.left + 0.5 + (gx * (r.width - 1)) / 10,
-            r.top + 0.5 + (gy * (r.height - 1)) / 10,
-          );
-          owners.push(
-            hit?.closest('.pt-exchange__inline-marker')?.getAttribute('data-passage') ?? '',
-          );
-        }
-      return owners;
-    });
-  }, index);
 }
 
 /** Is a tap `d` px from the centre of this box, in each of the four directions, on the element? */
@@ -188,22 +159,42 @@ test.describe('v0.2 frame 08b: the phone reader and its explain sheet (faux agen
     await page.keyboard.press('Escape');
     await expect(options).toHaveCount(0);
 
-    // One paragraph: nothing more to read, so no "Read the whole answer".
+    // A tutor answer is four sections: the sheet opens on its TL;DR, and the one source line, at the
+    // end of "In the paper", waits behind "Read the whole answer" (#205, #339).
+    const labels = sheet.locator('h3.pt-ai-label');
+    await expect(labels).toHaveText(['tl;dr']);
+    await expect(sheet.locator('.pt-source')).toHaveCount(0);
+    const whole = sheet.getByRole('button', { name: 'Read the whole answer' });
+    await expect(whole).toHaveAttribute('aria-expanded', 'false');
+    await whole.click();
+    await expect(labels).toContainText(['tl;dr', 'in plain words', 'how it works', 'in the paper']);
+    await expect(sheet.locator('.pt-source')).toHaveCount(1);
+    // The one button turns into "Show less" (so focus stays on it) and reports itself open.
     await expect(sheet.getByRole('button', { name: 'Read the whole answer' })).toHaveCount(0);
+    await expect(sheet.getByRole('button', { name: 'Show less' })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    );
 
-    // The quote on two lines; 22 px markers that answer taps 21 px out (a 44 px target); 44 px rows.
+    // The quote on two lines; page links under the paragraphs that answer taps 19 px out (a ~44 px target).
     const lines = await sheet.locator('.pt-call-slip__quote-text').evaluate((el) => {
       return Math.round(
         el.getBoundingClientRect().height / parseFloat(getComputedStyle(el).lineHeight),
       );
     });
     expect(lines).toBeLessThanOrEqual(2);
-    const marker = '.pt-explain-sheet [data-passage="2"] button';
-    expect((await page.locator(marker).first().boundingBox())?.height).toBe(22);
-    expect(await hitsAround(page, marker, 21)).toEqual([true, true, true, true]);
-    for (const row of await sheet.locator('.pt-trace-row__touch').all()) {
-      expect((await row.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
-    }
+    const marker = '.pt-explain-sheet .pt-source button';
+    expect(await page.locator(marker).count()).toBeGreaterThan(0);
+    // The one source line sits at the foot of the whole answer: bring it to the middle of the
+    // scroll first, so the probe never lands on the pinned footer or off screen.
+    await page
+      .locator(marker)
+      .first()
+      .evaluate((el) => {
+        el.scrollIntoView({ block: 'center' });
+      });
+    expect(await hitsAround(page, marker, 19)).toEqual([true, true, true, true]);
+    await expect(sheet.locator('.pt-marker, .pt-trace-row, .pt-coverage')).toHaveCount(0);
 
     // The pinned footer: usage, Dive in (S5e, #293) and To board under the scroll, never over it;
     // nothing dead. A diagram starts from the selection toolbar (#217), never from the sheet.
@@ -218,10 +209,10 @@ test.describe('v0.2 frame 08b: the phone reader and its explain sheet (faux agen
     const foot = await pinned.boundingBox();
     expect((scroll?.y ?? 0) + (scroll?.height ?? 0)).toBeLessThanOrEqual((foot?.y ?? 0) + 1);
 
-    // Marker 2: the sheet lowers to peek and passage 2 flashes, above the sheet.
+    // A page link: the sheet lowers to peek and its passage flashes, above the sheet.
     await page.locator(marker).first().click();
     await expect(page.locator('.pt-explain-sheet')).toHaveAttribute('data-detent', 'peek');
-    const flash = page.locator('svg [data-flash="true"] polygon.pt-flash');
+    const flash = page.locator('svg [data-flash] polygon.pt-flash');
     await expect(flash.first()).toBeVisible({ timeout: 10_000 });
     await page.waitForTimeout(500);
     const [box, sheetBox] = await Promise.all([
@@ -229,7 +220,7 @@ test.describe('v0.2 frame 08b: the phone reader and its explain sheet (faux agen
       page.locator('.pt-explain-sheet').boundingBox(),
     ]);
     expect((box?.y ?? 1e9) + (box?.height ?? 0)).toBeLessThan(sheetBox?.y ?? 0);
-    await expect(page.locator('[data-flash-tab="2"]')).toContainText('from marker 2 in the answer');
+    await expect(page.locator('[data-flash-tab], .pt-flash-tab')).toHaveCount(0);
 
     // A follow-up in three paragraphs opens on its first; Read the whole answer shows the rest.
     await sheet.getByRole('slider', { name: 'Explain height' }).press('ArrowUp');
@@ -245,17 +236,13 @@ test.describe('v0.2 frame 08b: the phone reader and its explain sheet (faux agen
     await expect(more).toHaveAttribute('aria-expanded', 'false');
     await more.click();
     await expect(second.getByText(/It comes back to the selection/)).toBeVisible();
-    await expect(second.locator('.pt-ai-slip__uncited')).toContainText("the AI's own reading");
+    await expect(second.locator('.pt-source').last()).toBeVisible();
+    await expect(second.locator('.pt-ai-slip__uncited')).toHaveCount(0);
     await expect(second.getByRole('button', { name: 'Show less' })).toHaveAttribute(
       'aria-expanded',
       'true',
     );
 
-    // "[b1, b2]" draws markers 1 and 2 side by side: each square answers only to itself.
-    const owners = await squareOwners(page, 1);
-    expect(owners).toHaveLength(2);
-    expect(new Set(owners[0])).toEqual(new Set(['1']));
-    expect(new Set(owners[1])).toEqual(new Set(['2']));
     await page.context().close();
   });
 
@@ -364,7 +351,9 @@ test.describe('v0.2 frame 08b: the phone reader and its explain sheet (faux agen
     await expect(sheet.locator('[data-message-status="complete"]')).toBeVisible({
       timeout: 120_000,
     });
-    const marker = sheet.locator('[data-passage="1"] button').first();
+    // The source line is at the end of the answer's last section: open the whole answer first.
+    await sheet.getByRole('button', { name: 'Read the whole answer' }).click();
+    const marker = sheet.locator('.pt-source button').first();
     const scrollTop = () =>
       page.evaluate(
         () => (document.querySelector('[data-papertree-scroller]') as HTMLElement).scrollTop,

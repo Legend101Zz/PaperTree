@@ -46,6 +46,29 @@ async function mouseDrag(
   await page.mouse.up();
 }
 
+/**
+ * A point on the EMPTY pane (the hit element is the pane itself), searched from the lower part of
+ * the board. A v0.3 card's body takes no pan (its words stay selectable), so a pan or a wheel zoom
+ * that starts on a card does nothing: the journey must start on the bare pane wherever the Tidy
+ * layout put the cards.
+ */
+async function emptyPanePoint(
+  page: import('@playwright/test').Page,
+): Promise<{ x: number; y: number }> {
+  const point = await page.evaluate(() => {
+    for (let y = 860; y >= 300; y -= 20) {
+      for (let x = 160; x <= 1400; x += 20) {
+        if (document.elementFromPoint(x, y)?.classList.contains('react-flow__pane')) {
+          return { x, y };
+        }
+      }
+    }
+    return null;
+  });
+  if (point === null) throw new Error('no empty pane point to pan from');
+  return point;
+}
+
 test.describe('Journey D: the canvas', () => {
   test.use({ actionTimeout: 20_000 });
   test('send, drag, connect, note, group, reload, delete, open source', async ({
@@ -74,16 +97,18 @@ test.describe('Journey D: the canvas', () => {
       })
       .toBeGreaterThan(20);
     expect(await page.evaluate(() => document.visibilityState)).toBe('visible');
-    // #203: the reader's header names the board "Board".
-    await expect(page.getByRole('link', { name: 'Board' })).toBeVisible();
+    // #344: the reader's header offers the board beside the paper (key B); the plain "Board" link
+    // is the phone's.
+    await expect(page.getByRole('button', { name: /^Board beside/ })).toBeVisible();
     await reveal(page, 'Deeper neural networks');
     const points = await pointsFor(page, 'Deeper neural networks', 'substantially deeper');
     await drag(page, points.from, points.to);
     const selected = await selectionRects(page);
     expect(selected.text).toContain('Deeper neural networks');
-    await page.getByRole('button', { name: 'Send to board' }).click(); // #203's wording
+    await page.getByRole('button', { name: 'Send to board', exact: true }).click(); // #203's wording
+    await page.getByRole('button', { name: /^Just send/ }).click(); // #346: stays on the paper
     const toast = page.getByTestId('canvas-toast');
-    await expect(toast).toContainText('Passage added to your board'); // #203: the toolbar's wording
+    await expect(toast).toContainText('Added'); // #346: Just send says Added, with Show
     await page.screenshot({ path: shot('d01-reader-toast-1440.png') });
     const afterFirst = await getBoard(stack.apiUrl, token, paperId);
     expect(afterFirst.board).not.toBeNull();
@@ -131,8 +156,12 @@ test.describe('Journey D: the canvas', () => {
     expect(created.status, JSON.stringify(created.json)).toBe(201);
 
     // ── 3. open the canvas from the toast's link: exactly 2 nodes ──
-    await page.getByRole('link', { name: 'Open board' }).click(); // the passage's toast (#203)
-    await expect(page).toHaveURL(new RegExp(`/paper/${paperId}/board$`));
+    await page.getByRole('link', { name: 'Show' }).click(); // the passage's toast (#203, #346)
+    // v0.3: the link opens the board on the card this send made (`?card=<id>`, #342); once the board
+    // has panned to the card the address drops the parameter, so a reload stays put.
+    await expect(page).toHaveURL(
+      new RegExp(`/paper/${paperId}/board(\\?card=${excerpt.node_id})?$`),
+    );
     await expect(page.locator('.react-flow__node')).toHaveCount(2);
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(1440);
     await expect(
@@ -152,7 +181,9 @@ test.describe('Journey D: the canvas', () => {
     await page.waitForTimeout(1000);
     calls.length = 0;
     const head = await nodeBox(page, excerpt.node_id);
-    await mouseDrag(page, { x: head.x + 60, y: head.y + 24 }, { x: head.x + 60, y: head.y + 224 });
+    // v0.3: a card is dragged by its top strip (the words below stay selectable), and a tree card's
+    // drag is an OFFSET on the Tidy layout, not a new x, y.
+    await mouseDrag(page, { x: head.x + 60, y: head.y + 16 }, { x: head.x + 60, y: head.y + 216 });
     await page.waitForTimeout(1200);
     const patches = calls.filter((c) => PATCHES.test(c));
     expect(patches).toEqual([
@@ -160,24 +191,23 @@ test.describe('Journey D: the canvas', () => {
     ]);
     const afterDrag = await getBoard(stack.apiUrl, token, paperId);
     const moved = afterDrag.nodes.find((n) => n.node_id === excerpt.node_id)!;
-    expect(moved.y).toBeGreaterThan(excerpt.y + 100);
+    expect(moved.offset_y ?? 0).toBeGreaterThan(100);
     expect(moved.version).toBe(excerpt.version + 1);
 
     // ── 5. connect with "supports": the label is visible ──
     calls.length = 0;
-    // #212: the link handles are the brass pins; a thread runs from a claim-out to an evidence-in.
-    const src = await page
-      .locator(`.react-flow__node[data-id="${excerpt.node_id}"] [data-handleid="claim_out"]`)
-      .boundingBox();
-    const dst = await page
-      .locator(`.react-flow__node[data-id="${explanationId}"] [data-handleid="evidence_in"]`)
-      .boundingBox();
-    expect(src && dst).toBeTruthy();
-    await mouseDrag(
-      page,
-      { x: src!.x + src!.width / 2, y: src!.y + src!.height / 2 },
-      { x: dst!.x + dst!.width / 2, y: dst!.y + dst!.height / 2 },
-    );
+    // v0.3: a branching card (passage, answer) has no brass pins, so the thread between these two
+    // cards is made with the toolbar's Thread: select the two (the first is the source), press Thread.
+    await page
+      .locator(`.react-flow__node[data-id="${excerpt.node_id}"] .pt-tc__strip`)
+      .click({ position: { x: 24, y: 6 } });
+    await page
+      .locator(`.react-flow__node[data-id="${explanationId}"] .pt-tc__strip`)
+      .click({ position: { x: 24, y: 6 }, modifiers: ['Shift'] });
+    await page
+      .getByRole('toolbar', { name: 'Board tools' })
+      .getByRole('button', { name: /^Thread/ })
+      .click();
     // #213: the "Link as" picker replaces v0.1's dialog; the same click chooses the kind.
     const dialog = page.getByRole('group', { name: /link as/i });
     await expect(dialog).toBeVisible();
@@ -221,7 +251,11 @@ test.describe('Journey D: the canvas', () => {
       kind: 'derives_from',
       label: 'needs the passage',
     });
-    await page.mouse.click(1000, 870); // empty pane: deselect the link
+    // Empty pane: deselect the link. Not a fixed point: with a thread on the board the key sits
+    // under the stage (y ~825-885 at 1440x900, in the flow, a key and not the pane), so (1000, 870)
+    // is the key. `emptyPanePoint` is verified to be the pane itself.
+    const off = await emptyPanePoint(page);
+    await page.mouse.click(off.x, off.y);
     await expect(edgeBar).toBeHidden();
 
     // ── 6. a note: add, type, Enter = one PATCH of the body ──
@@ -275,8 +309,10 @@ test.describe('Journey D: the canvas', () => {
 
     // ── 8. pan and zoom: saved on the END only ──
     calls.length = 0;
-    await mouseDrag(page, { x: 700, y: 840 }, { x: 640, y: 800 });
-    await page.mouse.move(720, 600);
+    const bare = await emptyPanePoint(page);
+    await mouseDrag(page, bare, { x: bare.x - 40, y: bare.y - 20 });
+    // The wheel zooms where the pointer is, so it stays on the point the pan ended on (bare pane).
+    await page.mouse.move(bare.x - 40, bare.y - 20);
     await page.mouse.wheel(0, -240);
     await page.waitForTimeout(1500);
     const viewportPatches = calls.filter(
@@ -306,7 +342,10 @@ test.describe('Journey D: the canvas', () => {
       }));
       return { api: board, dom };
     };
-    await page.mouse.click(1000, 870); // deselect everything: a selected link adds its editor row
+    // Deselect everything: a selected link adds its editor row. A click on the bare pane clears it;
+    // a fixed point does not, because a tree card (or the stage's lower edge) may sit there.
+    const clear = await emptyPanePoint(page);
+    await page.mouse.click(clear.x, clear.y);
     await expect(page.getByRole('group', { name: 'Selected link' })).toBeHidden();
     await page.waitForTimeout(500);
     const beforeReload = await snapshot();
@@ -341,11 +380,19 @@ test.describe('Journey D: the canvas', () => {
     expect(afterDelete.edges).toHaveLength(0);
 
     // ── 11. Open source lands on, and flashes, the passage ──
+    // v0.3: the passage's page is a button on its strip; it opens the reader on those words.
     await page
       .locator(`.react-flow__node[data-id="${excerpt.node_id}"]`)
-      .getByRole('link', { name: 'Open source' })
+      .getByRole('button', { name: /in the paper$/ })
       .click();
-    await expect(page).toHaveURL(new RegExp(`/paper/${paperId}/read\\?focus=${excerpt.node_id}$`));
+    // #349: from a full-width board the source opens the paper BESIDE, the card stays on screen.
+    await expect(page).toHaveURL(
+      new RegExp(
+        `/paper/${paperId}/read\\?(?=.*\\bbeside=1\\b)(?=.*\\bfocus=${excerpt.node_id}\\b)`,
+      ),
+    );
+    await expect(page.locator('html')).toHaveAttribute('data-pt-board', 'open');
+    await expect(page.locator(`.react-flow__node[data-id="${excerpt.node_id}"]`)).toBeVisible();
     const flash = page.locator('polygon.pt-flash').first();
     await expect(flash).toBeAttached({ timeout: 60_000 });
     expect(await page.evaluate(() => document.visibilityState)).toBe('visible');

@@ -1,0 +1,24 @@
+/*
+ * A crop of the paper (v0.3 #348). The picture is the paper's own pixels, so it keeps its colours in
+ * every room and on every page colour; only its edge is a token.
+ */
+.pt-crop {
+  display: block;
+  box-sizing: border-box;
+  max-inline-size: 100%;
+  block-size: auto;
+  border: 1px solid var(--pt-rule);
+  border-radius: var(--pt-radius-paper);
+}
+
+.pt-crop--loading {
+  min-block-size: 96px;
+  inline-size: 100%;
+}
+
+.pt-crop--failed {
+  margin: 0;
+  padding: var(--pt-space-3);
+  color: var(--pt-ink-muted);
+  font: 0.875rem/1.4 var(--pt-font-ai);
+}

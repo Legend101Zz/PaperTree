@@ -40,7 +40,7 @@ const probe = vi.hoisted(() => ({
   anchor: null as unknown,
   quote: '',
   scrolls: [] as { readonly page: number; readonly bbox: readonly number[] }[],
-  sent: [] as Promise<void>[],
+  sent: [] as Promise<unknown>[],
 }));
 
 vi.mock('@/components/reader/VirtualPageList', () => ({
@@ -253,11 +253,11 @@ describe('ReaderActions — mounted by ReaderWorkspace, reached from inside the 
 });
 
 describe('the mount site itself', () => {
-  it('ReaderWorkspace mounts the provider and the explain panel, with the sendToCanvas stub', () => {
+  it('ReaderActionsMount mounts the provider and the explain panel, with the sendToCanvas stub', () => {
     // A source assertion, like journey-wiring's D6: the behaviour above proves the wiring works,
     // this pins WHERE it is, so a refactor that drops the mount fails with a named reason.
     const source = readFileSync(
-      join(process.cwd(), 'src/app/paper/[id]/read/ReaderWorkspace.tsx'),
+      join(process.cwd(), 'src/features/reader/components/ReaderActionsMount.tsx'),
       'utf8',
     );
     expect(source).toContain('<ReaderActionsProvider value={actions}>');

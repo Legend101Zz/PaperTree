@@ -4,11 +4,12 @@
     POST    /papers/{id}/board/nodes           NodeCreate  -> 201 NodeCreated (board created on
                                                               the first send, same transaction)
     PATCH   /boards/{bid}/nodes/{nid}          NodePatch   -> CanvasNode | 409 StaleVersion
-    DELETE  /boards/{bid}/nodes/{nid}                      -> 204
+    DELETE  /boards/{bid}/nodes/{nid}                      -> 204 (the node AND its subtree)
     POST    /boards/{bid}/edges                EdgeCreate  -> 201 CanvasEdge
     PATCH   /boards/{bid}/edges/{eid}          EdgePatch   -> CanvasEdge
     DELETE  /boards/{bid}/edges/{eid}                      -> 204
     PATCH   /boards/{bid}                      BoardPatch  -> Board
+    POST    /boards/{bid}/tidy                 TidyRequest -> Tidied   (v0.3 #343)
 
 BUILT BY S7. The model-level rules (an excerpt needs `source_anchor`, an explanation
 `source_message_id`, an edge two different nodes) answer 422 in the models; the ones that need the
@@ -36,6 +37,7 @@ from papertree_db import (
     BoardRow,
     CanvasRejected,
     EdgeRow,
+    NodeAnswer,
     NodeRow,
     NotebookCounts,
     PaperId,
@@ -55,10 +57,13 @@ from ..schemas import (
     NodeCreate,
     NodeCreated,
     NodePatch,
+    Tidied,
+    TidyRequest,
 )
 from ..schemas import StaleVersion as StaleVersionBody
 from ..wiretime import wire_time
 from ._shared import read_json
+from .threads import run_is_live
 
 router = APIRouter()
 
@@ -89,8 +94,22 @@ def _counts_wire(counts: NotebookCounts) -> dict[str, int]:
     }
 
 
-def _node_wire(node: NodeRow, counts: NotebookCounts | None = None) -> dict[str, Any]:
-    """The node as the wire carries it; `counts` only for a notebook card (null otherwise)."""
+def answer_status(answer: NodeAnswer, run: dict[str, Any] | None) -> str:
+    """An answer still `streaming` whose run can no longer finish (the API stopped mid-stream) is
+    shown as ended, like a thread read does; the stored row is not rewritten."""
+    if answer.status == "streaming" and not run_is_live(run):
+        return "partial" if answer.final_text else "error"
+    return answer.status
+
+
+def node_wire(
+    node: NodeRow,
+    counts: NotebookCounts | None = None,
+    answer: NodeAnswer | None = None,
+    status: str | None = None,
+) -> dict[str, Any]:
+    """The node as the wire carries it; `counts` only for a notebook card and `answer` only for an
+    answer card (null otherwise). `status` overrides the answer's stored one (`answer_status`)."""
     wire: dict[str, Any] = {
         "node_id": node.node_id,
         "board_id": node.board_id,
@@ -107,12 +126,47 @@ def _node_wire(node: NodeRow, counts: NotebookCounts | None = None) -> dict[str,
         "source_message_id": node.source_message_id,
         "source_page_id": node.source_page_id,
         "source_diagram_id": node.source_diagram_id,
+        "parent_id": node.parent_id,
+        "branch": node.branch,
+        "parent_span": None if node.parent_span is None else dict(node.parent_span),
+        "question": node.question,
+        "uses": None if node.uses is None else dict(node.uses),
+        "offset_x": node.offset_x,
+        "offset_y": node.offset_y,
+        "folded": node.folded,
+        "final_text": None if answer is None else answer.final_text,
+        "level": None if answer is None else (answer.level or "familiar"),
+        "model": None if answer is None else answer.model,
+        "answer_status": None if answer is None else (status or answer.status),
+        "citations": None if answer is None else [dict(c) for c in answer.citations],
         "version": node.version,
         "created_at": wire_time(node.created_at),
         "updated_at": wire_time(node.updated_at),
     }
     wire["counts"] = None if counts is None else _counts_wire(counts)
     return wire
+
+
+def wire_nodes(
+    call: Caller, nodes: tuple[NodeRow, ...], snapshot: Any = None
+) -> list[dict[str, Any]]:
+    """Nodes as the wire carries them, notebook counts and answers read in one query each (from
+    the board snapshot when the caller already has it)."""
+    if snapshot is not None:
+        counts: Any = snapshot.notebook_counts
+        answers: Any = snapshot.answers
+    else:
+        counts = call.db.notebook_counts(call.db_owner, nodes)
+        answers = call.db.node_answers(call.db_owner, nodes)
+    out = []
+    for n in nodes:
+        answer = answers.get(n.node_id)
+        status = None
+        if answer is not None and answer.status == "streaming":
+            run = call.db.get_run(call.db_owner, answer.run_id) if answer.run_id else None
+            status = answer_status(answer, run)
+        out.append(node_wire(n, counts.get(n.node_id), answer, status))
+    return out
 
 
 def _edge_wire(edge: EdgeRow) -> dict[str, Any]:
@@ -145,9 +199,7 @@ async def get_board(call: CallerDep, paper_id: str) -> Response:
     return JSONResponse(
         {
             "board": None if snapshot.board is None else _board_wire(snapshot.board),
-            "nodes": [
-                _node_wire(n, snapshot.notebook_counts.get(n.node_id)) for n in snapshot.nodes
-            ],
+            "nodes": wire_nodes(call, snapshot.nodes, snapshot),
             "edges": [_edge_wire(e) for e in snapshot.edges],
         }
     )
@@ -172,7 +224,7 @@ async def create_node(call: CallerDep, paper_id: str, request: Request) -> Respo
     return JSONResponse(
         {
             "board": _board_wire(snapshot.board),
-            "node": _node_wire(stored, snapshot.notebook_counts.get(stored.node_id)),
+            "node": wire_nodes(call, (stored,))[0],
         },
         status_code=201,
     )
@@ -196,17 +248,21 @@ async def patch_node(call: CallerDep, board_id: str, node_id: str, request: Requ
         raise ApiError(
             "stale_version",
             "This note changed somewhere else. The latest version is shown; try again.",
-            extra={
-                "current": _node_wire(
-                    result.current,
-                    call.db.notebook_counts(call.db_owner, (result.current,)).get(
-                        result.current.node_id
-                    ),
-                )
-            },
+            extra={"current": wire_nodes(call, (result.current,))[0]},
         )
-    counts = call.db.notebook_counts(call.db_owner, (result,)).get(result.node_id)
-    return JSONResponse(_node_wire(result, counts))
+    return JSONResponse(wire_nodes(call, (result,))[0])
+
+
+@router.post("/boards/{board_id}/tidy", response_model=Tidied)
+async def tidy_board(call: CallerDep, board_id: str, request: Request) -> Response:
+    """Tidy one tree (owner decision C: Tidy owns the layout): every card of the tree that holds
+    `root_id` gets offset 0 and a new version, in one transaction. Other trees and loose cards are
+    not touched. 404 when the card is not on this owner's board."""
+    body, _ = await read_json(request, TidyRequest)
+    changed = call.db.tidy(call.db_owner, board_id, body.root_id)
+    if changed is None:
+        raise ApiError("not_found", "no such node on this board")
+    return JSONResponse({"nodes": wire_nodes(call, tuple(changed))})
 
 
 @router.delete("/boards/{board_id}/nodes/{node_id}", status_code=204)

@@ -37,6 +37,8 @@ async function main(): Promise<void> {
     process.exitCode = 1;
     return;
   }
+  // The figure step's parser (a worker thread, ~1 s to load mermaid): started now so no run pays for it.
+  (await import('./mermaid-parse.ts')).warmMermaid();
   const port = await app.listen(config.port);
   const health = app.health();
   log.info('agent.boot', {

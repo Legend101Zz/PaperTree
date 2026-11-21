@@ -128,7 +128,7 @@ test('RFIX2 screens - the header, a selection, a highlight, Guided with one crop
         { x: a.left + 0.5, y: (a.top + a.bottom) / 2 },
         { x: a.right - 2, y: (a.top + a.bottom) / 2 + 40 },
       );
-      const button = page.getByRole('button', { name: 'Highlight', exact: true });
+      const button = page.getByRole('button', { name: 'Highlight in amber', exact: true });
       await expect(button).toBeVisible();
       await page.screenshot({ path: shot(`selection-bar-${tag}.png`) });
       const scrollerTop = () =>

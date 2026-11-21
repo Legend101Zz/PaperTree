@@ -7,25 +7,38 @@
  * from the stream's first `next()`. The server answers 501 until S5 lands.
  */
 import { request, streamSse } from './client';
-import type { Anchor, Message, SseEvent, Thread } from './types';
+import type { Anchor, AnswerLevel, Message, SseEvent, Thread } from './types';
 
 const seg = encodeURIComponent;
 
 export interface CreateThreadBody {
-  readonly kind: 'explain' | 'ask' | 'diagram';
-  /** Required for `explain` and `diagram`. */
+  readonly kind: 'explain' | 'ask' | 'diagram' | 'image';
+  /** Required for `explain`, `diagram` and `image` (an image anchor: `figure` or `figure_region`,
+   * a PageSelector and one ShapeSelector quad, no text quote). */
   readonly anchor?: Anchor;
   /** 1..2000; the server defaults it to "Explain this passage." ("Explain with a diagram." for a
-   * diagram). */
+   * diagram, "Explain this figure." for an image). */
   readonly question?: string;
+  /** How deep the answer goes; the server's default is `familiar`. */
+  readonly level?: AnswerLevel;
+  /** `image` only: the text anchor of a paragraph selected together with the figure. */
+  readonly with_text_anchor?: Anchor;
 }
 
 export interface FollowUpBody {
-  readonly question: string;
+  /** Required unless `relevel_of` is given (a relevel re-asks the stored question). */
+  readonly question?: string;
   /** Re-run a failed assistant message instead of appending a new user turn. */
   readonly retry_of?: string;
   /** Redraw a finished diagram answer of this thread (required on a diagram thread). */
   readonly redraw_of?: string;
+  /** How deep the answer goes; the server's default is `familiar`. */
+  readonly level?: AnswerLevel;
+  /**
+   * The reader switched this answer to another level: the same question answered again at `level`
+   * (a sibling of the answer `relevel_of` names), not a new user turn. The server decides `check`.
+   */
+  readonly relevel_of?: string;
 }
 
 export const threadsApi = {
@@ -41,7 +54,14 @@ export const threadsApi = {
     signal?: AbortSignal,
   ): AsyncGenerator<SseEvent> =>
     streamSse(`/papers/${seg(paperId)}/threads/${seg(threadId)}/messages`, body, signal),
-  list: (paperId: string) => request<Thread[]>(`/papers/${seg(paperId)}/threads`),
+  /**
+   * The reader's threads. A board answer's thread is not one of them (0016); the board reads its
+   * own answers' sources with `includeBoard`.
+   */
+  list: (paperId: string, options?: { includeBoard?: boolean }) =>
+    request<Thread[]>(
+      `/papers/${seg(paperId)}/threads${options?.includeBoard === true ? '?include_board=true' : ''}`,
+    ),
   get: (paperId: string, threadId: string) =>
     request<{ thread: Thread; messages: Message[] }>(
       `/papers/${seg(paperId)}/threads/${seg(threadId)}`,

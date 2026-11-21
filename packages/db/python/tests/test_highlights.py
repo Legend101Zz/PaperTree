@@ -602,3 +602,67 @@ def test_an_upgrade_is_held_to_the_same_rules(tmp_path: Path) -> None:
         [still] = db.list_highlights(owner, PaperId(paper_id), 1)
         assert still.anchors[0].anchor["doc"]["textStreamId"] == "legacy-0001"
         db.upgrade_legacy_anchor(owner, PaperId(paper_id), LEGACY_ANCHOR, full)
+
+
+# ── image anchors (v0.3 #348): a figure or a free region, no words ───────────────────────────
+
+
+def _image_anchor(
+    env: Env, kind: str = "figure_region", quads: list[list[float]] | None = None
+) -> dict[str, Any]:
+    """A figure or figure_region record over the page the captured text is on: PageSelector and ONE
+    ShapeSelector quad, no TextQuote, no TextPosition (a rectangle holds no words)."""
+    record = copy.deepcopy(env.record)
+    record["id"] = "7e1f0c3a-5b2d-4c8e-9a64-1d2e3f4a5b6c"
+    record["targetKind"] = kind
+    record["selectors"] = [
+        s for s in record["selectors"] if s["type"] in ("PageSelector", "ShapeSelector")
+    ]
+    shape = next(s for s in record["selectors"] if s["type"] == "ShapeSelector")
+    shape["quads"] = [[100.0, 120.0, 400.0, 300.0]] if quads is None else quads
+    shape["polygons"] = []
+    return record
+
+
+@pytest.mark.parametrize("kind", ["figure", "figure_region"])
+def test_an_image_highlight_needs_no_text_quote(env: Env, kind: str) -> None:
+    record = _image_anchor(env, kind)
+    created = _create(env, anchors=[AnchorIn(record)], resolutions=[])
+    assert created.created
+    [listed] = env.db.list_highlights(env.owner, env.paper_id, 1)
+    [anchor] = listed.anchors
+    assert anchor.anchor == record
+    conn = sqlite3.connect(env.file)
+    try:
+        row = conn.execute(
+            "SELECT target_kind, quote_exact, page_index FROM anchors WHERE highlight_id = ?",
+            (HID,),
+        ).fetchone()
+    finally:
+        conn.close()
+    assert row == (kind, None, 1)
+
+
+def test_an_image_anchor_still_needs_its_page_and_one_rectangle(env: Env) -> None:
+    """Relaxing the quote for figure and figure_region relaxes nothing else (anchor_incomplete)."""
+    no_page = _without(_image_anchor(env), "PageSelector")
+    no_shape = _without(_image_anchor(env), "ShapeSelector")
+    no_quads = _image_anchor(env, quads=[])
+    two = _image_anchor(env, quads=[[1, 2, 30, 40], [50, 60, 90, 100]])
+    flat = _image_anchor(env, quads=[[10.0, 20.0, 10.0, 80.0]])
+    for label, record in (
+        ("no page", no_page),
+        ("no shape", no_shape),
+        ("no quads", no_quads),
+        ("two quads", two),
+        ("zero width", flat),
+    ):
+        assert _refused(env, record).code == "anchor_incomplete", label
+
+
+def test_a_text_anchor_still_needs_a_quote_and_only_image_kinds_are_relaxed(env: Env) -> None:
+    """The relaxation is for figure and figure_region ONLY: the same record as text, equation or
+    table_cell is still refused without its quote."""
+    for kind in ("text", "equation", "table_cell", "algorithm", "guided_para"):
+        record = _image_anchor(env, kind)
+        assert _refused(env, record).code == "anchor_incomplete", kind

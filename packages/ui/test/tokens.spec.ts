@@ -84,7 +84,6 @@ const PAIRS: readonly (readonly [string, string, number])[] = [
   ['--pt-pen', '--pt-call-slip', 4.5],
   ['--pt-on-tab', '--pt-tab', 4.5],
   ['--pt-ai-tab-ink', '--pt-ai-slip', 4.5],
-  ['--pt-nv-ink', '--pt-ai-slip', 4.5],
   ['--pt-danger', '--pt-page', 4.5],
   ['--pt-focus', '--pt-page', 3],
   ['--pt-control-border', '--pt-page', 3],
@@ -227,65 +226,157 @@ function ratioOn(
 }
 
 const WASHES = ['amber', 'green', 'blue', 'pink', 'purple'] as const;
-/** pdf.js paints black type; lamp-lit multiplies the canvas onto the page, so it stays black. */
-const PDF_TYPE: [number, number, number] = [0, 0, 0];
 
-describe('the PDF page, which stays paper in both schemes (#205, frame 09b)', () => {
-  for (const [name, scheme] of [
-    ['daylight', LIGHT],
-    ['lamp-lit', DARK],
-  ] as const) {
+/** The three pages (#345): their tokens live in blocks keyed on `data-pt-page`, not on the room. */
+const PAGES = {
+  light: declarations(rule(":root,\n:root[data-pt-page='light']")),
+  sepia: declarations(rule(":root[data-pt-page='sepia']")),
+  dark: declarations(rule(":root[data-pt-page='dark']")),
+} as const;
+
+type RGB = [number, number, number];
+
+/** WCAG 2 screen blend, which is how the dark page puts its type on its ground (pdfPage.css). */
+function screen(a: RGB, b: RGB): RGB {
+  return a.map((c, i) => 255 - ((255 - c) * (255 - b[i]!)) / 255) as RGB;
+}
+
+/**
+ * The colour of PDF type on each page. pdf.js paints black. Light and Sepia leave it black (sepia
+ * multiplies the canvas); Dark inverts it to white, multiplies by the ink and screens it onto the
+ * page, which lands on the ink to within a level (pdfPage.css), a hair lighter than the token.
+ */
+function typeOn(name: keyof typeof PAGES): RGB {
+  const scheme = PAGES[name];
+  return name === 'dark'
+    ? screen(colour(scheme, '--pt-pdf-ink'), colour(scheme, '--pt-pdf-page'))
+    : [0, 0, 0];
+}
+
+describe('the paper in Light, Sepia and Dark (#345; #205, frame 09b)', () => {
+  for (const name of ['light', 'sepia', 'dark'] as const) {
+    const scheme = PAGES[name];
     const page = colour(scheme, '--pt-pdf-page');
 
     it(`${name}: PDF type reads at 4.5:1 on the page, on every wash and under the selection`, () => {
-      expect(contrast(PDF_TYPE, page)).toBeGreaterThanOrEqual(4.5);
+      expect(contrast(typeOn(name), page)).toBeGreaterThanOrEqual(4.5);
+      expect(ratio(scheme, '--pt-pdf-ink', '--pt-pdf-page')).toBeGreaterThanOrEqual(4.5);
       for (const wash of WASHES) {
         const ground = over(paint(scheme, `--pt-pdf-hl-${wash}`), page);
-        expect(contrast(PDF_TYPE, ground), wash).toBeGreaterThanOrEqual(4.5);
+        expect(contrast(typeOn(name), ground), wash).toBeGreaterThanOrEqual(4.5);
       }
       const selected = over(paint(scheme, '--pt-pdf-selection'), page);
-      expect(contrast(PDF_TYPE, selected)).toBeGreaterThanOrEqual(4.5);
+      expect(contrast(typeOn(name), selected)).toBeGreaterThanOrEqual(4.5);
     });
 
     it(`${name}: the flash ring keeps 3:1 on the page and on the lit wash it rings`, () => {
       const ring = colour(scheme, '--pt-pdf-ring');
       expect(contrast(ring, page)).toBeGreaterThanOrEqual(3);
-      expect(contrast(ring, over(paint(scheme, '--pt-lit-wash'), page))).toBeGreaterThanOrEqual(3);
+      expect(contrast(ring, over(paint(scheme, '--pt-pdf-lit-wash'), page))).toBeGreaterThanOrEqual(
+        3,
+      );
     });
 
-    it(`${name}: each highlight's underline ink keeps 3:1 on the page`, () => {
-      for (const wash of WASHES) {
-        expect(ratioOn(scheme, `--pt-hl-${wash}-ink`, page), wash).toBeGreaterThanOrEqual(3);
-      }
-    });
-  }
-
-  for (const [name, scheme] of [
-    ['daylight', LIGHT],
-    ['lamp-lit', DARK],
-  ] as const) {
     it(`${name}: the outline a flash leaves behind (data-flash="linger") keeps 3:1`, () => {
-      const page = colour(scheme, '--pt-pdf-page');
       const rest = Number(scheme.get('--pt-flash-rest'));
       const outline = over({ rgb: colour(scheme, '--pt-pdf-ring'), alpha: rest }, page);
       expect(contrast(outline, page)).toBeGreaterThanOrEqual(3);
     });
+
+    it(`${name}: each highlight's underline ink keeps 3:1 on the page, and each wash shows`, () => {
+      for (const wash of WASHES) {
+        expect(ratioOn(scheme, `--pt-pdf-hl-${wash}-ink`, page), wash).toBeGreaterThanOrEqual(3);
+        const ground = over(paint(scheme, `--pt-pdf-hl-${wash}`), page);
+        expect(contrast(ground, page), wash).toBeGreaterThanOrEqual(1.3);
+      }
+    });
+
+    it(`${name}: Guided's ink, links and highlights read on its sheet`, () => {
+      const sheet = colour(scheme, '--pt-guided-page');
+      for (const token of ['ink', 'ink-2', 'ink-muted', 'link'] as const) {
+        expect(ratioOn(scheme, `--pt-guided-${token}`, sheet), token).toBeGreaterThanOrEqual(4.5);
+      }
+      for (const token of ['border', 'focus'] as const) {
+        expect(ratioOn(scheme, `--pt-guided-${token}`, sheet), token).toBeGreaterThanOrEqual(3);
+      }
+      for (const wash of WASHES) {
+        const ground = over(paint(scheme, `--pt-pdf-hl-${wash}`), sheet);
+        expect(ratioOn(scheme, '--pt-guided-ink', ground), wash).toBeGreaterThanOrEqual(4.5);
+        expect(ratioOn(scheme, `--pt-pdf-hl-${wash}-ink`, sheet), wash).toBeGreaterThanOrEqual(3);
+      }
+    });
   }
 
-  it('lamp-lit: each wash stands off the dimmed page at least as far as off white by day', () => {
-    const [day, night] = [colour(LIGHT, '--pt-pdf-page'), colour(DARK, '--pt-pdf-page')];
-    for (const wash of WASHES) {
-      const byDay = contrast(over(paint(LIGHT, `--pt-pdf-hl-${wash}`), day), day);
-      const byLamp = contrast(over(paint(DARK, `--pt-pdf-hl-${wash}`), night), night);
-      expect(byLamp, wash).toBeGreaterThanOrEqual(byDay);
+  it('Sepia and Dark put figures on a padded mat with an edge; Light has none', () => {
+    expect(PAGES.light.get('--pt-pdf-mat')).toBe('transparent');
+    expect(PAGES.light.get('--pt-pdf-mat-pad')).toBe('0px');
+    for (const name of ['sepia', 'dark'] as const) {
+      expect(PAGES[name].get('--pt-pdf-mat-pad'), name).toBe('10px');
+      expect(ratio(PAGES[name], '--pt-pdf-mat-edge', '--pt-pdf-mat'), name).toBeGreaterThanOrEqual(
+        1.5,
+      );
     }
   });
 
-  it("lamp-lit: Guided's dark page keeps the plain washes, so its light ink still reads", () => {
-    const page = colour(DARK, '--pt-page');
+  for (const name of ['light', 'sepia', 'dark'] as const) {
+    const scheme = PAGES[name];
+    const page = colour(scheme, '--pt-pdf-page');
+    const mat =
+      scheme.get('--pt-pdf-mat') === 'transparent' ? page : colour(scheme, '--pt-pdf-mat');
+
+    it(`${name}: a picked picture's edge keeps 3:1 on the page and on the figure's mat (#348)`, () => {
+      const edge = colour(scheme, '--pt-pdf-img-edge');
+      expect(contrast(edge, page)).toBeGreaterThanOrEqual(3);
+      expect(contrast(edge, mat)).toBeGreaterThanOrEqual(3);
+    });
+
+    it(`${name}: its handles are drawn in the edge's colour on a fill that keeps 3:1 against it, and its chip reads`, () => {
+      const edge = colour(scheme, '--pt-pdf-img-edge');
+      expect(ratioOn(scheme, '--pt-pdf-img-handle', edge)).toBeGreaterThanOrEqual(3);
+      expect(ratioOn(scheme, '--pt-pdf-img-chip-ink', edge)).toBeGreaterThanOrEqual(4.5);
+    });
+
+    it(`${name}: the faint outline of a float under the pointer shows on the page, and its wash does not hide the type`, () => {
+      const hover = over(paint(scheme, '--pt-pdf-img-hover'), page);
+      expect(contrast(hover, page)).toBeGreaterThanOrEqual(2);
+      const washed = over(paint(scheme, '--pt-pdf-img-wash'), page);
+      expect(contrast(typeOn(name), washed)).toBeGreaterThanOrEqual(4.5);
+    });
+  }
+
+  it('dark: each wash stands off the page at least as far as off white by day', () => {
+    const [day, night] = [
+      colour(PAGES.light, '--pt-pdf-page'),
+      colour(PAGES.dark, '--pt-pdf-page'),
+    ];
     for (const wash of WASHES) {
-      const ground = over(paint(DARK, `--pt-hl-${wash}`), page);
-      expect(contrast(colour(DARK, '--pt-ink'), ground), wash).toBeGreaterThanOrEqual(4.5);
+      const byDay = contrast(over(paint(PAGES.light, `--pt-pdf-hl-${wash}`), day), day);
+      const byNight = contrast(over(paint(PAGES.dark, `--pt-pdf-hl-${wash}`), night), night);
+      expect(byNight, wash).toBeGreaterThanOrEqual(byDay);
+    }
+  });
+
+  it("Guided's sheet and its figure crops read the page's tokens, not the room's", () => {
+    const sheet = rule('.pt-guided__sheet');
+    expect(property(sheet, 'background')).toBe('var(--pt-guided-page)');
+    expect(property(sheet, 'color')).toBe('var(--pt-guided-ink)');
+    // the room's ink tokens are re-declared inside the sheet, so everything in it follows the page
+    expect(property(sheet, '--pt-ink')).toBe('var(--pt-guided-ink)');
+    expect(property(sheet, '--pt-primary')).toBe('var(--pt-guided-link)');
+    const crops = rule('.pt-guided__sheet .pt-figure__crop,\n.pt-guided__sheet .pt-equation__crop');
+    expect(property(crops, 'background')).toBe('var(--pt-pdf-mat)');
+    expect(property(crops, 'padding')).toBe('var(--pt-pdf-mat-pad)');
+  });
+
+  it('the room does not set the paper: neither dark block declares a page token', () => {
+    const explicit = rule(":root.dark,\n:root[data-pt-theme='dark']");
+    const media =
+      /@media \(prefers-color-scheme: dark\) \{\s*:root:not\(\[data-pt-theme='light'\]\) \{([^}]*)\}/.exec(
+        CSS,
+      )?.[1] ?? '';
+    expect(media).not.toBe('');
+    for (const block of [explicit, media]) {
+      expect(block).not.toMatch(/--pt-(pdf|guided)-|--pt-flash-rest/);
     }
   });
 });

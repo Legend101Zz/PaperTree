@@ -1,16 +1,17 @@
 # diagram
 
-The engraved plate (#217, frames 07a–07c, DESIGN.md §1 "Diagrams", ADR-004 §2.9): "Explain with a diagram" on
-a selection draws a small figure of lettered parts A–L in the explain panel, each part with the passage it
-stands on. The backend is S7a (#216): a `diagram` thread, the `diagram-v1` prompt, parts streamed as SSE
-`plate` / `part` / `link` events with each quote already resolved to an Anchor.
+The engraved plate (#217, frames 07a–07c, DESIGN.md §1 "Diagrams", ADR-004 §2.9): a small figure of lettered
+parts A–L in the explain panel, each part with the passage it stands on. The reader no longer starts one from a
+selection ("Explain with a diagram" left the selection menu in #346: diagrams live inside answers, #339); a
+`diagram` thread stored by v0.2 still renders in the panel, and its plate can be redrawn. The backend is S7a
+(#216): a `diagram` thread, the `diagram-v1` prompt, parts streamed as SSE `plate` / `part` / `link` events with
+each quote already resolved to an Anchor.
 
 ## Data flow
 
-UI (the selection toolbar's "Explain with a diagram" → `components/reader/SourcePane` →
-`ReaderActions.explainWithDiagram`) → controller (`components/explain/useExplainActions`: `openDiagram`, the
-stream reader, `redraw`; the plate rides on the panel's message as `diagram`) → `lib/api/threads` →
-`POST /papers/{id}/threads {kind: "diagram", anchor}` and, for a Redraw,
+UI (a stored diagram thread opened in the explain panel) → controller (`features/explain/hooks/useExplainActions`:
+`selectThread`, the stream reader, `redraw`; the plate rides on the panel's message as `diagram`) → `lib/api/threads` →
+`GET /papers/{id}/threads/{tid}` and, for a Redraw,
 `POST /papers/{id}/threads/{tid}/messages {question, redraw_of}` (`services/api` `routers/threads.py`) → DB
 (`ai_diagram_parts` rows, one per part as it arrives; `ai_messages.diagram_json` for the title and links;
 migration 0011). The stored read (`GET /papers/{id}/threads/{tid}`, each message's `diagram`) replaces the live
@@ -25,23 +26,17 @@ plate once it settles (`features/explain/model/messages.mergeStored`), keyed by 
 - **A dropped letter keeps its row.** The API keeps the agent's letters; a part it dropped (an unreadable line, or
   one the table refused) leaves an empty row ("Part C was left out of the plate."), never renumbered. A dropped
   LAST letter leaves no row: nothing after it shows that it was ever there.
-- **Every part says where it stands** (DESIGN.md §4): **cited** (the quote is word for word in the passage:
-  marker, solid tab, the quote in the paper's voice), **not verified** (near a passage: dashed marker and tab;
-  or found nowhere: no marker, "not verified · not found in the paper"; either way the quote is the AI's, never
-  shown in the paper's voice), or **inferred** (no quote: a dashed box, "Inferred, no passage", the AI's own
-  line). In the drawing only a cited part has a hatched shadow; a not-verified one is dotted, captioned "not
-  verified", with a dashed marker (or "?" when its quote was found nowhere); an inferred one is dashed and
-  captioned. The readout counts them from the data: "6 parts · 5 cited · drawn by AI from p. 4" ("so far" while
-  it draws; a not-verified part is counted in words; "drawn by AI" alone when nothing is cited).
+- **A part may say where it came from, quietly** (#340): when the part has a passage of the paper behind it (an
+  Anchor), its key row ends in "From the paper: p. 4"; a part with none says nothing. No verdict ("cited / not
+  verified / inferred"), no marker, no tab, no caption, no hatching difference: every box looks alike. The
+  readout is "6 parts · drawn by AI from p. 4" ("so far" while it draws; "drawn by AI" alone when no part has a
+  page).
 - **The key is the plate's text alternative.** The drawing is `aria-hidden`; each key row is a button named by its
-  own words (no `aria-label`), with hidden words for what only the drawing shows: "Part E: … Passage 2, p. 4
-  ¶2. “…” Arrows in from D and A (V). Show in paper." and "Link back to B (again)." for a feedback link.
-- **Passage numbers** are the thread's (`model/plate.numberPlatePassages`): 1..k in the order the plates first
-  stand on a passage (keyed by the Anchor's block), so two parts on one paragraph share a marker and a Redraw's
-  plate keeps the same numbers.
-- **Tap a part** (its box or its key row) and the reader flashes its passage (`ReaderActions.focusAnchor`, with
-  `from.part`, so the margin tab says "from part C, Scale ÷ √dk"). A part with nothing to flash says so in a
-  polite live region instead.
+  own words (no `aria-label`), with hidden words for what only the drawing shows: "Part E: … The AI's line. From
+  the paper: p. 4. Arrows in from D and A (V). Show in paper." and "Link back to B (again)." for a feedback link.
+- **Tap a part** (its box or its key row) and the reader flashes its passage (`ReaderActions.focusAnchor`; the
+  flash has no margin tab). A part with nothing to flash says so in a polite live region instead ("Part F has no
+  passage in the paper to show.").
 - **What the run left out** (the API's writing-phase `status` labels: a skipped line, a dropped arrow) is listed
   under the plate. It is live only: a stored read does not carry it.
 - **Stop** (S4d's, on the tab row) freezes the plate: the run is cancelled, the parts that arrived stay
@@ -71,6 +66,58 @@ plate once it settles (`features/explain/model/messages.mergeStored`), keyed by 
   a failed or stopped-empty plate's Retry is held back the same way. A Redraw refused before the stream keeps its
   ask (stamped "not sent") and its Retry sends that same Redraw again, never a new thread.
 
+## The figure inside an answer (v0.3)
+
+### Mermaid (new answers)
+
+New answers draw their figure as a ```mermaid fence in "How it works"; the model picks the type that fits the
+idea (flowchart, sequenceDiagram, stateDiagram-v2, mindmap, timeline, quadrantChart, xychart-beta, classDiagram,
+erDiagram). The agent checks the fence (`services/agent/src/mermaid.ts`: allowed types, no `%%{` directive,
+`click`, `href`, HTML, size caps) and drops an unsafe one; then the agent's figure step (`figure.ts`) runs the REAL
+`mermaid.parse` in a worker thread (`mermaid-parse.ts`, happy-dom shim isolated there), repairs what it can
+(`mermaid-repair.ts`: split statements, quote shape characters, one root, drop `<br>`), asks the model once, else
+drops the fence, and enforces the size caps the prompt states.
+`components/MermaidDiagram.tsx` draws what is left:
+
+- `mermaid` is imported only in `mermaid/render.ts`, with `import('mermaid')`, only once a fence has CLOSED
+  (webpack makes it async chunks; the reader route's first-load JS is unchanged). While the fence streams there is
+  the same quiet dashed placeholder as the plate figure, never raw code.
+- `mermaid.initialize({ startOnLoad: false, securityLevel: 'strict', theme: 'base', themeVariables })` before each
+  draw (Mermaid's config is global, so draws are queued one at a time), then `mermaid.parse` (`suppressErrors`),
+  then `mermaid.render`. A fence that fails either draws NOTHING (a hidden empty figure, `data-mermaid-failed`):
+  a "diagram unavailable" note would put the app's failure into an answer that reads fine without the picture,
+  and raw code never shows. Results are cached by text + theme.
+- `mermaid/theme.ts` maps the figure's computed `--pt-*` tokens (ink, ink-muted, page, ai-slip, rule,
+  control-border, accent, the UI face) onto Mermaid's base theme variables, in `#rrggbb` only (Mermaid's colour
+  parser rejects the `rgb(r g b / a%)` form). Light / Sepia / Dark pages and Daylight / Lamp-lit rooms are just
+  other values of those tokens; a `MutationObserver` on `<html>` (class, `data-pt-theme`, `data-pt-page`) and the
+  OS scheme re-read them and the figure is drawn again only when the tokens really changed.
+- Mermaid's svg carries a `<style>` scoped to its own id (`#pt-mmd-N .node ...`, `createUserStyles`), so it cannot
+  restyle the page; strict mode sanitises labels. The figure scales to its room but never below 0.7
+  (`mermaid/scale.ts`): a wider drawing keeps that scale and scrolls sideways inside its box, with a fade at the
+  edge it scrolls toward; its height is capped like a board card (`--pt-card-cap`, 60vh) and scrolls inside. One
+  click on it ("larger") shows it at its natural width; click, Enter/Space or Esc puts it back (the Explain image head's pattern). Its accessible name is
+  "Diagram, <type in words>: first labels" (`mermaid/fence.ts`); the drawing itself is `aria-hidden`. No motion.
+- Tests: `test/mermaid-diagram.spec.tsx` (mermaid mocked: lazy load, parse first, failure, re-theme, larger),
+  `test/mermaid-answer.spec.tsx` (streaming placeholder through `AnswerBody`), `test/mermaid-theme.spec.ts`,
+  `mermaid/fence.spec.ts`, `mermaid/scale.spec.ts` (min scale, scroll, CSS contract), `mermaid/theme.spec.ts`
+  (no default rainbow per page/room), `components/MermaidDiagram.spec.tsx`.
+
+### The older plate fence
+
+A ```diagram fence (a stored answer from before) is NOT drawn on the slot grid. `model/layered.ts` lays it out as layers:
+rank = longest path from a root via `after`, parts of one rank side by side (ordered by barycentre sweeps,
+fewest crossings), an arrow that skips rows runs down a virtual lane box so it never crosses a box, arrows leave a
+parent's bottom and enter a child's top at spread ports (straight when aligned, else one short elbow), a rank too
+wide for the room wraps onto more rows, and a pure chain stays one column. `InlineDiagram` measures its width
+(ResizeObserver: ~520 in the Explain panel, ~300 in a board card) and passes it as `maxWidth`; boxes narrow to 100
+before a row wraps. `components/LayeredDrawing.tsx` draws it with the plate's classes and tokens but NO key
+letters or leader lines; labels with maths (`$…$`, or bare TeX like `√d_k` marked by `model/maths.ts`) are typeset
+by `lib/MathText` in a `foreignObject`; the `<svg role="img">` carries a `<title>` and a `<desc>` listing the
+parts and arrows in order. The standalone plate (`PlateDrawing`, `layout.ts`) is unchanged. Tests:
+`test/diagram-layered.spec.ts` (the ten reviewed fences: no overlap, every arrow parent -> child, none through a
+box, fits 520 and 300), `test/diagram-inline.spec.tsx`.
+
 ## On screen
 
 - `components/DiagramExchange.tsx`: one exchange of a diagram thread: the call slip, the plate, the lines under
@@ -89,8 +136,8 @@ plate once it settles (`features/explain/model/messages.mergeStored`), keyed by 
 
 - `model/layout.ts`: the slot grid. Pure, tested (`layout.spec.ts`: stability under streaming on the recorded
   run, determinism, arrows only from earlier letters, gaps kept, a 12-part plate in well under 16 ms).
-- `model/plate.ts`: events → plate, verdicts, readout, passage numbers, tabs, the phase. Pure, tested on the
+- `model/plate.ts`: events → plate, the readout, a part's page, the phase. Pure, tested on the
   recorded faux runs (`plate.spec.ts`). `model/fit.ts`: a box label at 15 or 13 px, on one or two lines, else cut;
   an edge label cut to its lane (`fit.spec.ts`).
-- `e2e/v02/diagram.spec.ts`: the walk on the faux agent (select → plate → tap B → Send to board → the board card).
+- `e2e/v02/stored-plate.spec.ts`: the walk on the faux agent (a stored diagram thread → plate in the panel → tap B → Send to board → the board card).
 - `apps/web/test/s7b-plate.spec.tsx`: the panel on recorded SSE frames (`test/fixtures/diagram-plate*.sse`).

@@ -157,36 +157,6 @@ export function viewportFor(args: {
   };
 }
 
-/**
- * An IR bbox to the CSS rect of an overlay painted at scale 1.
- *
- * THE OVERLAY IS SIZED TO THE SCALE-1 VIEWPORT AND SCALED WITH A CSS TRANSFORM. That is the whole
- * trick, and it is why zoom and resize are free rather than a recompute:
- *
- *     <div style="width: {w}px; height: {h}px; transform: scale(z); transform-origin: 0 0">
- *
- * Zoom then costs one composited transform. Nothing is re-measured, nothing is re-laid-out, and —
- * critically — NOTHING IS READ BACK FROM THE DOM. The v1 reader divides `getClientRects()` by
- * `window.innerWidth` at capture and treats the result as a fraction of the page element at paint,
- * which is why its highlights land wrong on creation, move on resize, and differ per device. Every
- * number in this function comes from the IR and the zoom; there is no measurement to be wrong.
- *
- * Returned in CSS pixels at scale 1, so the caller multiplies by nothing.
- */
-export function irBboxToOverlayRect(bbox: BBox): {
-  left: number;
-  top: number;
-  width: number;
-  height: number;
-} {
-  return {
-    left: bbox[0],
-    top: bbox[1],
-    width: Math.max(0, bbox[2] - bbox[0]),
-    height: Math.max(0, bbox[3] - bbox[1]),
-  };
-}
-
 /** An IR polygon to an SVG `points` attribute at scale 1. */
 export function irPolygonToSvgPoints(polygon: readonly Point[]): string {
   return polygon.map((p) => `${p[0]},${p[1]}`).join(' ');

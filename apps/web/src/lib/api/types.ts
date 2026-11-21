@@ -88,6 +88,11 @@ export interface JobSummary {
 /** The reading mode the reader saves with a place (`PUT /papers/{id}/reading-state`). */
 export type ReadingMode = 'source' | 'guided' | 'split';
 
+/** `PATCH /papers/{id}` (v0.3 #337): the name the library shows; 1 to 300 characters once trimmed. */
+export interface PaperRename {
+  readonly title: string;
+}
+
 /** `GET /auth/me` and `PATCH /auth/me`. `display_name` is null until the person sets one. */
 export interface Me {
   user_id: string;
@@ -231,24 +236,8 @@ export interface Citation {
   marker: string;
   page_index: number;
   anchor: Anchor;
-  supported: boolean | null;
   /** On a stored answer read back; absent on the live SSE `citations` event. */
   locator?: PassageLocator;
-}
-
-/** How much of an assistant answer is cited (#201). */
-export interface MessageCoverage {
-  passages: number;
-  /** Marker handle occurrences that have a stored citation (`[b1, b8]` counts 2). */
-  citations: number;
-  /** Occurrences whose handle has no stored citation; never counted in `citations`. */
-  unresolved_markers: number;
-  paragraphs: number;
-  /** 0-based indexes into the list `exchanges.answer_paragraphs` builds (blank-line split, bare
-   * Markdown heading lines dropped) of the paragraphs with no marker. */
-  uncited_paragraphs: number[];
-  /** Stored citations with `supported === false`; an unchecked one (null) is not counted. */
-  not_verified: number;
 }
 
 export interface RunSummary {
@@ -275,11 +264,9 @@ export interface DiagramCite {
   anchor: Anchor | null;
   locator: PassageLocator | null;
   page_index: number | null;
-  /** true: verbatim ("cited"); false: with differences or not found ("not verified"). */
-  supported: boolean;
 }
 
-/** One lettered part of a diagram answer; `cite` null is "inferred, no passage". */
+/** One lettered part of a diagram answer; `cite` null: no passage of the paper behind it. */
 export interface DiagramPart {
   letter: string;
   label: string;
@@ -307,6 +294,9 @@ export interface MessageDiagram {
   links: DiagramLink[];
 }
 
+/** How deep an AI answer goes (v0.3 answer format §2); the default is `familiar`. */
+export type AnswerLevel = 'new' | 'familiar' | 'expert';
+
 export interface Message {
   message_id: string;
   thread_id: string;
@@ -318,17 +308,26 @@ export interface Message {
   generation: number;
   run: RunSummary | null;
   citations: Citation[];
-  /** Only on an assistant message that is `complete` or `partial` (and not a diagram). */
-  coverage?: MessageCoverage;
   /** Only on an assistant message of a `diagram` thread. */
   diagram?: MessageDiagram;
+  /**
+   * The level an assistant answer of an explain or ask thread was written at (an answer stored
+   * before v0.3 reads `familiar`); null on a user message and on a diagram answer.
+   */
+  level: AnswerLevel | null;
+  /**
+   * Assistant messages only (null on a user message): the `message_id` of the FIRST answer to the
+   * question this one answers. Answers that share it are siblings, one per level; an answer with
+   * no sibling carries its own `message_id`.
+   */
+  sibling_group: string | null;
   created_at: string;
   completed_at: string | null;
 }
 
 export interface Thread {
   thread_id: string;
-  kind: 'explain' | 'ask' | 'diagram';
+  kind: 'explain' | 'ask' | 'diagram' | 'image';
   title: string;
   origin_anchor: Anchor | null;
   created_at: string;
@@ -361,6 +360,9 @@ export type SseEvent =
       };
     }
   | { event: 'text'; data: { delta: string } }
+  // A board ask only (v0.3 #343): its FIRST frame is the answer card the server made up front,
+  // the node itself (not wrapped), before `run`.
+  | { event: 'node'; data: CanvasNode }
   | { event: 'citations'; data: { items: Citation[] } }
   // A diagram run (v0.2 S7a/S7b): its title, then each part with its quote already resolved, and
   // the feedback edges `after` cannot say. No `text` and no `citations` come on such a run.
@@ -374,6 +376,12 @@ export type SseEvent =
         status: 'complete' | 'partial' | 'error' | 'aborted';
         error: { code: RunErrorCode | ErrorCode; retryable: boolean; message: string } | null;
         message_id: string;
+        /**
+         * The STORED text when it differs from what the `text` events carried (the agent repairs
+         * or removes a ```mermaid fence after the stream ends), else null. A reader replaces what
+         * it streamed with it (contracts.md §2.6, 2026-11-20).
+         */
+        final_text: string | null;
       };
     };
 
@@ -383,7 +391,7 @@ export interface Summary {
   prompt_version: string;
   created_at: string;
   status: 'complete' | 'partial';
-  bullets: { text: string; citations: Citation[]; supported: boolean }[];
+  bullets: { text: string; citations: Citation[] }[];
 }
 
 export interface Board {
@@ -416,9 +424,67 @@ export interface CanvasNode {
   source_diagram_id: string | null;
   /** A notebook card's page counts, computed on read; null on every other kind. */
   counts: NotebookCardCounts | null;
+  /** The v0.3 branching board (migration 0016, #343). A root passage and a loose card have no parent. */
+  /** The node this one answers or annotates; null on a root and on a loose card. */
+  parent_id: string | null;
+  /** Where a child sits relative to its parent; null on a root and on a loose card. */
+  branch: BoardBranch | null;
+  /** The words of the parent's answer this branch starts from; null for a follow-up. */
+  parent_span: ParentSpan | null;
+  /** For an answer, the ask as typed or the quick-ask label. */
+  question: string | null;
+  /** What the ask sent: the Uses picker's choices. */
+  uses: AskUses | null;
+  /** The reader's drag offset on top of the Tidy layout. */
+  offset_x: number;
+  offset_y: number;
+  /** A folded subtree shows as one pill. */
+  folded: boolean;
+  /** Answer nodes only (null on every other kind), read with the board: no thread fetch per card. */
+  final_text: string | null;
+  level: AskLevel | null;
+  model: string | null;
+  /** `streaming` while the run is live. */
+  answer_status: AnswerStatus | null;
+  /**
+   * An answer card's citations (each `[bN]` handle with its page and Anchor), read with the board in
+   * the same query as `final_text`; null on every other kind. No thread scan finds them.
+   */
+  citations: Citation[] | null;
   version: number;
   created_at: string;
   updated_at: string;
+}
+
+/** Which way a child leaves its parent: `down` continues the thread, `right` branches. */
+export type BoardBranch = 'down' | 'right';
+
+/**
+ * A selection in the parent's stored answer text. The offsets are UTF-16 code units into the
+ * Markdown the model wrote (not the rendered text), so they hold across renders.
+ */
+export interface ParentSpan {
+  start: number;
+  end: number;
+  quote: string;
+}
+
+/** Where an answer card's run stands, as the board reads it. */
+type AnswerStatus = 'streaming' | 'complete' | 'partial' | 'error' | 'aborted';
+
+/** The depth an answer is written at. */
+export type AskLevel = 'new' | 'familiar' | 'expert';
+
+/** The Uses picker's choices, sent with an ask and stored on the answer node. */
+export interface AskUses {
+  /** Whether the ancestors' questions and answers go with the ask. */
+  path: boolean;
+  /** `page` = the passage's page and one either side, no tools; `whole` = tools allowed. */
+  paper: 'page' | 'whole' | 'off';
+  level: AskLevel;
+  diagram: 'may' | 'never' | 'always';
+  /** Cards the reader selected on purpose; sibling branches are never sent otherwise. */
+  extra_node_ids: string[];
 }
 
 type CanvasNodeKind =

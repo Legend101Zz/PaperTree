@@ -20,7 +20,20 @@ function required(name: string): string {
   return value;
 }
 
-export const test = base.extend<{ stack: Stack }>({
+export const test = base.extend<{ stack: Stack; closeStrayContexts: void }>({
+  // Many specs open their own context (`browser.newContext`) and never close it. Across ~100
+  // tests those contexts, each with a rendered PDF, kept CI at 13-14 GB of a 16 GB runner until
+  // the job was killed (exit 143). After every test, close whatever contexts are still open; the
+  // built-in `context` fixture is set up after this one, so it is torn down (traces saved) first.
+  closeStrayContexts: [
+    async ({ browser }, use) => {
+      await use();
+      await Promise.all(
+        browser.contexts().map((context) => context.close().catch(() => undefined)),
+      );
+    },
+    { auto: true },
+  ],
   stack: async ({}, use) => {
     await use({
       apiUrl: required('PAPERTREE_E2E_API_URL'),

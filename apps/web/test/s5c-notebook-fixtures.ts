@@ -76,7 +76,6 @@ export const CITATIONS: Citation[] = PASSAGES.map(
     marker,
     page_index: page,
     anchor: anchor(id, block, page, exact),
-    supported: true,
     locator: {
       passage_key: `g1:${block}`,
       page_index: page,
@@ -112,6 +111,8 @@ const USER: Message = {
   generation: 1,
   run: null,
   citations: [],
+  level: null,
+  sibling_group: null,
   created_at: T,
   completed_at: T,
 };
@@ -123,17 +124,9 @@ export const ANSWER_MESSAGE: Message = {
   role: 'assistant',
   content: CONTENT,
   citations: CITATIONS,
-  coverage: {
-    passages: 4,
-    citations: 11,
-    unresolved_markers: 0,
-    paragraphs: 5,
-    uncited_paragraphs: [4],
-    not_verified: 0,
-  },
   run: {
     run_id: 'run_1',
-    model: 'MiniMax-M3.1-Flash-Preview',
+    model: 'MiniMax-M3.1-Flash',
     provider: 'minimax',
     agent_sdk: 'pi',
     input_tokens: 6000,
@@ -178,7 +171,7 @@ function item(
 
 const EXCHANGE_BODY = JSON.stringify({
   call: { text: 'Explain this passage.', origin_anchor: ORIGIN },
-  ai: { message_id: ANSWER, model: 'MiniMax-M3.1-Flash-Preview', content: CONTENT },
+  ai: { message_id: ANSWER, model: 'MiniMax-M3.1-Flash', content: CONTENT },
 });
 
 export function pageView(extra: NotebookItemWire[] = []): NotebookPageView {

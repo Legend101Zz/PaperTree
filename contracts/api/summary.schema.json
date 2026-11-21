@@ -195,21 +195,11 @@
         "anchor": {
           "$ref": "#/$defs/AnchorV1"
         },
-        "supported": {
-          "anyOf": [
-            {
-              "type": "boolean"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
         "locator": {
           "$ref": "#/$defs/PassageLocator"
         }
       },
-      "required": ["citation_id", "ordinal", "marker", "page_index", "anchor", "supported"],
+      "required": ["citation_id", "ordinal", "marker", "page_index", "anchor"],
       "title": "Citation",
       "type": "object"
     },
@@ -495,12 +485,9 @@
             "$ref": "#/$defs/Citation"
           },
           "type": "array"
-        },
-        "supported": {
-          "type": "boolean"
         }
       },
-      "required": ["text", "citations", "supported"],
+      "required": ["text", "citations"],
       "title": "SummaryBullet",
       "type": "object"
     },
