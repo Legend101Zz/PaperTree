@@ -43,6 +43,13 @@ describe('buildTree', () => {
     expect(tree.loose).toEqual([]);
   });
 
+  it('keeps a childless answer sent from the reader as a tree of one too', () => {
+    // So it is laid out at the tree width from the start and other trees' branches move clear of it.
+    const tree = buildTree([node({ id: 'ans', kind: 'explanation' })]);
+    expect(ids(tree.roots)).toEqual(['ans']);
+    expect(tree.loose).toEqual([]);
+  });
+
   it('treats a card whose parent is not on the board as loose instead of dropping it', () => {
     const tree = buildTree([node({ id: 'a', parent: 'gone' })]);
     expect(ids(tree.loose)).toEqual(['a']);

@@ -11,7 +11,7 @@ better or worse, are in [`docs/METRICS.md`](docs/METRICS.md).
 
 The "tutor" release: a book comes off the shelf and opens in one move, an answer reads like a tutor
 explaining, and the board becomes a branching tree you can lay beside the paper. v0.3 is not tagged yet:
-its pull requests (#350, #352 to #369) are the work of the v0.3 build, and the figures below come from a
+its pull requests (#350, #352 to #373) are the work of the v0.3 build, and the figures below come from a
 metrics pass on the build, not from a CI run. What got better or worse, with numbers, is in
 [`docs/METRICS.md`](docs/METRICS.md#v03-against-v02).
 
@@ -20,9 +20,24 @@ metrics pass on the build, not from a CI run. What got better or worse, with num
 - **The shelf and the spread:** a click takes the book off the shelf and opens it (spines stand on planks
   and have widths that follow the paper). The spread has At a glance (a short sheet made in the background),
   Continue, Rename, Topic, and Delete with Undo.
-- **Tutor answers:** an explanation comes in sections, in plain words, with maths set in KaTeX, an inline
+- **Tutor answers:** an explanation comes in sections (TL;DR, In plain words, How it works, In the paper), in plain words, with maths set in KaTeX, an inline
   diagram that draws the mechanism, levels (simpler or deeper), and Check yourself. Sources are quiet: a
   small mark you open, not chips between the words.
+- **Mermaid diagrams:** the figure in "How it works" is a ` ```mermaid ` fence, and the model picks the kind
+  that fits: flowchart, sequence, state, mindmap, timeline, quadrant, xy chart or class diagram.
+  - The agent runs Mermaid's own parser on the fence before an answer is stored. It repairs what it can
+    (split statements, quoted shape characters, one mindmap root), asks the model once to repair the rest,
+    and otherwise drops the fence, so a reload shows what the live answer showed.
+  - The browser loads `mermaid` 12.2.0 lazily, only once a fence has closed, and shows a quiet "drawing…"
+    placeholder until then. It draws with Mermaid's strict security level, themed from the app's tokens
+    (Light, Sepia and Dark pages, Daylight and Lamp-lit rooms), and redraws when they change. A fence that
+    does not parse draws nothing.
+  - A figure scales to its room but never below 70 % of its drawn size; a wider one scrolls sideways and is
+    a keyboard-reachable region. On a board card the figure is a whole-diagram preview, and "larger" opens
+    it in a dialog.
+  - A stress test of four rounds of live MiniMax-M3.1-Flash answers over the eight corpus papers: round 1
+    (prompt only) drew 91 diagrams and 4 failed to render; rounds 2 to 4 left the reader 237 diagrams and 0
+    failed to render, in light and dark.
 - **Dark and sepia pages:** the paper itself can be read light-on-dark or in sepia (the Aa menu); figures
   sit on a mat that never covers a caption or a label.
 - **The selection menu** sits beside the selection, with one paint band per line.
@@ -55,6 +70,13 @@ metrics pass on the build, not from a CI run. What got better or worse, with num
 
 ### Fixed
 
+- **Shelf and board, #373:** six fixes found while taking the v0.3 screenshots.
+  - A short plank shelf no longer scrolls or clips its first and last label holders.
+  - The board header's card count no longer runs under the tools.
+  - The Enter hint on the board's Follow up button is readable, and the heading sliver beside it is gone.
+  - A tree that grows a branch pushes its neighbour clear instead of sliding under it.
+  - An answer sent from the reader, with no children, is a tree of one: only a tree that grows pushes.
+  - The Board-beside bar clips its title instead of showing a sliver of it.
 - **Issues closed:** #323 (env files and `contracts.md` list v0.2's model variables), #336 to #346 (shelf
   and book opening, maths, tutor answers, quiet sources, Summary readout, board send, split view, dark
   reading, the selection menu), #348 (image selection and asks), #349 (UI changes found by playing the
@@ -62,7 +84,9 @@ metrics pass on the build, not from a CI run. What got better or worse, with num
   (an e2e job that can hang) stay open.
 - **Pull requests:** #350 (Wave 0), #352 to #358 and #360 (Waves 1 to 3: reading, selection, shelf, spread,
   tutor answer), #362 to #365 (Wave 4: the board), #366 and #367 (Wave 5: images), #368 and #369 (Wave 6:
-  the reader split, live-check fixes, the dead-code sweep). #363 was closed and replaced by #364.
+  the reader split, live-check fixes, the dead-code sweep), #370 to #372 (Wave 6: diagram layout, docs,
+  Mermaid) and #373 (Wave 7: this README, the v0.3 screenshots and demo, and the six fixes above). #363 was
+  closed and replaced by #364.
 
 ## [0.2.0] - 2026-10-17
 
@@ -71,8 +95,8 @@ explains a passage with numbered markers that flash the passages they stand on, 
 every part. A notebook page starts from an answer, and the board (v0.1's canvas) lays out what you found.
 The whole interface was built from one design: of its 32 frames, 16 are done and 16 are partial, and
 each partial frame has an issue ([`RESULT.md`](research/build/v0.2-ui/RESULT.md), "Frames"). The full
-notes are on the [GitHub release](https://github.com/Legend101Zz/PaperTree/releases/tag/v0.2.0) and in
-the [README](README.md#release-notes-v020); what got better or worse, with numbers, is in
+notes are on the [GitHub release](https://github.com/Legend101Zz/PaperTree/releases/tag/v0.2.0);
+what got better or worse, with numbers, is in
 [`docs/METRICS.md`](docs/METRICS.md#v02-against-v01).
 
 ### Added

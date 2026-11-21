@@ -41,10 +41,13 @@ export function BoardHeader({
     // The pane's own bar (V3-25): the paper is already on the left, so there is no way back to take.
     return (
       <header className="pt-boardbar pt-boardbar--beside">
-        <h1 className="pt-boardbar__h1" title={paperTitle ?? undefined}>
-          {name ?? 'Board'}
-        </h1>
-        {counts === null ? null : <p className="pt-boardbar__counts">{counts}</p>}
+        {/* The same title block as the full bar: in a narrow pane it clips, never a sliver. */}
+        <div className="pt-boardbar__title">
+          <h1 className="pt-boardbar__h1" title={paperTitle ?? undefined}>
+            {name ?? 'Board'}
+          </h1>
+          {counts === null ? null : <p className="pt-boardbar__counts">{counts}</p>}
+        </div>
         {children}
       </header>
     );

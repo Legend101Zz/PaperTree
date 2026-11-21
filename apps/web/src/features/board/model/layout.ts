@@ -240,6 +240,7 @@ export function layoutBoard<N extends LayoutNodeInput = CanvasNode>(
   };
 
   for (const root of tree.roots) place(root, undefined, root.x, root.y, null, root, { x: 0, y: 0 });
+  separateTrees(tree.roots, cards);
 
   for (const id of order) {
     const node = tree.byId.get(id);
@@ -251,6 +252,86 @@ export function layoutBoard<N extends LayoutNodeInput = CanvasNode>(
     edges.push(edgeBetween(node, parent, child, input.spanY));
   }
   return { cards, order, edges, hidden };
+}
+
+/** The room left between two trees when one is moved clear of another. */
+export const TREE_GAP = COLUMN_GAP;
+
+interface Box {
+  readonly left: number;
+  readonly top: number;
+  readonly right: number;
+  readonly bottom: number;
+}
+
+const overlaps = (a: Box, b: Box): boolean =>
+  a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+
+/**
+ * The box around some cards.
+ *
+ * @param cards The cards (at least one).
+ * @returns Their bounding box.
+ */
+function boxAround(cards: readonly PlacedCard[]): Box {
+  return {
+    left: Math.min(...cards.map((c) => c.x)),
+    top: Math.min(...cards.map((c) => c.y)),
+    right: Math.max(...cards.map((c) => c.x + c.w)),
+    bottom: Math.max(...cards.map((c) => c.y + c.h)),
+  };
+}
+
+const shifted = (box: Box, dx: number): Box => ({
+  ...box,
+  left: box.left + dx,
+  right: box.right + dx,
+});
+
+/**
+ * Each tree is laid out from its own root, so a tree that grows (a new branch in the next column)
+ * can land on the tree beside it. Taken in reading order (left to right, then top down), a tree
+ * that overlaps the BRANCHES of a tree already settled moves right, as a whole, until it is clear
+ * by `TREE_GAP`; a tree that was moved is then in the way as a whole. Only growth pushes: cards
+ * the reader placed over each other stay as they are, and a board with no branches (every v0.2
+ * board) is not touched. Nothing is stored: the push goes when the branch that caused it does.
+ *
+ * @param roots The roots, as laid out.
+ * @param cards Every placed card; the cards of a moved tree are replaced, shifted.
+ */
+function separateTrees(roots: readonly TreeNodeInput[], cards: Map<string, PlacedCard>): void {
+  const members = new Map<string, PlacedCard[]>();
+  for (const card of cards.values()) {
+    const list = members.get(card.rootId) ?? [];
+    list.push(card);
+    members.set(card.rootId, list);
+  }
+  // Nothing has grown: nothing can have grown into anything.
+  if ([...members.values()].every((list) => list.length < 2)) return;
+  const ordered = roots
+    .map((root) => cards.get(root.node_id))
+    .filter((card): card is PlacedCard => card !== undefined)
+    .sort((a, b) => a.x - b.x || a.y - b.y);
+  const inTheWay: Box[] = [];
+  for (const root of ordered) {
+    const own = members.get(root.id) ?? [];
+    const box = boxAround(own);
+    let dx = 0;
+    for (;;) {
+      const moved = shifted(box, dx);
+      const hits = inTheWay.filter((other) => overlaps(moved, other));
+      if (hits.length === 0) break;
+      // Monotone: each step clears every box hit so far, so the loop ends.
+      dx = Math.max(...hits.map((other) => other.right + TREE_GAP - box.left));
+    }
+    if (dx > 0) {
+      for (const card of own)
+        cards.set(card.id, { ...card, x: card.x + dx, baseX: card.baseX + dx });
+      inTheWay.push(shifted(box, dx));
+    }
+    const branches = own.filter((card) => card.id !== root.id);
+    if (branches.length > 0) inTheWay.push(shifted(boxAround(branches), dx));
+  }
 }
 
 function edgeBetween(
