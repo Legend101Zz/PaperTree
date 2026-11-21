@@ -66,6 +66,21 @@ plate once it settles (`features/explain/model/messages.mergeStored`), keyed by 
   a failed or stopped-empty plate's Retry is held back the same way. A Redraw refused before the stream keeps its
   ask (stamped "not sent") and its Retry sends that same Redraw again, never a new thread.
 
+## The figure inside an answer (v0.3)
+
+A ```diagram fence in an answer is NOT drawn on the slot grid. `model/layered.ts` lays it out as layers:
+rank = longest path from a root via `after`, parts of one rank side by side (ordered by barycentre sweeps,
+fewest crossings), an arrow that skips rows runs down a virtual lane box so it never crosses a box, arrows leave a
+parent's bottom and enter a child's top at spread ports (straight when aligned, else one short elbow), a rank too
+wide for the room wraps onto more rows, and a pure chain stays one column. `InlineDiagram` measures its width
+(ResizeObserver: ~520 in the Explain panel, ~300 in a board card) and passes it as `maxWidth`; boxes narrow to 100
+before a row wraps. `components/LayeredDrawing.tsx` draws it with the plate's classes and tokens but NO key
+letters or leader lines; labels with maths (`$…$`, or bare TeX like `√d_k` marked by `model/maths.ts`) are typeset
+by `lib/MathText` in a `foreignObject`; the `<svg role="img">` carries a `<title>` and a `<desc>` listing the
+parts and arrows in order. The standalone plate (`PlateDrawing`, `layout.ts`) is unchanged. Tests:
+`test/diagram-layered.spec.ts` (the ten reviewed fences: no overlap, every arrow parent -> child, none through a
+box, fits 520 and 300), `test/diagram-inline.spec.tsx`.
+
 ## On screen
 
 - `components/DiagramExchange.tsx`: one exchange of a diagram thread: the call slip, the plate, the lines under
