@@ -8,6 +8,7 @@ import {
   ESTIMATED_HEIGHT,
   PILL_HEIGHT,
   ROW_GAP,
+  TREE_GAP,
   heightCap,
   layoutBoard,
   offsetForDrop,
@@ -337,5 +338,58 @@ describe('layoutBoard: edges', () => {
     const after = layoutBoard(buildTree(moved), input(table)).edges.find((e) => e.id === 'viaSpan');
     expect(after?.from.x).toBe((before?.from.x ?? 0) + 50);
     expect(after?.to.x).toBe((before?.to.x ?? 0) + 50);
+  });
+});
+
+describe('layoutBoard: trees never overlap', () => {
+  it('moves a neighbouring tree right, as a whole, when a branch grows into it', () => {
+    // Two roots side by side with room for one card between them, then a right branch on the first.
+    const gap = CARD_WIDTH.passage + 40;
+    const tree = buildTree([
+      node({ id: 'a', x: 0, y: 0 }),
+      node({ id: 'b', x: gap, y: 0 }),
+      node({ id: 'b2', parent: 'b', branch: 'down' }),
+      node({ id: 'a1', parent: 'a', span: spanOf(TEXT, 'identity mapping') }),
+    ]);
+    const { cards } = layoutBoard(tree, input({ a: 200, a1: 150, b: 200, b2: 150 }));
+    const a1 = cards.get('a1');
+    const b = cards.get('b');
+    const b2 = cards.get('b2');
+    expect(a1).toBeDefined();
+    // The branch keeps its place by its parent; the other tree moves clear of it by TREE_GAP...
+    expect(a1?.x).toBe(CARD_WIDTH.passage + COLUMN_GAP);
+    expect(b?.x).toBe((a1?.x ?? 0) + (a1?.w ?? 0) + TREE_GAP);
+    // ...with its whole tree, and its base moves too, so a drag still measures from where it is.
+    expect(b2?.x).toBe(b?.x);
+    expect(b?.baseX).toBe(b?.x);
+  });
+
+  it('leaves trees that do not touch where their roots are', () => {
+    const tree = buildTree([
+      node({ id: 'a', x: 0, y: 0 }),
+      node({ id: 'b', x: 2000, y: 0 }),
+      node({ id: 'a1', parent: 'a', span: spanOf(TEXT, 'identity mapping') }),
+    ]);
+    const { cards } = layoutBoard(tree, input({ a: 200, a1: 150, b: 200 }));
+    expect(cards.get('b')).toMatchObject({ x: 2000, y: 0 });
+  });
+
+  it('leaves a tree below alone when they only share columns, not rows', () => {
+    const tree = buildTree([node({ id: 'a', x: 0, y: 0 }), node({ id: 'b', x: 0, y: 900 })]);
+    const { cards } = layoutBoard(tree, input({ a: 200, b: 200 }));
+    expect(cards.get('b')).toMatchObject({ x: 0, y: 900 });
+  });
+
+  it('draws the lines to the moved cards', () => {
+    const tree = buildTree([
+      node({ id: 'a', x: 0, y: 0 }),
+      node({ id: 'b', x: CARD_WIDTH.passage + 40, y: 0 }),
+      node({ id: 'b2', parent: 'b', branch: 'down' }),
+      node({ id: 'a1', parent: 'a', span: spanOf(TEXT, 'identity mapping') }),
+    ]);
+    const { cards, edges } = layoutBoard(tree, input({ a: 200, a1: 150, b: 200, b2: 150 }));
+    const down = edges.find((e) => e.id === 'b2');
+    const b = cards.get('b');
+    expect(down?.from.x).toBe((b?.x ?? 0) + (b?.w ?? 0) / 2);
   });
 });
