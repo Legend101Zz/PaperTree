@@ -34,7 +34,7 @@ the paper.
 [![SQLite](https://img.shields.io/badge/SQLite-WAL-003B57?logo=sqlite&logoColor=white)](https://www.sqlite.org)
 [![pnpm](https://img.shields.io/badge/pnpm-10-F69220?logo=pnpm&logoColor=white)](https://pnpm.io)
 [![uv](https://img.shields.io/badge/uv-workspace-DE5FE9)](https://docs.astral.sh/uv/)
-[![Model: MiniMax](https://img.shields.io/badge/model-MiniMax%20M3%20%2B%20M3.1%20Flash-E5484D)](#model-policy)
+[![Model: MiniMax M3.1 Flash](https://img.shields.io/badge/model-MiniMax%20M3.1%20Flash-E5484D)](#model-policy)
 
 [![TS tests](https://img.shields.io/badge/TS%20tests-3%2C807%20passing-brightgreen)](#tests-and-quality-gates)
 [![pytest](https://img.shields.io/badge/pytest-2%2C688%20passing-brightgreen)](#tests-and-quality-gates)
