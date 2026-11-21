@@ -46,7 +46,10 @@ describe('mermaid.parse in a worker thread', () => {
     assert.equal(typeof scope['DOMPurify'], 'undefined');
   });
 
-  test('a parse of a typical fence is fast once the worker is warm (median under 50 ms)', async () => {
+  // Warm parses run 11-18 ms here; on a loaded CI runner (turbo runs every package's tests at once) the
+  // median reached 51.5 ms. What this guards is the warm worker: a cold DOM per parse costs ~150 ms, so
+  // 120 ms still fails that regression without failing on a busy machine (cf. #80, a wall-clock flake).
+  test('a parse of a typical fence is fast once the worker is warm (median under 120 ms)', async () => {
     await parser.warm();
     const times: number[] = [];
     for (let i = 0; i < 15; i++) {
@@ -56,7 +59,7 @@ describe('mermaid.parse in a worker thread', () => {
     }
     times.sort((a, b) => a - b);
     const median = times[Math.floor(times.length / 2)] ?? Infinity;
-    assert.ok(median < 50, `median ${median.toFixed(1)} ms`);
+    assert.ok(median < 120, `median ${median.toFixed(1)} ms`);
   });
 
   test('concurrent parses are answered to the right caller', async () => {
