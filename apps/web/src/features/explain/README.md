@@ -89,8 +89,9 @@ never stored).
   heading stays as it was, so an old answer renders); `answer.ts` gives each paragraph its sources and
   `AnswerModel.blocks` the reading order. `AnswerBody` draws them (label, the TL;DR lead, paragraphs, the inline
   figure, Check yourself) and is the one renderer for the panel, the board card and the notebook page; the
-  card and the notebook pass no check. ``diagram: `features/diagram` `InlineDiagram` (placeholder until the fence
-closes; nothing when invalid). ``check: `model/check.ts` + `CheckYourself` (marked in the browser; state is
+  card and the notebook pass no check. The figure: a ``mermaid fence is `features/diagram` `MermaidDiagram`
+(Mermaid loaded only once the fence closes; placeholder until then; nothing when it does not parse); a stored
+answer's older ``diagram fence is `InlineDiagram` (placeholder until the fence closes; nothing when invalid). ``check: `model/check.ts` + `CheckYourself` (marked in the browser; state is
   the exchange's, so it survives a level switch). **Levels**: `LevelSwitch` on an answer; a level is asked once
   (`FollowUp { level, relevel_of }`, a sibling answer that shares the first answer's `sibling_group`, not a turn) and every level fetched is held in
   `Exchange.variants` (`model/levels.ts`), so switching back re-shows it with one fade and no request.

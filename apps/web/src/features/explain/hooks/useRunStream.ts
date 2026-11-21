@@ -7,7 +7,8 @@
  *   text       appended; the `[bN]` handles stay in the text and are resolved at render time
  *   citations  keyed by `citation_id`; they arrive once, just before `done`
  *   usage      the run's tokens and estimated cost
- *   done       the final status; an error keeps whatever text had arrived
+ *   done       the final status (an error keeps whatever text had arrived), and `final_text`, the
+ *              stored text, which replaces the streamed one when the two differ
  *
  * Every async continuation carries the epoch it started in; the reducer drops events of any other.
  */
@@ -169,6 +170,11 @@ export function useRunStream(refs: ExplainRefs): RunStream {
               finished = true;
               const { status, error } = event.data;
               patch({
+                // The stored text, when the agent repaired or removed a figure after the stream:
+                // what is shown now is what a reload shows (contracts.md §2.6).
+                ...(typeof event.data.final_text === 'string'
+                  ? { text: event.data.final_text }
+                  : {}),
                 status,
                 label: null,
                 messageId: event.data.message_id,

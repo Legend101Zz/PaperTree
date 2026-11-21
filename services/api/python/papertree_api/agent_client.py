@@ -965,11 +965,25 @@ class RunBroker:
         if run is not None:
             self.queue.put_nowait(sse("usage", run_summary(run)))
         self.finished = True
-        self._emit_done(status, error_wire(error_code) if status != "complete" else None)
+        # What the reader streamed is `self.buffer`; the stored text may differ (the agent repairs
+        # or drops a ```mermaid fence after the stream ends): then `done` carries it so the live
+        # answer is what a reload shows. A diagram run streams no text.
+        stored = final_text if spec.kind != "diagram" and final_text != self.buffer else None
+        self._emit_done(status, error_wire(error_code) if status != "complete" else None, stored)
 
-    def _emit_done(self, status: str, error: dict[str, Any] | None) -> None:
+    def _emit_done(
+        self, status: str, error: dict[str, Any] | None, final_text: str | None = None
+    ) -> None:
         self.queue.put_nowait(
-            sse("done", {"status": status, "error": error, "message_id": self.spec.message_id})
+            sse(
+                "done",
+                {
+                    "status": status,
+                    "error": error,
+                    "message_id": self.spec.message_id,
+                    "final_text": final_text,
+                },
+            )
         )
 
 

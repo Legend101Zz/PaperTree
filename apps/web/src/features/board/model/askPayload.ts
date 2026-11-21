@@ -46,7 +46,7 @@ export const QUICK_ASKS: Readonly<
 > = {
   simpler: { label: 'Simpler', question: 'Explain this more simply.', level: 'new' },
   example: { label: 'Example', question: 'Give me a concrete example of this.' },
-  diagram: { label: 'Diagram', question: 'Draw this as a small diagram.', diagram: 'always' },
+  diagram: { label: 'Diagram', question: 'Draw a diagram of this.', diagram: 'always' },
 };
 
 /** The words of the level and diagram pickers, as the feedforward line shows them. */

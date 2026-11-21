@@ -129,6 +129,30 @@ describe('parseAnswerItems', () => {
     expect(closed[1]).toMatchObject({ closed: true });
   });
 
+  it('a mermaid fence is an item of its own: unclosed while streaming, then closed', () => {
+    const open = parseAnswerItems(
+      '## How it works\nSee:\n```mermaid\nflowchart LR\n  a --> b',
+      true,
+    );
+    expect(open.at(-1)).toEqual({ k: 'mermaid', body: 'flowchart LR\n  a --> b', closed: false });
+    expect(parseAnswerItems('See:\n```merm', true).at(-1)).toMatchObject({
+      k: 'mermaid',
+      closed: false,
+    });
+    const closed = parseAnswerItems('See:\n```mermaid\nflowchart LR\n  a --> b\n```\nAfter.', true);
+    expect(closed.map((i) => i.k)).toEqual(['p', 'mermaid', 'p']);
+    expect(closed[1]).toMatchObject({ closed: true });
+    // Held back as a fence marker, never flashed as text.
+    expect(parseAnswerItems('See:\n```', true).map((i) => i.k)).toEqual(['p']);
+  });
+
+  it('a heading inside a mermaid fence is not a section, and an old diagram fence still reads', () => {
+    expect(parseAnswerItems('```mermaid\nmindmap\n  ## TL;DR\n```').map((i) => i.k)).toEqual([
+      'mermaid',
+    ]);
+    expect(parseAnswerItems('```diagram\n{"t":"end"}\n```').map((i) => i.k)).toEqual(['diagram']);
+  });
+
   it('a check fence is an item only when whole', () => {
     const body = 'prompt: If $x$ is ___.\naccept: x';
     expect(parseAnswerItems(`Text.\n\`\`\`check\n${body}`, true).map((i) => i.k)).toEqual(['p']);

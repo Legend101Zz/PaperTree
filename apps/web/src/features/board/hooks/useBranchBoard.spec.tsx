@@ -348,7 +348,10 @@ describe('asking from the Uses line', () => {
         },
         { event: 'text', data: { delta: 'It is ' } },
         { event: 'text', data: { delta: 'a shortcut.' } },
-        { event: 'done', data: { status: 'complete', error: null, message_id: 'm' } },
+        {
+          event: 'done',
+          data: { status: 'complete', error: null, message_id: 'm', final_text: null },
+        },
       ]),
     );
     const { result } = await mount(tree());
@@ -382,12 +385,49 @@ describe('asking from the Uses line', () => {
     expect(window.localStorage.getItem('papertree.board.brd_1.level')).toBe('new');
   });
 
+  it('done.final_text replaces the streamed text on the card (a repaired or dropped figure)', async () => {
+    const streamed = 'It is.\n\n```mermaid\nflowchart TD\n  a --> --> b\n  b --> c\n```';
+    const stored = 'It is.';
+    api.ask.mockImplementation(() =>
+      stream([
+        {
+          event: 'node',
+          data: node({ id: 'new', parent: 'a', branch: 'right', question: 'what is it?' }),
+        },
+        {
+          event: 'run',
+          data: {
+            run_id: 'run_1',
+            thread_id: 't',
+            user_message_id: null,
+            message_id: 'm',
+            generation: 1,
+          },
+        },
+        { event: 'text', data: { delta: streamed } },
+        {
+          event: 'done',
+          data: { status: 'complete', error: null, message_id: 'm', final_text: stored },
+        },
+      ]),
+    );
+    const { result } = await mount(tree());
+    act(() => result.current.branch.control.openAsk('a'));
+    act(() => result.current.branch.control.setText('what is it?'));
+    await act(() => result.current.branch.ask.send(result.current.branch.view.draft!));
+    await waitFor(() =>
+      expect(result.current.branch.ask.streams.get('new')?.status).toBe('complete'),
+    );
+    expect(result.current.branch.ask.streams.get('new')?.text).toBe(stored);
+    expect(result.current.ctl.nodes.find((n) => n.id === 'new')?.data.node.final_text).toBe(stored);
+  });
+
   it('a quick ask sends its own words and no typed question', async () => {
     api.ask.mockImplementation(() => stream([]));
     const { result } = await mount(tree());
     await act(() => result.current.branch.ask.quick('a', SPAN, 'diagram'));
     expect(api.ask.mock.calls[0]![2]).toMatchObject({
-      question: 'Draw this as a small diagram.',
+      question: 'Draw a diagram of this.',
       quick: 'diagram',
       span: SPAN,
       uses: { diagram: 'always' },
@@ -402,7 +442,7 @@ describe('asking from the Uses line', () => {
       yield { event: 'node', data: node({ id: 'new', parent: 'a', branch: 'right' }) } as SseEvent;
       yield {
         event: 'done',
-        data: { status: 'complete', error: null, message_id: 'm' },
+        data: { status: 'complete', error: null, message_id: 'm', final_text: null },
       } as SseEvent;
     });
     const { result } = await mount(tree());
@@ -447,7 +487,10 @@ describe('asking from the Uses line', () => {
       stream([
         { event: 'node', data: node({ id: 'new', parent: 'a', branch: 'right', question: 'q?' }) },
         { event: 'text', data: { delta: streamedText } },
-        { event: 'done', data: { status: 'complete', error: null, message_id: 'm' } },
+        {
+          event: 'done',
+          data: { status: 'complete', error: null, message_id: 'm', final_text: null },
+        },
       ]),
     );
     const { result } = await mount(tree());
@@ -505,7 +548,10 @@ describe('asking from the Uses line', () => {
           event: 'node',
           data: { ...rows[1]!, version: 2, answer_status: 'streaming', final_text: null },
         },
-        { event: 'done', data: { status: 'complete', error: null, message_id: 'm' } },
+        {
+          event: 'done',
+          data: { status: 'complete', error: null, message_id: 'm', final_text: null },
+        },
       ]),
     );
     const { result } = await mount(rows);
@@ -889,7 +935,10 @@ describe('beside the paper (#344)', () => {
         event: 'node',
         data: node({ id, parent, branch: 'right', span: parent === 'a' ? SPAN : undefined }),
       },
-      { event: 'done', data: { status: 'complete', error: null, message_id: 'm' } },
+      {
+        event: 'done',
+        data: { status: 'complete', error: null, message_id: 'm', final_text: null },
+      },
     ];
     const { result } = await mount(tree(), host);
     api.ask.mockImplementationOnce(() => stream(frames('q1', 'p')));

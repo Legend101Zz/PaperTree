@@ -99,7 +99,7 @@ describe('quick asks (rule 8)', () => {
 
   it('Diagram always draws one', () => {
     expect(quickAskUses('diagram', defaultUses()).diagram).toBe('always');
-    expect(QUICK_ASKS.diagram.question).toBe('Draw this as a small diagram.');
+    expect(QUICK_ASKS.diagram.question).toBe('Draw a diagram of this.');
   });
 
   it('keeps the reader’s other choices', () => {

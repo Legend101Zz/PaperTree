@@ -1079,6 +1079,7 @@
     },
     "SseDone": {
       "additionalProperties": false,
+      "description": "The end of a run. `final_text` is the text the server STORED when it differs from what the\n`text` events carried (the agent repairs or removes a ```mermaid fence after the stream ends),\nelse null: a reader replaces what it streamed with it (contracts.md §2.6, 2026-11-20 note).",
       "properties": {
         "status": {
           "enum": ["complete", "partial", "error", "aborted"],
@@ -1096,9 +1097,20 @@
         },
         "message_id": {
           "type": "string"
+        },
+        "final_text": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         }
       },
-      "required": ["status", "error", "message_id"],
+      "required": ["status", "error", "message_id", "final_text"],
       "title": "SseDone",
       "type": "object"
     },

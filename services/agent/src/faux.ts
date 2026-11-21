@@ -408,10 +408,36 @@ function seedPassages(systemPrompt: string): Array<{ handle: string; text: strin
   return out;
 }
 
+/** The faux explain figure: a flowchart with a subgraph and labelled edges (Mermaid). */
+export const FAUX_FLOWCHART = [
+  'flowchart TD',
+  '  subgraph block["Residual block"]',
+  '    layers["Layers learn F(x)"]',
+  '    add(("Add"))',
+  '  end',
+  '  input["Input x"] --> layers',
+  '  layers -->|"F(x)"| add',
+  '  input -->|"skip connection"| add',
+  '  add --> output["Output F(x) + x"]',
+].join('\n');
+
+/** The faux ask figure: a sequenceDiagram (Mermaid). */
+export const FAUX_SEQUENCE = [
+  'sequenceDiagram',
+  '  participant Reader',
+  '  participant Tutor',
+  '  participant Paper',
+  '  Reader->>Tutor: Asks about the passage',
+  '  Tutor->>Paper: Looks up the passage',
+  '  Paper-->>Tutor: The words it says',
+  '  Tutor-->>Reader: A plain answer',
+].join('\n');
+
 /**
  * The faux model's explain / ask answer in the v0.3 shape (contracts.md §3.2.2): the four sections,
- * one inline `$…$`, one handle (under "In the paper"), a one-part-per-line ```diagram fence in
- * "How it works" and, when the request says `check: true`, the ```check fence. Deterministic: the
+ * one inline `$…$`, one handle (under "In the paper"), a ```mermaid fence in "How it works" (a
+ * flowchart with a subgraph for an explain, a sequenceDiagram for an ask, so a test can see both
+ * types draw) and, when the request says `check: true`, the ```check fence. Deterministic: the
  * words come from the seed passage and nothing is random. It is already in the canonical form
  * `tidyAnswer` writes, so the deltas still equal `done.final_text`.
  */
@@ -426,35 +452,14 @@ function tutorAnswer(request: RunRequest, inPaper: string): string {
     request.kind === 'ask' || request.kind === 'image'
       ? ` (Faux) Asked: "${words(request.question, request.datamark, 14)}", with ${String(turns)} earlier turn(s) on this path.`
       : '';
-  const diagram = [
-    { t: 'plate', title: 'The idea in three steps' },
-    { t: 'part', label: 'Input x', text: 'what goes in', kind: 'input', after: [], cite: null },
-    {
-      t: 'part',
-      label: 'Layers',
-      text: 'learn the change',
-      kind: 'step',
-      after: ['A'],
-      cite: null,
-    },
-    {
-      t: 'part',
-      label: 'Sum F(x) + x',
-      text: 'the input is added back',
-      kind: 'output',
-      after: ['B', 'A'],
-      cite: null,
-    },
-  ];
+  const diagram = request.kind === 'ask' ? FAUX_SEQUENCE : FAUX_FLOWCHART;
   const sections = [
     `## TL;DR\n(Faux) The passage in one plain sentence: an idea the paper builds on.${echo}`,
     level === 'expert'
       ? '## The trade-off\n(Faux) It buys a simpler optimisation and costs one extra addition.'
       : '## In plain words\n(Faux) Think of it as editing a draft instead of rewriting it.',
     '## How it works\n(Faux) The block outputs $y = F(x) + x$.' +
-      (request.diagram === 'never'
-        ? ''
-        : `\n\`\`\`diagram\n${diagram.map((line) => JSON.stringify(line)).join('\n')}\n\`\`\``),
+      (request.diagram === 'never' ? '' : `\n\`\`\`mermaid\n${diagram}\n\`\`\``),
     `## In the paper\n${inPaper}`,
   ];
   if (request.check === true) {

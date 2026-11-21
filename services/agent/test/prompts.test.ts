@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 
 import type { RunRequest } from '../src/contract.ts';
-import { cleanDiagramFence } from '../src/diagram.ts';
+import { cleanMermaidFence, mermaidTypeOf } from '../src/mermaid.ts';
 import {
   INLINE_DIAGRAM,
   markBlock,
@@ -147,26 +147,38 @@ describe('the explain and ask prompts (v0.3, #339)', () => {
     assert.doesNotMatch(asked, /Do not write a ```check fence/);
   });
 
-  test('describe the diagram fence in the diagram run’s own line format, cite null, 8 parts', () => {
+  test('ask for one mermaid fence, the type chosen by the idea, depth and the no-HTML rules', () => {
     const prompt = base('ask');
-    assert.match(prompt, /```diagram/);
-    assert.match(prompt, /"t":"plate"/);
-    assert.match(prompt, /4-8 parts/);
-    assert.match(prompt, /"cite":null/);
-    assert.match(prompt, /never a single box/);
+    assert.match(prompt, /```mermaid/);
+    for (const type of [
+      'flowchart',
+      'sequenceDiagram',
+      'stateDiagram-v2',
+      'mindmap',
+      'timeline',
+      'quadrantChart',
+      'xychart-beta',
+      'classDiagram',
+      'erDiagram',
+    ]) {
+      assert.ok(prompt.includes(type), type);
+    }
+    assert.match(prompt, /flowchart TD/);
+    assert.match(prompt, /Hard limits, checked/);
+    assert.match(prompt, /never one letter/);
+    assert.match(prompt, /numbers only from the passages/);
+    assert.match(prompt, /no \$, <br>, HTML, quotes in titles, click, links, style or colours/);
+    assert.doesNotMatch(prompt, /"t":"plate"|```diagram|4-8 parts/, 'the plate wording is gone');
   });
 
-  test("the inline diagram's example is a real 5-part figure with a branch and a join, and reads cleanly", () => {
+  test('the inline example is a real flowchart of five boxes in a subgraph and labelled edges, and passes the checker', () => {
     const body = INLINE_DIAGRAM.split('\n').slice(2, -1).join('\n');
-    const lines = (cleanDiagramFence(body) ?? '').split('\n');
-    const parts = lines.slice(1).map((l) => JSON.parse(l) as { label: string; after: string[] });
-    assert.equal(parts.length, 5);
-    assert.deepEqual(parts[3]?.after, ['B', 'C'], 'a join');
-    assert.ok(
-      parts.every((p) => p.label.length > 1),
-      'no label is a bare letter',
-    );
-    assert.equal(lines.join('\n'), body, 'the example is already in the canonical shape');
+    assert.equal(cleanMermaidFence(body), body, 'already in the shape the tidy step keeps');
+    assert.equal(mermaidTypeOf(body), 'flowchart');
+    assert.match(body, /^\s*subgraph /m);
+    assert.match(body, /-->\|"[^"]+"\|/, 'a labelled edge');
+    const labelled = [...body.matchAll(/^\s*(?!subgraph)(?:\w+ --> )?(\w+)\["/gm)];
+    assert.ok(new Set(labelled.map((m) => m[1])).size >= 4, 'labelled boxes, not bare ids');
     assert.ok(systemPrompt(request('explain')).includes(body));
   });
 
@@ -188,8 +200,8 @@ describe('the explain and ask prompts (v0.3, #339)', () => {
     const seed = { ...request('explain').seed!, passages: [] };
     const worst = base('explain', { check: true, level: 'new', seed });
     assert.ok(
-      worst.length < 3300,
-      `the old 2,700 plus the one inline-diagram example: ${String(worst.length)}`,
+      worst.length < 3260,
+      `the old 2,700 plus the mermaid type menu, hard limits and example: ${String(worst.length)}`,
     );
     assert.doesNotMatch(base('explain'), /Cite every claim/);
     assert.match(base('explain'), /^Example: "## TL;DR/m, 'one compact example of the shape');
@@ -217,12 +229,17 @@ describe('the explain and ask prompts are a short contract (#339, P2)', () => {
     copy.seed.passages = [];
     return systemPrompt(copy as unknown as RunRequest);
   };
-  // Length of the same prompt, passages removed, before #339 (git 91a3109, measured).
-  const BEFORE = { 'explain-v1': 2772, 'ask-v1': 2670 } as const;
+  // Length of the same prompt, passages removed. Before #339 (git 91a3109): 2772 / 2670. With the
+  // plate-fence example (v0.3 W6): 2698 / 2655. The mermaid fence swaps that 946-char plate
+  // instruction for a 989-char one (a type menu and a 5-box flowchart): +43 characters, 2741 / 2698.
+  // W6 readability: the per-type hard limits (the agent counts and enforces them, figure.ts) make
+  // it 1188 chars, +199: 2940 / 2897. The budget is that, rounded up by 20; a longer prompt needs a
+  // reason written here.
+  const BUDGET = { 'explain-v1': 2960, 'ask-v1': 2920 } as const;
 
   for (const version of ['explain-v1', 'ask-v1'] as const) {
-    test(`${version}: no longer than before #339, the inline-diagram example included`, () => {
-      assert.ok(bare(version).length <= BEFORE[version], String(bare(version).length));
+    test(`${version}: within its budget, the mermaid instruction and example included`, () => {
+      assert.ok(bare(version).length <= BUDGET[version], String(bare(version).length));
     });
   }
 
@@ -247,13 +264,14 @@ describe('a board ask: the diagram fence and the tools (#343)', () => {
     systemPrompt({ ...request('explain'), prompt_version: 'ask-v1', ...patch } as RunRequest);
 
   test('diagram: may keeps the rule, always requires one fence, never refuses it', () => {
-    assert.match(ask({}), /When the mechanism is a flow of 4 or more parts/);
-    assert.doesNotMatch(ask({}), /exactly one ```diagram fence/);
-    assert.match(ask({ diagram: 'always' }), /exactly one ```diagram fence/);
-    assert.match(ask({ diagram: 'always' }), /"t":"plate"/);
+    assert.match(ask({}), /When a picture explains it better than words/);
+    assert.doesNotMatch(ask({}), /exactly one ```mermaid fence/);
+    assert.match(ask({ diagram: 'always' }), /exactly one ```mermaid fence/);
+    assert.match(ask({ diagram: 'always' }), /of the type that fits the idea best/);
+    assert.match(ask({ diagram: 'always' }), /^flowchart TD$/m, 'the example still comes with it');
     const never = ask({ diagram: 'never' });
-    assert.match(never, /No ```diagram fence/);
-    assert.doesNotMatch(never, /"t":"plate"/);
+    assert.match(never, /No ```mermaid fence/);
+    assert.doesNotMatch(never, /sequenceDiagram|flowchart/);
   });
 
   test('with no tool calls allowed the prompt names no tool', () => {

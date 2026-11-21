@@ -153,6 +153,12 @@ test('branch a conversation: ask, branch from words, focus a path, tidy, fold, o
   await expect(first.locator('.pt-tc__knot')).toHaveText('1');
   const second = answerCards(page).nth(1);
   expect((await second.boundingBox())!.x).toBeGreaterThan(firstBox.x + firstBox.width);
+  // A board ask draws its figure with Mermaid too (the faux ask answers with a sequenceDiagram).
+  await expect(second.locator('[data-mermaid] svg')).toBeAttached({ timeout: 30_000 });
+  await expect(second.locator('[data-mermaid]')).toHaveAttribute(
+    'aria-label',
+    /^Diagram, sequence diagram: /,
+  );
 
   // Keep as note: key 4, no AI call.
   await word.dblclick();

@@ -1,0 +1,195 @@
+/*
+ * A Mermaid figure inside an answer. The box is the plate figure's (`inline.css`); the drawing is
+ * Mermaid's own svg, themed from the tokens by `../mermaid/theme`. Tokens only here.
+ */
+
+.pt-diagram-inline.pt-mmd {
+  display: block;
+  padding: 6px;
+}
+
+/* The size control: a quiet caption row under the drawing, right-aligned, never over it. */
+.pt-mmd__caption {
+  display: flex;
+  justify-content: flex-end;
+  padding-block-start: 2px;
+}
+
+.pt-mmd__btn {
+  margin: 0;
+  padding: 0 4px;
+  border: 0;
+  background: none;
+  color: var(--pt-ink-muted);
+  font: 13px var(--pt-font-ui);
+  line-height: 1.4;
+  cursor: zoom-in;
+}
+
+.pt-mmd__btn:hover {
+  color: var(--pt-ink);
+}
+
+.pt-mmd__btn:focus-visible {
+  outline: var(--pt-focus-width, 2px) solid var(--pt-focus);
+  outline-offset: 2px;
+}
+
+.pt-mmd__svg {
+  display: block;
+  line-height: 0;
+}
+
+/*
+ * The scroll box holds the drawing: it is drawn at `--pt-mmd-w` (the room, but never below the
+ * minimum readable scale; scale.ts), wider than the box it scrolls sideways, and its height is
+ * capped like a board card (--pt-card-cap, 60vh) and scrolls inside.
+ */
+.pt-mmd {
+  position: relative;
+}
+
+.pt-mmd__scroll {
+  display: block;
+  flex: 1 1 auto;
+  min-inline-size: 0;
+  overflow: auto;
+  max-block-size: var(--pt-card-cap, 60vh);
+  overscroll-behavior: contain;
+}
+
+.pt-mmd__scroll:focus-visible {
+  outline: var(--pt-focus-width, 2px) solid var(--pt-focus);
+  outline-offset: 2px;
+}
+
+.pt-mmd__stage {
+  position: relative;
+  display: block;
+}
+
+.pt-mmd__scroll .pt-mmd__svg {
+  inline-size: max-content;
+  min-inline-size: 100%;
+}
+
+.pt-mmd__svg svg {
+  display: block;
+  margin-inline: auto;
+  inline-size: var(--pt-mmd-w, 100%);
+  max-inline-size: none !important; /* Mermaid sets its own max-width inline */
+  block-size: auto;
+}
+
+.pt-mmd[data-large='true'] .pt-mmd__btn {
+  cursor: zoom-out;
+}
+
+/* A fade at the edge the drawing scrolls toward, gone once the end is reached or it all fits. */
+.pt-mmd__fade {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-end: 0;
+  inline-size: 28px;
+  pointer-events: none;
+  background: linear-gradient(to right, transparent, var(--pt-page));
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.pt-mmd[data-scrolls='true'] .pt-mmd__fade {
+  opacity: 1;
+}
+
+/* Mermaid draws no motion of its own; make sure a diagram never animates for a reader who asked not to. */
+@media (prefers-reduced-motion: reduce) {
+  .pt-mmd * {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+/*
+ * A narrow room (a board card): the whole drawing is fitted to the width and shown as a preview.
+ * Nothing scrolls, the height follows, and a transparent button over the stage opens the larger view.
+ */
+.pt-mmd[data-preview='true'] .pt-mmd__scroll {
+  overflow: hidden;
+  max-block-size: none;
+}
+
+.pt-mmd__preview {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: zoom-in;
+}
+
+.pt-mmd__preview:focus-visible {
+  outline: var(--pt-focus-width, 2px) solid var(--pt-focus);
+  outline-offset: -2px;
+}
+
+/*
+ * The larger view from a board card: a modal over the page, up to min(92vw, 1200px) x 86vh, the
+ * drawing fitted to its box (the panel's rule). Page and room tokens only.
+ */
+.pt-mmd-dialog__backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 3000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--pt-ink, #000) 45%, transparent);
+}
+
+.pt-mmd-dialog {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  inline-size: min(92vw, 1200px);
+  max-block-size: 86vh;
+  padding: 36px 12px 12px;
+  box-sizing: border-box;
+  border-radius: 8px;
+  background: var(--pt-page);
+  color: var(--pt-ink);
+  box-shadow: 0 12px 40px rgb(0 0 0 / 0.3);
+}
+
+.pt-mmd-dialog__close {
+  position: absolute;
+  inset-block-start: 6px;
+  inset-inline-end: 8px;
+  margin: 0;
+  padding: 2px 10px;
+  border: 1px solid var(--pt-ink-muted);
+  border-radius: 6px;
+  background: none;
+  color: var(--pt-ink);
+  font: 13px var(--pt-font-ui);
+  line-height: 1.4;
+  cursor: pointer;
+}
+
+.pt-mmd-dialog__close:focus-visible,
+.pt-mmd-dialog__scroll:focus-visible {
+  outline: var(--pt-focus-width, 2px) solid var(--pt-focus);
+  outline-offset: 2px;
+}
+
+.pt-mmd-dialog__scroll {
+  flex: 1 1 auto;
+  min-block-size: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.pt-mmd-dialog__svg {
+  inline-size: max-content;
+  min-inline-size: 100%;
+}

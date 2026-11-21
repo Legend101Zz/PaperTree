@@ -68,7 +68,44 @@ plate once it settles (`features/explain/model/messages.mergeStored`), keyed by 
 
 ## The figure inside an answer (v0.3)
 
-A ```diagram fence in an answer is NOT drawn on the slot grid. `model/layered.ts` lays it out as layers:
+### Mermaid (new answers)
+
+New answers draw their figure as a ```mermaid fence in "How it works"; the model picks the type that fits the
+idea (flowchart, sequenceDiagram, stateDiagram-v2, mindmap, timeline, quadrantChart, xychart-beta, classDiagram,
+erDiagram). The agent checks the fence (`services/agent/src/mermaid.ts`: allowed types, no `%%{` directive,
+`click`, `href`, HTML, size caps) and drops an unsafe one; then the agent's figure step (`figure.ts`) runs the REAL
+`mermaid.parse` in a worker thread (`mermaid-parse.ts`, happy-dom shim isolated there), repairs what it can
+(`mermaid-repair.ts`: split statements, quote shape characters, one root, drop `<br>`), asks the model once, else
+drops the fence, and enforces the size caps the prompt states.
+`components/MermaidDiagram.tsx` draws what is left:
+
+- `mermaid` is imported only in `mermaid/render.ts`, with `import('mermaid')`, only once a fence has CLOSED
+  (webpack makes it async chunks; the reader route's first-load JS is unchanged). While the fence streams there is
+  the same quiet dashed placeholder as the plate figure, never raw code.
+- `mermaid.initialize({ startOnLoad: false, securityLevel: 'strict', theme: 'base', themeVariables })` before each
+  draw (Mermaid's config is global, so draws are queued one at a time), then `mermaid.parse` (`suppressErrors`),
+  then `mermaid.render`. A fence that fails either draws NOTHING (a hidden empty figure, `data-mermaid-failed`):
+  a "diagram unavailable" note would put the app's failure into an answer that reads fine without the picture,
+  and raw code never shows. Results are cached by text + theme.
+- `mermaid/theme.ts` maps the figure's computed `--pt-*` tokens (ink, ink-muted, page, ai-slip, rule,
+  control-border, accent, the UI face) onto Mermaid's base theme variables, in `#rrggbb` only (Mermaid's colour
+  parser rejects the `rgb(r g b / a%)` form). Light / Sepia / Dark pages and Daylight / Lamp-lit rooms are just
+  other values of those tokens; a `MutationObserver` on `<html>` (class, `data-pt-theme`, `data-pt-page`) and the
+  OS scheme re-read them and the figure is drawn again only when the tokens really changed.
+- Mermaid's svg carries a `<style>` scoped to its own id (`#pt-mmd-N .node ...`, `createUserStyles`), so it cannot
+  restyle the page; strict mode sanitises labels. The figure scales to its room but never below 0.7
+  (`mermaid/scale.ts`): a wider drawing keeps that scale and scrolls sideways inside its box, with a fade at the
+  edge it scrolls toward; its height is capped like a board card (`--pt-card-cap`, 60vh) and scrolls inside. One
+  click on it ("larger") shows it at its natural width; click, Enter/Space or Esc puts it back (the Explain image head's pattern). Its accessible name is
+  "Diagram, <type in words>: first labels" (`mermaid/fence.ts`); the drawing itself is `aria-hidden`. No motion.
+- Tests: `test/mermaid-diagram.spec.tsx` (mermaid mocked: lazy load, parse first, failure, re-theme, larger),
+  `test/mermaid-answer.spec.tsx` (streaming placeholder through `AnswerBody`), `test/mermaid-theme.spec.ts`,
+  `mermaid/fence.spec.ts`, `mermaid/scale.spec.ts` (min scale, scroll, CSS contract), `mermaid/theme.spec.ts`
+  (no default rainbow per page/room), `components/MermaidDiagram.spec.tsx`.
+
+### The older plate fence
+
+A ```diagram fence (a stored answer from before) is NOT drawn on the slot grid. `model/layered.ts` lays it out as layers:
 rank = longest path from a root via `after`, parts of one rank side by side (ordered by barycentre sweeps,
 fewest crossings), an arrow that skips rows runs down a virtual lane box so it never crosses a box, arrows leave a
 parent's bottom and enter a child's top at spread ports (straight when aligned, else one short elbow), a rank too

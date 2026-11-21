@@ -12,8 +12,8 @@
  * The faux model quotes the first two seed passages the API planned for the selection, so the
  * paragraph draws on those pages: this proves the wiring (the source line, the peek, the flash),
  * not answer quality. The faux agent answers in the v0.3 shape (`## TL;DR` … `## In the paper`, one
- * `$…$`, one `[bN]`, a ```diagram fence in explain, and a ```check fence when the request says
- * `check: true`). The PDF is the committed corpus's; the spec SKIPS, loudly, without it.
+ * `$…$`, one `[bN]`, a ```mermaid flowchart (with a subgraph) in explain, and a ```check fence
+ * when the request says `check: true`). The PDF is the committed corpus's; the spec SKIPS, loudly, without it.
  */
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
@@ -109,7 +109,13 @@ test.describe('v0.2 steps 6–8: select → Explain → the source line flashes 
     ]);
     await expect(exchange.locator('.pt-ai-lead')).toBeVisible();
     await expect(exchange.locator('.pt-ai-slip .katex').first()).toBeVisible();
-    await expect(exchange.locator('[data-diagram-inline]')).toBeVisible();
+    // The figure is Mermaid's own svg (a flowchart with a subgraph in the faux explain answer), and
+    // is named for what it is.
+    const figure = exchange.locator('[data-mermaid]');
+    await expect(figure.locator('svg')).toBeVisible({ timeout: 30_000 });
+    await expect(figure).toHaveAttribute('aria-label', /^Diagram, flowchart: Residual block/);
+    await expect(figure.locator('svg .cluster')).not.toHaveCount(0);
+    await expect(exchange.locator('[data-diagram-pending], [data-mermaid-failed]')).toHaveCount(0);
     await expect(exchange.locator('.pt-answer-foot')).toContainText(/\S/);
     await expect(exchange.getByRole('button', { name: 'Familiar' })).toHaveAttribute(
       'aria-pressed',

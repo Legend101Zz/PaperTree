@@ -121,7 +121,7 @@
       "type": "boolean"
     },
     "diagram": {
-      "description": "v0.3 (#343): whether an explain or ask answer may (`may`, the default: only if a picture helps), must (`always`) or must not (`never`) carry its one ```diagram fence. A board ask sets it from its `uses.diagram`. Optional; absent reads `may`. A `never` answer has any diagram fence the model wrote stripped.",
+      "description": "v0.3 (#343): whether an explain or ask answer may (`may`, the default: only if a picture helps), must (`always`) or must not (`never`) carry its one figure fence (```mermaid; an older ```diagram fence is still read). A board ask sets it from its `uses.diagram`. Optional; absent reads `may`. A `never` answer has any diagram fence the model wrote stripped.",
       "enum": ["may", "never", "always"]
     },
     "images": {

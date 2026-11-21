@@ -376,6 +376,12 @@ export type SseEvent =
         status: 'complete' | 'partial' | 'error' | 'aborted';
         error: { code: RunErrorCode | ErrorCode; retryable: boolean; message: string } | null;
         message_id: string;
+        /**
+         * The STORED text when it differs from what the `text` events carried (the agent repairs
+         * or removes a ```mermaid fence after the stream ends), else null. A reader replaces what
+         * it streamed with it (contracts.md §2.6, 2026-11-20).
+         */
+        final_text: string | null;
       };
     };
 

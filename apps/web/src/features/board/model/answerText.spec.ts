@@ -42,6 +42,12 @@ describe('answerBlocks', () => {
     ]);
   });
 
+  it('a mermaid fence is the diagram block too, and never leaks its code', () => {
+    const blocks = answerBlocks('Text\n```mermaid\nflowchart LR\n  a --> b\n```\nAfter.');
+    expect(blocks.map((b) => b.kind)).toEqual(['paragraph', 'diagram', 'paragraph']);
+    expect(JSON.stringify(blocks)).not.toContain('flowchart');
+  });
+
   it('keeps a plain old answer as paragraphs', () => {
     expect(answerBlocks('One.\n\nTwo.')).toEqual([
       { kind: 'paragraph', text: 'One.' },

@@ -4,7 +4,8 @@
  * sources and `AnswerBody` draws the items.
  *
  *   ## TL;DR | In plain words | The trade-off | How it works | In the paper   -> a label
- *   ```diagram ... ```   -> one inline figure (its lines are read by `features/diagram/model/fence`)
+ *   ```mermaid ... ```   -> one inline figure drawn with Mermaid (`features/diagram` MermaidDiagram)
+ *   ```diagram ... ```   -> an older stored answer's figure (plate lines, `features/diagram/model/fence`)
  *   ```check ... ```     -> one "Check yourself" blank (read by `./check`)
  *
  * It is a tolerant reader, never a validator. A heading that is not one of the five names stays
@@ -12,7 +13,7 @@
  * bold line), so an older stored answer, or a model that wrote its own headings, still renders.
  * While the answer streams, whatever is still arriving is held back rather than shown and then
  * taken back: a half-typed heading (`## In pl`), a half-typed fence marker, an open ```check
- * fence, and an open ```diagram fence, which stands as a placeholder until it closes.
+ * fence, and an open ```mermaid or ```diagram fence, which stands as a placeholder until it closes.
  */
 
 /** The five sections the format names, in the order the model writes them. */
@@ -47,6 +48,8 @@ export type AnswerItem =
   | { readonly k: 'p'; readonly text: string; readonly section: SectionKey | null }
   /** The body of a ```diagram fence; `closed` is false while its closing fence has not arrived. */
   | { readonly k: 'diagram'; readonly body: string; readonly closed: boolean }
+  /** The body of a ```mermaid fence; `closed` is false while its closing fence has not arrived. */
+  | { readonly k: 'mermaid'; readonly body: string; readonly closed: boolean }
   /** The body of a ```check fence; only a closed one is drawn. */
   | { readonly k: 'check'; readonly body: string };
 
@@ -82,12 +85,14 @@ export function sectionOf(line: string): SectionKey | null {
  * @param partial The line is the end of a streaming text and may be cut short.
  * @returns The fence we draw, or `other`.
  */
-function fenceKind(info: string, partial: boolean): 'diagram' | 'check' | 'other' {
+function fenceKind(info: string, partial: boolean): 'diagram' | 'mermaid' | 'check' | 'other' {
   const lower = info.toLowerCase();
   if (lower === 'diagram') return 'diagram';
+  if (lower === 'mermaid') return 'mermaid';
   if (lower === 'check') return 'check';
   // The last line of a streaming answer is cut anywhere: "```diag" is the start of a diagram.
   if (partial && lower !== '' && 'diagram'.startsWith(lower)) return 'diagram';
+  if (partial && lower !== '' && 'mermaid'.startsWith(lower)) return 'mermaid';
   if (partial && lower !== '' && 'check'.startsWith(lower)) return 'check';
   return 'other';
 }
@@ -165,6 +170,7 @@ export function parseAnswerItems(text: string, streaming = false): AnswerItem[] 
       }
       const joined = body.join('\n');
       if (kind === 'diagram') out.push({ k: 'diagram', body: joined, closed });
+      else if (kind === 'mermaid') out.push({ k: 'mermaid', body: joined, closed });
       else if (kind === 'check') {
         // A check is drawn only whole: an open one waits, and is never shown half-written.
         if (closed) out.push({ k: 'check', body: joined });

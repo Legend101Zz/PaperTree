@@ -66,6 +66,8 @@ import {
   TOOL_NAMES,
 } from './contract.ts';
 import { tidyAnswer } from './answer.ts';
+import { type FigureOutcome, settleFigure } from './figure.ts';
+import { mermaidParser, type ParseVerdict } from './mermaid-parse.ts';
 import { DIAGRAM_TOOLS, holdsDiagramLine, PlateReader } from './diagram.ts';
 import { parseGlanceAnswer } from './glance.ts';
 import { parseTopicAnswer, parseTopicInput } from './topic.ts';
@@ -93,6 +95,8 @@ export interface RunDeps {
   readonly faux?: { readonly model: FauxModel; readonly brain: FauxBrain };
   /** Tests only: the time-to-headers bound (§3.1 fixes 30 s). */
   readonly providerTimeoutMs?: number;
+  /** Tests only: replaces the worker-thread `mermaid.parse` of the figure step. */
+  readonly parseMermaid?: (body: string) => Promise<ParseVerdict>;
 }
 
 export interface Usage {
@@ -142,6 +146,10 @@ export const DIAGRAM_TOOLS_TEXT =
 export const BUDGET_CLOSED_TEXT = 'Tool budget exhausted; answer from what you have.';
 /** `max_turns` leaves this many more turns for the answer turn itself (a tool-free reply is 1). */
 const BUDGET_TURN_EXTRA_TURNS = 3;
+/** The figure step's model repair: its whole budget, the least that is worth starting, its token cap. */
+const FIGURE_REPAIR_MS = 10_000;
+const FIGURE_REPAIR_MIN_MS = 1_500;
+const FIGURE_REPAIR_TOKENS = 2_000;
 /** After the host aborts, the session must settle within this long, or the run is closed anyway. */
 const SETTLE_AFTER_ABORT_MS = 5_000;
 
@@ -229,6 +237,8 @@ class Run {
   private topicValid: boolean | null = null;
   /** A glance run's verdict on its own answer (null for every other kind, or before the end). */
   private glanceValid: boolean | null = null;
+  /** The figure step's result (figure.ts): null when it did not run (no fence, aborted, other kind). */
+  private figure: FigureOutcome | null = null;
   private toolCalls = 0;
   /** The cap was hit: the session is being stopped so the final, answer-only turn can follow. */
   private budgetTurnPending = false;
@@ -695,6 +705,7 @@ class Run {
     // A last line with no newline after it, once the answer ended on its own (an aborted run's
     // last line was cut, not written badly).
     if (this.hostReason === null) this.plate?.flush();
+    await this.settleFigure();
     const done = this.done(promptError);
     this.sse.event('done', { ...done });
     this.sse.end();
@@ -719,6 +730,7 @@ class Run {
       ...(this.plate === null ? {} : { parts: this.plate.parts }),
       ...(this.topicValid === null ? {} : { topic_valid: this.topicValid }),
       ...(this.glanceValid === null ? {} : { glance_valid: this.glanceValid }),
+      ...(this.figure === null ? {} : { figure: this.figure.path }),
       unseen_markers: parseMarkers(done.final_text).filter((m) => !done.handles_seen.includes(m)),
       first_text_ms: done.first_text_ms,
       first_token_ms: this.firstTokenMs,
@@ -754,17 +766,126 @@ class Run {
   }
 
   /**
-   * `final_text`: an explain, ask or image answer has its ```diagram and ```check fences tidied
+   * `final_text`: an explain, ask or image answer has its ```mermaid (or older ```diagram) and ```check fences tidied
    * (answer.ts); every other kind is exactly what streamed.
    */
   private tidied(): string {
     const kind = this.request.kind;
     if (kind !== 'explain' && kind !== 'ask' && kind !== 'image') return this.finalText;
+    if (this.figure !== null) return this.figure.text;
     return tidyAnswer(
       this.finalText,
       this.request.check === true,
       this.request.diagram !== 'never',
     );
+  }
+
+  /**
+   * The figure step (figure.ts) of an explain, ask or image answer that has a ```mermaid fence:
+   * the REAL parse in a worker thread, the deterministic repairs, at most one short model repair
+   * (its usage is the run's), else the fence is KEPT when it parses (over a size cap is soft) or
+   * dropped when it does not. Runs after the stream, before `done`, so
+   * pings go on meanwhile; never on an aborted run (that text is what it is). The result is logged
+   * as `agent.figure` (`path`: ok | tidy | deterministic | model | kept-over-cap | dropped | unchecked).
+   */
+  private async settleFigure(): Promise<void> {
+    const kind = this.request.kind;
+    if (kind !== 'explain' && kind !== 'ask' && kind !== 'image') return;
+    if (this.hostReason !== null || !this.finalText.includes('```mermaid')) return;
+    const { deps, request } = this;
+    const budget = Math.min(FIGURE_REPAIR_MS, request.limits.deadline_ms - this.now());
+    const ping = setInterval(() => this.sse.ping(), deps.pingMs);
+    try {
+      this.figure = await settleFigure(
+        this.finalText,
+        request.check === true,
+        request.diagram !== 'never',
+        {
+          parse: deps.parseMermaid ?? ((body) => mermaidParser.parse(body)),
+          ...(budget >= FIGURE_REPAIR_MIN_MS
+            ? {
+                repair: (prompt: string, system: string) =>
+                  this.repairFigure(prompt, system, budget),
+              }
+            : {}),
+        },
+      );
+    } catch (error) {
+      // The step must never fail a run: the answer goes out as the tidy step left it.
+      deps.log.warn('agent.figure.failed', {
+        run_id: request.run_id,
+        error_type: error instanceof Error ? error.name : typeof error,
+      });
+    } finally {
+      clearInterval(ping);
+    }
+    if (this.figure === null) return;
+    deps.log.info('agent.figure', {
+      run_id: request.run_id,
+      request_id: request.request_id,
+      path: this.figure.path,
+      repairs: this.figure.repairs,
+      problem: this.figure.problem === null ? null : clip(this.figure.problem, 160),
+      parse_ms: Math.round(this.figure.parseMs),
+      model_called: this.figure.modelCalled,
+    });
+  }
+
+  /**
+   * The ONE model repair request of the figure step: a fresh tool-less session (never the run's own,
+   * whose history must not gain a turn), the run's model at effort low, no retry, `budgetMs` to
+   * finish. Its usage is pushed to the run's totals and sent as a `usage` event. Null on any
+   * failure, timeout or an empty reply.
+   */
+  private async repairFigure(
+    prompt: string,
+    system: string,
+    budgetMs: number,
+  ): Promise<string | null> {
+    const { deps } = this;
+    const stop = AbortSignal.any([AbortSignal.timeout(budgetMs), this.clientGone]);
+    const session = await createPaperSession({
+      modelRuntime: deps.modelRuntime,
+      model: deps.model,
+      thinkingLevel: 'low',
+      maxOutputTokens: FIGURE_REPAIR_TOKENS,
+      maxRetries: 0,
+      systemPrompt: system,
+      tools: [],
+      sessionId: this.sessionId,
+      entries: [],
+      providerTimeoutMs: budgetMs,
+    });
+    let reply = '';
+    let failed = false;
+    session.session.subscribe((event) => {
+      if (event.type !== 'message_end' || event.message.role !== 'assistant') return;
+      const message = event.message as AssistantMessage;
+      for (const block of message.content) if (block.type === 'text') reply += block.text;
+      failed = message.stopReason === 'error' || message.stopReason === 'aborted';
+      const usage = usageOf(message);
+      if (isZero(usage)) return;
+      this.usages.push(usage);
+      this.sse.event('usage', { ...usage });
+    });
+    const onAbort = (): void => session.abort();
+    stop.addEventListener('abort', onAbort, { once: true });
+    try {
+      const prompted = session.prompt(prompt);
+      prompted.catch(() => undefined);
+      await Promise.race([
+        prompted,
+        new Promise<void>((resolve) =>
+          stop.addEventListener('abort', () => resolve(), { once: true }),
+        ),
+      ]);
+    } catch {
+      failed = true;
+    } finally {
+      stop.removeEventListener('abort', onAbort);
+      session.dispose();
+    }
+    return failed || stop.aborted || reply.trim() === '' ? null : reply;
   }
 
   /**
