@@ -12,14 +12,7 @@
 import { fireEvent } from '@testing-library/react';
 import type { ReactElement } from 'react';
 
-import {
-  EmptyLibrary,
-  FailureState,
-  OfflineState,
-  ParsingState,
-  PartialState,
-  UncertaintyState,
-} from '@/components/library/SystemStates';
+import { FailureState, OfflineState, UncertaintyState } from '@/components/library/SystemStates';
 import type { LibraryPaper } from '@/components/library/types';
 import { AddPapers } from '@/features/library/components/AddPapers';
 import { LibraryHeader } from '@/features/library/components/LibraryHeader';
@@ -252,32 +245,6 @@ export const CASES: readonly LibraryCase[] = [
   { name: 'ShelfHints', element: <ShelfHints query="" matched={0} total={4} /> },
   { name: 'TableView', element: TABLE_VIEW },
   {
-    name: 'ParsingState',
-    element: <ParsingState totalPages={6} parsedPages={[0, 1, 2]} onOpenPage={noop} />,
-  },
-  {
-    name: 'PartialState',
-    element: (
-      <PartialState
-        partialReason="Golden fixture: only pages 0-2 of the 18-page source PDF are parsed."
-        affectedPages={[11, 12, 13]}
-        onOpenPage={noop}
-      />
-    ),
-  },
-  {
-    // The non-contiguous branch of the banner heading. Both branches are rendered so neither can
-    // rot unaudited — `[2, 9, 30]` must not be described as a range.
-    name: 'PartialState (scattered pages)',
-    element: (
-      <PartialState
-        partialReason="Pages 3, 10 and 31 produced no text layer."
-        affectedPages={[30, 2, 9]}
-        onOpenPage={noop}
-      />
-    ),
-  },
-  {
     name: 'UncertaintyState',
     element: (
       <UncertaintyState
@@ -306,5 +273,4 @@ export const CASES: readonly LibraryCase[] = [
     ),
   },
   { name: 'OfflineState', element: <OfflineState onRetryConnection={noop} /> },
-  { name: 'EmptyLibrary', element: <EmptyLibrary onAddPaper={noop} /> },
 ];

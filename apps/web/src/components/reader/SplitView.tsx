@@ -20,8 +20,6 @@
 
 import type { ReactNode } from 'react';
 
-export type SplitPane = 'source' | 'guided';
-
 export interface SplitViewProps {
   readonly source: ReactNode;
   readonly guided: ReactNode;

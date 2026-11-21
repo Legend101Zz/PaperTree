@@ -30,7 +30,7 @@ import type {
   PointerEvent as ReactPointerEvent,
   MouseEvent as ReactMouseEvent,
 } from 'react';
-import { AlertTriangle, CheckCircle2, Clock, Highlighter, Loader2 } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Clock, Loader2 } from 'lucide-react';
 import { TOUCH_TARGET_MIN_PX, TOUCH_TARGET_STYLE } from '@papertree/ui';
 import { PROCESSING_DETAIL, PROCESSING_LABEL, type ProcessingState } from './types';
 
@@ -147,15 +147,6 @@ export function ProcessingBadge({ state, label, reasonShown = false }: Processin
       )}
       <span>{label ?? PROCESSING_LABEL[state]}</span>
       {reasonShown ? null : <span className="sr-only">{` ${PROCESSING_DETAIL[state]}`}</span>}
-    </span>
-  );
-}
-
-export function HighlightCountBadge({ count }: { readonly count: number }) {
-  return (
-    <span className="pt-s3-muted pt-s3-small inline-flex items-center gap-1.5">
-      <Highlighter className="h-3.5 w-3.5" aria-hidden="true" />
-      <span>{count === 1 ? '1 highlight' : `${String(count)} highlights`}</span>
     </span>
   );
 }

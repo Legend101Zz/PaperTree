@@ -836,10 +836,6 @@
   border: 0;
 }
 
-.pt-hints--empty {
-  justify-content: center;
-}
-
 .pt-hints__note {
   display: inline-flex;
   gap: 8px;

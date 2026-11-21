@@ -83,9 +83,6 @@ const PAPERS: readonly (readonly [string, readonly string[], number, number | nu
   ],
 ];
 
-/** How many distinct corpus papers there are. */
-export const CORPUS_SIZE = PAPERS.length;
-
 /**
  * A reading place, as S2a's `GET /papers` carries it.
  *

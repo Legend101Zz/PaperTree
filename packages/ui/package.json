@@ -23,10 +23,6 @@
     "lint": "oxlint src && eslint --ext .ts,.tsx src",
     "test": "vitest run"
   },
-  "dependencies": {
-    "@papertree/anchoring": "workspace:*",
-    "@papertree/document-ir": "workspace:*"
-  },
   "peerDependencies": {
     "react": "^18.2.0",
     "react-dom": "^18.2.0"

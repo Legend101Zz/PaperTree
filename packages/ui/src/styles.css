@@ -1,6 +1,5 @@
 /*
- * @papertree/ui — the stylesheet for the provenance register, the five primitives, and the
- * highlight overlay.
+ * @papertree/ui — the stylesheet for the provenance register and the five primitives.
  *
  * IMPORT IT ONCE, from the app shell:  @import '@papertree/ui/styles.css';
  *
@@ -50,20 +49,15 @@
   /* type scale (size / line height) */
   --pt-t-display-xl: 56px;
   --pt-t-display-l: 40px;
-  --pt-t-display-m: 34px;
   --pt-t-display-s: 30px;
   --pt-t-paper-title: 18px;
   --pt-t-paper: 15px;
-  --pt-lh-paper: 23px;
   --pt-t-paper-trace: 14px;
-  --pt-lh-paper-trace: 21px;
   --pt-t-paper-card: 12.5px;
   --pt-t-ai: 15px;
-  --pt-lh-ai: 23px;
   --pt-t-ai-panel: 14.5px;
   --pt-lh-ai-panel: 22px;
   --pt-t-meta: 14px;
-  --pt-t-min: 13px;
   --pt-t-label: 13px;
   --pt-t-label-s: 12.5px;
   --pt-ls-label: 0.06em;
@@ -90,7 +84,6 @@
   --pt-radius-sheet: 14px;
   --pt-radius-round: 50%;
   --pt-target-touch: 44px;
-  --pt-target-desktop: 36px;
   --pt-focus-width: 2px;
   --pt-focus-offset: 2px;
 
@@ -130,7 +123,6 @@
   /* daylight */
   --pt-ground: #f1ede5; /* bone: the desk */
   --pt-page: #faf8f3; /* ivory panels, top bars, the Guided page */
-  --pt-surface: var(--pt-page);
   --pt-ai-slip: #ece3d0; /* only AI text sits here */
   --pt-call-slip: #fdfbf7; /* your asks; index cards */
   --pt-linen: #e6dfd2; /* the board */
@@ -189,11 +181,6 @@
   --pt-hl-pink-ink: #a8356a;
   --pt-hl-purple: rgb(170 135 215 / 30%);
   --pt-hl-purple-ink: #6442ae;
-  --pt-highlight-fill: rgb(240 190 70 / 30%);
-  --pt-highlight-stroke: rgb(168 101 10 / 70%);
-  --pt-highlight-approx-fill: rgb(240 190 70 / 14%);
-  --pt-highlight-approx-stroke: rgb(168 101 10 / 90%);
-  --pt-highlight-orphan-stroke: var(--pt-danger);
   /* the paper's own colours (--pt-pdf-*, --pt-guided-*) are declared once per page, below the dark
    * block: they follow `data-pt-page` (Light, Sepia, Dark), not the room (#345) */
 
@@ -824,74 +811,6 @@ span.pt-paper .pt-paper__cite {
   font-family: var(--pt-font-body);
   font-size: 0.875rem;
   color: var(--pt-ink-muted);
-}
-
-/* ─────────────────────────────────────────────────────────────────────────────────────────────
- * the highlight overlay
- * ───────────────────────────────────────────────────────────────────────────────────────────── */
-
-/*
- * The overlay is sized to the SCALE-1 viewport and scaled with a transform; the reader sets the
- * width/height and `--pt-zoom`. Everything geometric comes from the IR, so there is nothing here to
- * measure and nothing to recompute on zoom. See `anchoring/bridge.ts#irBboxToOverlayRect`.
- */
-.pt-overlay {
-  position: absolute;
-  inset-block-start: 0;
-  inset-inline-start: 0;
-  transform: scale(var(--pt-zoom, 1));
-  transform-origin: 0 0;
-  /* The overlay must not swallow selection on the text layer underneath. */
-  pointer-events: none;
-  overflow: visible;
-}
-
-.pt-overlay .pt-highlight {
-  pointer-events: auto;
-}
-
-/*
- * REGIONS ARE POLYGONS. A selection crossing the two-column gutter in `resnet-cvpr-2col` is two of
- * these, never one bounding box that swallows the gutter and half the other column.
- *
- * `non-scaling-stroke` is not cosmetic: the overlay is inside `transform: scale(z)`, so without it
- * a 1px outline is 4px at 400% zoom and 0.5px at 50%, and the "dashed means approximate" signal
- * degrades exactly when the user has zoomed in to check it.
- */
-.pt-highlight {
-  fill: var(--pt-highlight-fill);
-  stroke: none;
-  vector-effect: non-scaling-stroke;
-  cursor: pointer;
-  touch-action: manipulation;
-}
-
-/*
- * Tier 2–4 resolutions: we found it, but not by identity. The dashed outline is the visible half of
- * `Resolution.state === 'approximate'`, and it is a DIFFERENT SHAPE rather than a different opacity
- * so that it survives a dark theme, a colour-blind reader and a greyscale screenshot.
- */
-.pt-highlight--approximate {
-  fill: var(--pt-highlight-approx-fill);
-  stroke: var(--pt-highlight-approx-stroke);
-  stroke-width: 1.5;
-  stroke-dasharray: 6 4;
-}
-
-/*
- * An orphan has no region — that is what makes it an orphan — so this styles the placeholder the
- * Navigator shows in its stead. It is loud on purpose: `anchoring/reparse.spec` requires every
- * failure to be surfaced, and a silently dropped highlight is the failure mode the whole anchor
- * ladder exists to avoid.
- */
-.pt-highlight--orphan {
-  fill: none;
-  stroke: var(--pt-highlight-orphan-stroke);
-  stroke-width: 1.5;
-  stroke-dasharray: 2 4;
-  color: var(--pt-highlight-orphan-stroke);
-  border: 1px dashed var(--pt-highlight-orphan-stroke);
-  border-radius: var(--pt-radius);
 }
 
 /* ─────────────────────────────────────────────────────────────────────────────────────────────
@@ -2297,50 +2216,6 @@ span.pt-paper .pt-paper__cite {
   padding: 24px;
 }
 
-.pt-s3-card {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  height: 100%;
-  background: var(--pt-ground-raised);
-  border: 1px solid var(--pt-rule);
-  border-radius: 12px;
-  padding: 16px;
-}
-.pt-s3-card__title {
-  font-family: var(--pt-font-body);
-  font-size: 1.0625rem;
-  line-height: 1.3;
-  font-weight: 600;
-  color: var(--pt-ink);
-}
-.pt-s3-cardlink {
-  display: flex;
-  align-items: flex-start;
-  width: 100%;
-  min-height: 44px;
-  padding: 0;
-  border: 0;
-  background: none;
-  text-align: left;
-  font: inherit;
-  color: inherit;
-  cursor: pointer;
-  border-radius: 8px;
-  overflow-wrap: anywhere;
-}
-.pt-s3-cardlink.pt-s3-card__title {
-  font-family: var(--pt-font-body);
-  font-size: 1.0625rem;
-  font-weight: 600;
-  line-height: 1.3;
-}
-.pt-s3-cardlink:hover .pt-s3-card__title,
-.pt-s3-cardlink.pt-s3-card__title:hover {
-  text-decoration: underline;
-  text-underline-offset: 3px;
-}
-
 /* alerts and notes */
 .pt-s3-alert {
   border-radius: 12px;
@@ -2689,16 +2564,6 @@ span.pt-paper .pt-paper__cite {
   /* Numbers and usage are Courier, lining and tabular (DESIGN.md §2, §4.8). */
   font: var(--pt-t-num) / 1.5 var(--pt-font-you); /* 13 px: the muted ink's smallest size */
   font-variant-numeric: lining-nums tabular-nums;
-}
-
-.pt-explain__warn {
-  margin: 0;
-  padding: 8px 12px;
-  font-size: 0.875rem;
-  color: var(--pt-ink);
-  border: 1px solid var(--pt-highlight-approx-stroke);
-  background: var(--pt-highlight-approx-fill);
-  border-radius: 12px;
 }
 
 .pt-explain__error {
@@ -3348,16 +3213,6 @@ html:has(.pt-notice--undo) .pt-toast {
   pointer-events: none;
 }
 
-.pt-cv__empty-card {
-  max-inline-size: 28rem;
-  padding: 24px;
-  text-align: center;
-  background: var(--pt-ground-raised);
-  border-radius: var(--pt-radius-panel);
-  box-shadow: var(--pt-float-shadow);
-  pointer-events: auto;
-}
-
 /* xyflow bridge: its own variables, pointed at our tokens (light and dark follow the tokens). */
 .pt-cv .react-flow {
   --xy-background-color: var(--pt-page-ground);
@@ -3397,55 +3252,6 @@ html:has(.pt-notice--undo) .pt-toast {
   outline: 2px solid var(--pt-focus);
   outline-offset: 2px;
   border-radius: var(--pt-radius-panel);
-}
-
-.pt-cv-node {
-  display: flex;
-  flex-direction: column;
-  inline-size: 100%;
-  block-size: 100%;
-  overflow: hidden;
-  color: var(--pt-ink);
-  background: var(--pt-ground-raised);
-  border: 1px solid var(--pt-rule);
-  border-radius: var(--pt-radius-panel);
-  box-shadow: var(--pt-sheet-shadow);
-}
-
-.pt-cv-node[data-selected='true'] {
-  border-color: var(--pt-accent);
-  box-shadow: 0 0 0 2px var(--pt-accent-soft);
-}
-
-.pt-cv-node--group {
-  background: var(--pt-accent-soft);
-  border: 1.5px dashed var(--pt-accent);
-  box-shadow: none;
-}
-
-.pt-cv-group__title {
-  align-self: flex-start;
-  inline-size: min(70%, 16rem);
-  min-block-size: 40px;
-  margin: 4px;
-  padding: 0 8px;
-  font: inherit;
-  font-size: 0.875rem;
-  font-weight: 600;
-  color: var(--pt-ink);
-  background: transparent;
-  border: 1px solid transparent;
-  border-radius: 8px;
-}
-
-.pt-cv-group__title:hover,
-.pt-cv-group__title:focus-visible {
-  background: var(--pt-ground-raised);
-  border-color: var(--pt-rule);
-}
-
-.pt-cv-group__title:focus-visible {
-  outline: 2px solid var(--pt-focus);
 }
 
 .pt-cv .pt-cv-resize {
@@ -3527,22 +3333,7 @@ html:has(.pt-notice--undo) .pt-toast {
   max-inline-size: 100%;
 }
 
-/* In-card controls keep a tap target ON SCREEN at phone widths: xyflow scales a card by the canvas
-   zoom, which the canvas publishes as `--pt-cv-zoom`. The board's card buttons grow their hit area
-   in `apps/web/src/features/board/components/cards.css` (#212). The group name is an input (no
-   pseudo-elements), so its box grows instead, down to a 30 % zoom (below that a group frame is a
-   thumbnail: zoom in). Desktop cards are untouched. */
-@media (max-width: 639px) {
-  .pt-cv-group__title {
-    min-block-size: calc(40px / clamp(0.3, var(--pt-cv-zoom, 1), 1));
-  }
-}
-
 /* ── w3ui round 2 (additive) ───────────────────────────────────────────────────────────────── */
-
-.pt-md-heading {
-  margin-block: 0 4px;
-}
 
 .pt-explain__prose em {
   font-style: italic;
@@ -4040,12 +3831,10 @@ button.pt-holder {
    are ported from the design's tokens.css onto --pt-* tokens; contrast pairs are the ones
    test/tokens.spec.ts already covers (ink / pen / tab / nv-ink on page, AI slip and call slip). */
 
-/* The two translucent colours this section needs, named once so no rgb() literal sits in a rule.
-   The ruling is lit by lamplight in the dark blocks at the top (09c, #215); the ring reads on every
-   ground in both schemes. */
+/* The translucent colour this section needs, named once so no rgb() literal sits in a rule.
+   The ruling is lit by lamplight in the dark blocks at the top (09c, #215). */
 :root {
   --pt-call-slip-rule: rgb(60 96 130 / 13%); /* the 24 px blue ruling on a call slip */
-  --pt-lit-ring: rgb(160 120 40 / 25%); /* the faint inset ring around a lit trace row */
 }
 
 .pt-you {
