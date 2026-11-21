@@ -131,6 +131,8 @@ export function MermaidDiagram({ body, closed, compact = false }: MermaidDiagram
   const opener = useRef<HTMLElement | null>(null);
   const box = useRef<HTMLSpanElement | null>(null);
   const [atEnd, setAtEnd] = useState(false);
+  // A box that overflows (sideways, or past the height cap) is a region the keyboard can scroll.
+  const [overflows, setOverflows] = useState(false);
 
   useEffect(() => {
     if (!closed || tokens === null) return undefined;
@@ -158,6 +160,14 @@ export function MermaidDiagram({ body, closed, compact = false }: MermaidDiagram
   };
   // A new size starts at the left edge again: the fade is back until the reader reaches the end.
   useLayoutEffect(() => setAtEnd(false), [fit.width, room]);
+  useLayoutEffect(() => {
+    const el = box.current;
+    setOverflows(
+      el !== null &&
+        !preview &&
+        (el.scrollWidth > el.clientWidth + 1 || el.scrollHeight > el.clientHeight + 1),
+    );
+  }, [fit.width, room, preview, drawn]);
   if (result?.ok === false) {
     // Nothing is shown; the element stays so the theme reader and tests can find it.
     return <figure ref={ref} hidden data-mermaid-failed="" />;
@@ -191,6 +201,9 @@ export function MermaidDiagram({ body, closed, compact = false }: MermaidDiagram
         <span
           ref={box}
           className="pt-mmd__scroll"
+          {...(overflows
+            ? { tabIndex: 0, role: 'region', 'aria-label': `${mermaidName(body)}, scrolls` }
+            : {})}
           onScroll={(event) => {
             const el = event.currentTarget;
             setAtEnd(el.scrollLeft + el.clientWidth >= el.scrollWidth - 2);

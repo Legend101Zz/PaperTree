@@ -105,6 +105,25 @@ describe('MermaidDiagram size', () => {
     expect(button.textContent).toBe('larger');
   });
 
+  it('a box that scrolls is a named region the keyboard can reach (axe scrollable-region-focusable)', async () => {
+    draw.width = 3290;
+    vi.spyOn(HTMLElement.prototype, 'scrollWidth', 'get').mockReturnValue(2303);
+    const figure = await drawn();
+    const scroller = figure.querySelector<HTMLElement>('.pt-mmd__scroll') as HTMLElement;
+    await waitFor(() => expect(scroller.getAttribute('tabindex')).toBe('0'));
+    expect(scroller.getAttribute('role')).toBe('region');
+    expect(scroller.getAttribute('aria-label')).toMatch(/scrolls$/);
+  });
+
+  it('a box that fits is not a tab stop', async () => {
+    draw.width = 300;
+    vi.spyOn(HTMLElement.prototype, 'scrollWidth', 'get').mockReturnValue(ROOM);
+    const figure = await drawn();
+    const scroller = figure.querySelector<HTMLElement>('.pt-mmd__scroll') as HTMLElement;
+    expect(scroller.hasAttribute('tabindex')).toBe(false);
+    expect(scroller.hasAttribute('role')).toBe(false);
+  });
+
   it('Esc on the control puts a large figure back', async () => {
     draw.width = 3290;
     const figure = await drawn();

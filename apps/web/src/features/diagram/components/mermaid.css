@@ -58,6 +58,11 @@
   overscroll-behavior: contain;
 }
 
+.pt-mmd__scroll:focus-visible {
+  outline: var(--pt-focus-width, 2px) solid var(--pt-focus);
+  outline-offset: 2px;
+}
+
 .pt-mmd__stage {
   position: relative;
   display: block;
