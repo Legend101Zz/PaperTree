@@ -374,6 +374,27 @@ describe('layoutBoard: trees never overlap', () => {
     expect(cards.get('b')).toMatchObject({ x: 2000, y: 0 });
   });
 
+  it('leaves cards the reader placed over each other as they are: only growth pushes', () => {
+    // Two passages a few px apart overlap (a dense v0.2 board, or the 500-card scale test).
+    const tree = buildTree([node({ id: 'a', x: 0, y: 0 }), node({ id: 'b', x: 100, y: 50 })]);
+    const { cards } = layoutBoard(tree, input({ a: 200, b: 200 }));
+    expect(cards.get('b')).toMatchObject({ x: 100, y: 50 });
+  });
+
+  it('moves a tree it pushed out of the way of the next one too', () => {
+    // a grows a branch into b; b moves right, onto c; c moves right of b.
+    const step = CARD_WIDTH.passage + 40;
+    const tree = buildTree([
+      node({ id: 'a', x: 0, y: 0 }),
+      node({ id: 'b', x: step, y: 0 }),
+      node({ id: 'c', x: step * 2, y: 0 }),
+      node({ id: 'a1', parent: 'a', span: spanOf(TEXT, 'identity mapping') }),
+    ]);
+    const { cards } = layoutBoard(tree, input({ a: 200, a1: 150, b: 200, c: 200 }));
+    const b = cards.get('b');
+    expect(cards.get('c')?.x).toBe((b?.x ?? 0) + (b?.w ?? 0) + TREE_GAP);
+  });
+
   it('leaves a tree below alone when they only share columns, not rows', () => {
     const tree = buildTree([node({ id: 'a', x: 0, y: 0 }), node({ id: 'b', x: 0, y: 900 })]);
     const { cards } = layoutBoard(tree, input({ a: 200, b: 200 }));

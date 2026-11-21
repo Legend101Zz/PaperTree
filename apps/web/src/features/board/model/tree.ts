@@ -134,9 +134,12 @@ export function buildTree<N extends TreeNodeInput>(nodes: readonly N[]): BoardTr
   const loose: N[] = [...orphans].sort(byCreation);
   for (const node of [...parentless].sort(byCreation)) {
     // A card with children is a root whatever its kind (an image card, later); a childless
-    // excerpt is a tree of one; everything else is a loose v0.2 card.
-    if (node.kind === 'excerpt' || children.has(node.node_id)) roots.push(node);
-    else loose.push(node);
+    // excerpt or answer is a tree of one (an answer sent from the reader can be asked about and
+    // branched, so it is laid out and kept clear of other trees from the start, at the tree's
+    // width); everything else (notes, notebook pages, plates) is a loose card.
+    if (node.kind === 'excerpt' || node.kind === 'explanation' || children.has(node.node_id)) {
+      roots.push(node);
+    } else loose.push(node);
   }
   return { byId, roots, loose, children };
 }
